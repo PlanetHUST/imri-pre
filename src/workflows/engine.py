@@ -9,6 +9,11 @@ import disk_quantity.disk_solve as disk
 import physical_process.general_class as agn
 import physical_process.helper_function as helpers
 import physical_process.sampling as stellar_sampling
+from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
+from disk_quantity.migration_torque import (
+    MigrationParameters,
+    compute_torque_profile,
+)
 
 from .config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
@@ -126,8 +131,67 @@ class TDEDynEngine:
                 "aspect_ratio": np.asarray(aspect_ratio, dtype=float),
                 "gravitational_radius_cm": float(gravitational_radius_cm),
             }
+            try:
+                pagn_alpha = 0.01
+                pagn_disk = build_pagn_disk_profile(
+                    m_smbh_msun,
+                    mdot_cgs=accretion_rate_g_s,
+                    alpha=pagn_alpha,
+                    eddington_ratio=0.1,
+                )
+                self.disk_cache[m_smbh_msun]["torque_disk"] = pagn_disk.disk
+                self.disk_cache[m_smbh_msun]["torque_alpha"] = pagn_alpha
+                vprint(
+                    f"  cached pAGN disk for torque integration at "
+                    f"M_SMBH={m_smbh_msun:.3e} Msun"
+                )
+            except Exception:
+                vprint(
+                    f"  pAGN torque unavailable for M_SMBH={m_smbh_msun:.3e} Msun; "
+                    f"falling back to disk_solve migration"
+                )
             vprint(f"  cached disk for M_SMBH={m_smbh_msun:.3e} Msun")
         return self.disk_cache[m_smbh_msun]
+
+    def migration_time_myr(
+        self,
+        result: TDEDynSingleResult,
+        agn_properties: agn.AGN_properties,
+        damping_result: DampingResult,
+        tde_radius_cm: float,
+        radius_cm: FloatArray,
+        surface_density_g_cm2: FloatArray,
+        aspect_ratio: FloatArray,
+        disk_data: DiskProfiles | None,
+    ) -> float:
+        """Return the migration time from either torque integration or fallback."""
+        if disk_data is not None and "torque_disk" in disk_data:
+            torque = compute_torque_profile(
+                disk_data["torque_disk"],
+                migrator_mass_msun=damping_result["mass_msun"],
+                params=MigrationParameters(
+                    alpha=float(disk_data.get("torque_alpha", 0.01)),
+                    include_type_ii=self.config.consider_type_ii_migration,
+                ),
+            )
+            return helpers.t_migration_from_torque(
+                torque.radius_cm,
+                np.asarray(torque.gamma_tot, dtype=float) * 1.0e7,
+                damping_result["mass_g"],
+                damping_result["initial_semi_major_axis_cm"],
+                tde_radius_cm,
+                result.m_smbh_msun,
+            )
+
+        return helpers.t_migration(
+            agn_properties,
+            damping_result["mass_g"],
+            damping_result["initial_semi_major_axis_cm"],
+            h_list=aspect_ratio,
+            sigma_list=surface_density_g_cm2,
+            r_list=radius_cm,
+            consider_type_ii=self.config.consider_type_ii_migration,
+        )
 
     def select_disk_crossing_stars(
         self,
@@ -378,6 +442,7 @@ class TDEDynEngine:
         radius_cm: FloatArray,
         surface_density_g_cm2: FloatArray,
         aspect_ratio: FloatArray,
+        disk_data: DiskProfiles | None = None,
     ) -> None:
         """Classify direct and migration TDEs and accumulate their masses."""
         tde_radius_cm = self.config.tde_radius_rg * agn_properties.rg
@@ -439,14 +504,15 @@ class TDEDynEngine:
                         if gap_parameter > helpers.TYPE_II_GAP_PARAMETER_THRESHOLD:
                             type_ii_migration_count += 1
                             type_ii_migration_mass_msun += damping_result["mass_msun"]
-                    migration_time_myr = helpers.t_migration(
+                    migration_time_myr = self.migration_time_myr(
+                        result,
                         agn_properties,
-                        damping_result["mass_g"],
-                        damping_result["initial_semi_major_axis_cm"],
-                        h_list=aspect_ratio,
-                        sigma_list=surface_density_g_cm2,
-                        r_list=radius_cm,
-                        consider_type_ii=self.config.consider_type_ii_migration,
+                        damping_result,
+                        tde_radius_cm,
+                        radius_cm,
+                        surface_density_g_cm2,
+                        aspect_ratio,
+                        disk_data,
                     )
                     event_time_myr = (
                         migration_time_myr + damping_result["final_time_myr"]
@@ -569,14 +635,15 @@ class TDEDynEngine:
                     if gap_parameter > helpers.TYPE_II_GAP_PARAMETER_THRESHOLD:
                         type_ii_migration_count += 1
                         type_ii_migration_mass_msun += damping_result["mass_msun"]
-                migration_time_myr = helpers.t_migration(
+                migration_time_myr = self.migration_time_myr(
+                    result,
                     agn_properties,
-                    damping_result["mass_g"],
-                    damping_result["initial_semi_major_axis_cm"],
-                    r_list=radius_cm,
-                    sigma_list=surface_density_g_cm2,
-                    h_list=aspect_ratio,
-                    consider_type_ii=self.config.consider_type_ii_migration,
+                    damping_result,
+                    tde_radius_cm,
+                    radius_cm,
+                    surface_density_g_cm2,
+                    aspect_ratio,
+                    disk_data,
                 )
                 event_time_myr = migration_time_myr + damping_result["final_time_myr"]
                 if event_time_myr < agn_properties.AGNlifetime:
@@ -776,5 +843,6 @@ class TDEDynEngine:
             disk_data["radius_cm"],
             disk_data["surface_density_g_cm2"],
             disk_data["aspect_ratio"],
+            disk_data,
         )
         return result

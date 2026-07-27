@@ -19,6 +19,7 @@ class MigrationParameters:
     hydrogen_fraction: float = 0.7
     kappa_t: float = 20.0
     kappa_norm: float = 25.0
+    include_type_ii: bool = True
 
 
 @dataclass
@@ -39,6 +40,7 @@ class TorqueProfile:
     gamma_0: np.ndarray
     gamma_i: np.ndarray
     gamma_th: np.ndarray
+    gamma_type_ii: np.ndarray
     gamma_tot: np.ndarray
     tau_mig: np.ndarray
     tau_e: np.ndarray
@@ -195,6 +197,17 @@ def comp_gamma_th(dpressure_dlogr, disk, migrator_mass, params):
     return np.where(mu_th < 1.0, prefactor * unsaturated, prefactor * saturated)
 
 
+def comp_gamma_type_ii(alpha, migrator_mass, h_over_r, radius, omega):
+    """Return Type-II (viscous-limited) migration torque [J].
+
+    Gamma_type,ii = alpha * m * h^2 * R^2 * Omega^2
+
+    pAGN stores mass in kg, radius in metres, and Omega in s^-1, so the
+    returned torque uses the same SI units as the other torque terms.
+    """
+    return alpha * migrator_mass * h_over_r**2 * radius**2 * omega**2
+
+
 def compute_torque_profile(
     disk,
     *,
@@ -236,7 +249,13 @@ def compute_torque_profile(
         (corot * gap_exp + lind) / (1.0 + kappa_gap / params.kappa_norm) * gamma_0
     )  # Lindblad torque
     gamma_th = gamma_0 * gamma_th_coeff  # thermal torque
-    gamma_tot = gamma_i + gap_exp * gamma_th
+    if params.include_type_ii:
+        gamma_type_ii = comp_gamma_type_ii(
+            params.alpha, migrator_mass, h_over_r, disk_view.R, disk_view.Omega
+        )
+    else:
+        gamma_type_ii = np.zeros_like(gamma_i, dtype=float)
+    gamma_tot = gamma_i + gap_exp * gamma_th + gamma_type_ii
 
     orbital_angular_momentum = migrator_mass * disk_view.Omega * disk_view.R**2
 
@@ -270,6 +289,7 @@ def compute_torque_profile(
         gamma_0=gamma_0,
         gamma_i=gamma_i,
         gamma_th=gamma_th,
+        gamma_type_ii=gamma_type_ii,
         gamma_tot=gamma_tot,
         tau_mig=tau_mig,
         tau_e=tau_e,

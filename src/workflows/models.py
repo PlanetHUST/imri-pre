@@ -44,13 +44,15 @@ class DampingResult(TypedDict):
     mass_msun: float
 
 
-class DiskProfiles(TypedDict):
+class DiskProfiles(TypedDict, total=False):
     inner_radius_cm: float
     outer_radius_cm: float
     radius_cm: FloatArray
     surface_density_g_cm2: FloatArray
     aspect_ratio: FloatArray
     gravitational_radius_cm: float
+    torque_disk: object
+    torque_alpha: float
 
 
 class StellarPopulation(TypedDict):

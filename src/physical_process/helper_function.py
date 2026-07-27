@@ -194,6 +194,99 @@ def t_migration(
     return float(migration_time_s / const.Myr)
 
 
+def t_migration_from_torque(
+    r_grid_cm: FloatArray,
+    gamma_tot_cgs: FloatArray,
+    migrator_mass_g: float,
+    r_ini_cm: float,
+    r_fin_cm: float,
+    smbh_mass_msun: float,
+) -> float:
+    """Return migration time [Myr] by integrating the torque profile.
+
+    Uses the formula from prompt.md:
+        t_mig = integral(R_ini -> R_fin) m * R^2 * Omega / Gamma_tot dR
+
+    Args:
+        r_grid_cm: radial grid [cm] from the torque computation.
+        gamma_tot_cgs: total torque [g cm^2 s^-2] at each radius, including
+            Type-I, thermal, and Type-II contributions.
+        migrator_mass_g: migrator (stellar) mass [g].
+        r_ini_cm: starting orbital radius [cm].
+        r_fin_cm: target orbital radius [cm].
+        smbh_mass_msun: SMBH mass [Msun].
+
+    Returns:
+        Migration timescale [Myr]. Returns ``np.inf`` if the integrand
+        is not finite over the integration range, or if a torque zero-crossing
+        (migration trap) lies between ``r_ini_cm`` and ``r_fin_cm``.
+    """
+    if migrator_mass_g <= 0.0:
+        raise ValueError("migrator mass must be positive")
+    if r_ini_cm <= 0.0 or r_fin_cm <= 0.0:
+        raise ValueError("radii must be positive")
+
+    smbh_mass_g = smbh_mass_msun * const.msun
+
+    r_grid = np.asarray(r_grid_cm, dtype=float)
+    gamma = np.asarray(gamma_tot_cgs, dtype=float)
+    if r_grid.shape != gamma.shape:
+        raise ValueError("radius and torque grids must have the same shape")
+
+    finite = np.isfinite(r_grid) & np.isfinite(gamma)
+    r_grid = r_grid[finite]
+    gamma = gamma[finite]
+    if r_grid.size < 2:
+        return np.inf
+
+    order = np.argsort(r_grid)
+    r_grid = r_grid[order]
+    gamma = gamma[order]
+    unique_r, unique_indices = np.unique(r_grid, return_index=True)
+    r_grid = unique_r
+    gamma = gamma[unique_indices]
+    if r_grid.size < 2:
+        return np.inf
+
+    r_min = min(r_ini_cm, r_fin_cm)
+    r_max = max(r_ini_cm, r_fin_cm)
+    if r_min < r_grid[0] or r_max > r_grid[-1]:
+        return np.inf
+
+    mask = (r_grid >= r_min) & (r_grid <= r_max)
+    r_seg = np.concatenate(
+        ([r_min], r_grid[mask & (r_grid > r_min) & (r_grid < r_max)], [r_max])
+    )
+    gamma_seg = np.interp(r_seg, r_grid, gamma)
+
+    if r_seg.size < 2:
+        return np.inf
+
+    if np.any(gamma_seg == 0.0):
+        return np.inf
+    sign_changes = np.where(np.sign(gamma_seg[1:]) != np.sign(gamma_seg[:-1]))[0]
+    if sign_changes.size > 0:
+        return np.inf
+
+    omega = np.sqrt(const.G * smbh_mass_g / r_seg**3)
+    integrand = migrator_mass_g * r_seg**2 * omega / gamma_seg
+
+    if r_ini_cm > r_fin_cm:
+        r_integral = r_seg[::-1]
+        integrand_integral = integrand[::-1]
+    else:
+        r_integral = r_seg
+        integrand_integral = integrand
+
+    trapezoid = getattr(np, "trapezoid", np.trapz)
+    t_mig_s = float(trapezoid(integrand_integral, r_integral))
+
+    if not np.isfinite(t_mig_s) or t_mig_s <= 0.0:
+        return np.inf
+
+    return float(t_mig_s / const.Myr)
+
+
 def velocity_disp(M_SMBH: float) -> float:
     """Return NSC velocity dispersion [cm/s] for SMBH mass [Msun]."""
     if M_SMBH <= 0.0:
