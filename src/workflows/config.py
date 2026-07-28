@@ -31,6 +31,12 @@ PRIMARY_TIMESCALE_HISTOGRAM_FILENAME = "timescale_histograms_primary.png"
 COPY_TIMESCALE_HISTOGRAM_FILENAME = "timescale_histograms_copies.png"
 COMBINED_TIMESCALE_HISTOGRAM_FILENAME = "timescale_histograms_primary_and_copies.png"
 TIMESCALE_HISTOGRAM_FILENAME = PRIMARY_TIMESCALE_HISTOGRAM_FILENAME
+IMRI_AVERAGED_RESULTS_FILENAME = "imri_demo_averaged_results.csv"
+IMRI_EVENTS_FILENAME = "imri_demo_events.csv"
+IMRI_LISA_MIN_GW_FREQUENCY_HZ = 1.0e-3
+IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
+IMRI_MAX_GW_TIME_MYR = 13.6e3
+IMRI_GW_ECCENTRICITY = 0.0
 
 
 class TDEDynConfig:
@@ -66,6 +72,11 @@ class TDEDynConfig:
         tde_radius_rg: float = 10.0,
         direct_tde: bool = True,
         consider_type_ii_migration: bool = True,
+        # Simplified IMRI demo controls
+        imri_lisa_min_gw_frequency_hz: float = IMRI_LISA_MIN_GW_FREQUENCY_HZ,
+        imri_lisa_max_gw_frequency_hz: float = IMRI_LISA_MAX_GW_FREQUENCY_HZ,
+        imri_max_gw_time_myr: float = IMRI_MAX_GW_TIME_MYR,
+        imri_gw_eccentricity: float = IMRI_GW_ECCENTRICITY,
         # Execution and reporting controls
         damping_cpu_count: int | None = None,
         checkpoint_grid_interval: int = 5,
@@ -85,6 +96,12 @@ class TDEDynConfig:
             raise ValueError("initial stellar density gamma must satisfy 0 < gamma < 3")
         if checkpoint_grid_interval <= 0:
             raise ValueError("checkpoint interval must be positive")
+        if not 0.0 < imri_lisa_min_gw_frequency_hz < imri_lisa_max_gw_frequency_hz:
+            raise ValueError("IMRI LISA frequencies must satisfy 0 < f_min < f_max")
+        if imri_max_gw_time_myr <= 0.0:
+            raise ValueError("IMRI maximum GW time must be positive")
+        if not 0.0 <= imri_gw_eccentricity < 1.0:
+            raise ValueError("IMRI GW eccentricity must satisfy 0 <= e < 1")
 
         # Sampling and runtime controls
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
@@ -112,6 +129,10 @@ class TDEDynConfig:
         self.tde_radius_rg = tde_radius_rg
         self.direct_tde = direct_tde
         self.consider_type_ii_migration = consider_type_ii_migration
+        self.imri_lisa_min_gw_frequency_hz = imri_lisa_min_gw_frequency_hz
+        self.imri_lisa_max_gw_frequency_hz = imri_lisa_max_gw_frequency_hz
+        self.imri_max_gw_time_myr = imri_max_gw_time_myr
+        self.imri_gw_eccentricity = imri_gw_eccentricity
 
         # Execution and reporting controls
         self.create_visualizations = create_visualizations

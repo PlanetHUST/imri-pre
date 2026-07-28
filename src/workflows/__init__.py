@@ -8,6 +8,12 @@ from .config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     DISK_INNER_RADIUS_RG,
     GEOMETRIC_FRACTION_HEATMAP_FILENAME,
+    IMRI_AVERAGED_RESULTS_FILENAME,
+    IMRI_EVENTS_FILENAME,
+    IMRI_GW_ECCENTRICITY,
+    IMRI_LISA_MAX_GW_FREQUENCY_HZ,
+    IMRI_LISA_MIN_GW_FREQUENCY_HZ,
+    IMRI_MAX_GW_TIME_MYR,
     METADATA_FILENAME,
     MIN_RELAXATION_TIME_MYR,
     RATE_HEATMAP_FILENAME,
@@ -49,7 +55,13 @@ from .workers import (
     process_damping_task,
     run_damping_tasks_parallel,
 )
-from .workflow import debug_print_result, main, print_header, run_simulation
+from .workflow import (
+    debug_print_result,
+    main,
+    print_header,
+    run_imri_demo,
+    run_simulation,
+)
 
 __all__ = [
     "AVERAGED_RESULTS_FILENAME",
@@ -64,6 +76,12 @@ __all__ = [
     "FloatArray",
     "GEOMETRIC_FRACTION_HEATMAP_FILENAME",
     "GeometricPopulation",
+    "IMRI_AVERAGED_RESULTS_FILENAME",
+    "IMRI_EVENTS_FILENAME",
+    "IMRI_GW_ECCENTRICITY",
+    "IMRI_LISA_MAX_GW_FREQUENCY_HZ",
+    "IMRI_LISA_MIN_GW_FREQUENCY_HZ",
+    "IMRI_MAX_GW_TIME_MYR",
     "METADATA_FILENAME",
     "MIN_RELAXATION_TIME_MYR",
     "RATE_HEATMAP_FILENAME",
@@ -92,6 +110,7 @@ __all__ = [
     "process_damping_task",
     "run_cli",
     "run_damping_tasks_parallel",
+    "run_imri_demo",
     "run_simulation",
     "save_metadata",
     "save_results",

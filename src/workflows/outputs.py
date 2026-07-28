@@ -1124,7 +1124,7 @@ def _cumulative_mass_statistics(
 def save_metadata(
     output_dir: Path,
     config: TDEDynConfig,
-    runtime_stats: dict[str, float | int],
+    runtime_stats: dict[str, float | int | str],
 ) -> None:
     """Save simulation configuration and runtime statistics."""
     metadata: dict[str, Any] = {
@@ -1132,7 +1132,7 @@ def save_metadata(
             "date": datetime.now().isoformat(),
             "timestamp_s_since_epoch": time.time(),
             "description": (
-                "Dynamical TDE mass-rate simulation with unified " "parallel damping"
+                "Dynamical TDE/IMRI simulation with unified parallel damping"
             ),
         },
         "parameters": {
@@ -1156,6 +1156,14 @@ def save_metadata(
             "tde_radius_rg": config.tde_radius_rg,
             "direct_tde": config.direct_tde,
             "consider_type_ii_migration": config.consider_type_ii_migration,
+            "imri_lisa_min_gw_frequency_hz": (
+                config.imri_lisa_min_gw_frequency_hz
+            ),
+            "imri_lisa_max_gw_frequency_hz": (
+                config.imri_lisa_max_gw_frequency_hz
+            ),
+            "imri_max_gw_time_myr": config.imri_max_gw_time_myr,
+            "imri_gw_eccentricity": config.imri_gw_eccentricity,
             "damping_cpu_count": config.damping_cpu_count,
             "checkpoint_grid_interval": (config.checkpoint_grid_interval),
             "create_visualizations": config.create_visualizations,

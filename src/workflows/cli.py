@@ -7,6 +7,10 @@ from typing import Sequence
 
 from .config import (
     AVERAGED_RESULTS_FILENAME,
+    IMRI_GW_ECCENTRICITY,
+    IMRI_LISA_MAX_GW_FREQUENCY_HZ,
+    IMRI_LISA_MIN_GW_FREQUENCY_HZ,
+    IMRI_MAX_GW_TIME_MYR,
     SECONDS_PER_MINUTE,
     TIMESCALES_FILENAME,
     VISUALIZATION_DIRECTORY,
@@ -18,7 +22,7 @@ from .outputs import (
     create_timescale_histograms_from_csv,
     create_visualizations_from_csv,
 )
-from .workflow import run_simulation
+from .workflow import run_imri_demo, run_simulation
 
 
 def _parse_mass_vector(value: str) -> list[float]:
@@ -106,6 +110,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--tde-radius-rg", type=float, default=10.0)
     parser.add_argument(
+        "--imri-demo",
+        action="store_true",
+        help="run the simplified primary-BH IMRI demo instead of TDE counting",
+    )
+    parser.add_argument(
+        "--imri-lisa-min-gw-frequency-hz",
+        type=float,
+        default=IMRI_LISA_MIN_GW_FREQUENCY_HZ,
+        help="lower GW frequency defining LISA-band entry",
+    )
+    parser.add_argument(
+        "--imri-lisa-max-gw-frequency-hz",
+        type=float,
+        default=IMRI_LISA_MAX_GW_FREQUENCY_HZ,
+        help="upper GW frequency recorded for the LISA band",
+    )
+    parser.add_argument(
+        "--imri-max-gw-time-myr",
+        type=float,
+        default=IMRI_MAX_GW_TIME_MYR,
+        help="maximum Peters GW time from the IMRI threshold to LISA entry",
+    )
+    parser.add_argument(
+        "--imri-gw-eccentricity",
+        type=float,
+        default=IMRI_GW_ECCENTRICITY,
+        help="fixed eccentricity used by the simplified Peters threshold",
+    )
+    parser.add_argument(
         "--checkpoint-interval",
         type=int,
         default=5,
@@ -177,6 +210,10 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         tde_radius_rg=arguments.tde_radius_rg,
         direct_tde=arguments.direct_tde,
         consider_type_ii_migration=not arguments.no_type_ii_migration,
+        imri_lisa_min_gw_frequency_hz=arguments.imri_lisa_min_gw_frequency_hz,
+        imri_lisa_max_gw_frequency_hz=arguments.imri_lisa_max_gw_frequency_hz,
+        imri_max_gw_time_myr=arguments.imri_max_gw_time_myr,
+        imri_gw_eccentricity=arguments.imri_gw_eccentricity,
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         create_visualizations=not arguments.no_visualizations,
@@ -184,7 +221,10 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         print_debug_results=not arguments.no_debug_results,
     )
     start_time_s = time.time()
-    run_simulation(config)
+    if arguments.imri_demo:
+        run_imri_demo(config)
+    else:
+        run_simulation(config)
     runtime_s = time.time() - start_time_s
     print(
         f"Total runtime: {runtime_s:.2f} seconds = "

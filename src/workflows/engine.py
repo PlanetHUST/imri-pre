@@ -694,10 +694,18 @@ class TDEDynEngine:
             f"({type_ii_migration_count} stars)"
         )
 
-    def run_single_simulation(
+    def run_primary_damping_realization(
         self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int
-    ) -> TDEDynSingleResult:
-        """Run one Monte Carlo realization."""
+    ) -> tuple[
+        TDEDynSingleResult,
+        agn.AGN_properties,
+        DiskProfiles,
+        GeometricPopulation | None,
+        FloatArray,
+        list[DampingResult],
+        int,
+    ]:
+        """Run sampling, geometric selection, and primary damping tasks."""
         result = TDEDynSingleResult(m_smbh_msun, m_nsc_msun, repeat_idx)
         cpu_count = (
             self.config.damping_cpu_count
@@ -771,7 +779,15 @@ class TDEDynEngine:
                 )
             )
         if len(selected_indices) == 0:
-            return result
+            return (
+                result,
+                agn_properties,
+                disk_data,
+                None,
+                np.asarray([], dtype=float),
+                [],
+                cpu_count,
+            )
         vprint(
             f"Geometry selection: {len(selected_indices)}/"
             f"{result.total_stars} stars selected "
@@ -815,6 +831,35 @@ class TDEDynEngine:
             ),
             key=lambda item: item["idx"],
         )
+        return (
+            result,
+            agn_properties,
+            disk_data,
+            geo_pool,
+            relaxation_time_myr_geo,
+            primary_results,
+            cpu_count,
+        )
+
+    def run_single_simulation(
+        self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int
+    ) -> TDEDynSingleResult:
+        """Run one Monte Carlo realization."""
+        (
+            result,
+            agn_properties,
+            disk_data,
+            geo_pool,
+            relaxation_time_myr_geo,
+            primary_results,
+            cpu_count,
+        ) = self.run_primary_damping_realization(
+            m_smbh_msun,
+            m_nsc_msun,
+            repeat_idx,
+        )
+        if geo_pool is None:
+            return result
         copy_results = sorted(
             run_damping_tasks_parallel(
                 self.build_copy_tasks(

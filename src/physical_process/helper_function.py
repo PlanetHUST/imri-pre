@@ -25,6 +25,10 @@ RELAXATION_COEFFICIENT = 0.34
 COULOMB_LOGARITHM = 10.0
 RELAXATION_REFERENCE_STELLAR_MASS_G = const.msun
 TYPE_II_GAP_PARAMETER_THRESHOLD = 11.0
+PETERS_ECCENTRICITY_SMALL = 1.0e-8
+PETERS_ECCENTRICITY_MAX = 1.0 - 1.0e-8
+PETERS_ECCENTRICITY_INTEGRATION_POINTS = 4096
+ISCO_RADIUS_RG = 6.0
 
 
 def get_cpu_count() -> int:
@@ -285,6 +289,168 @@ def t_migration_from_torque(
         return np.inf
 
     return float(t_mig_s / const.Myr)
+
+
+def gw_frequency_hz(total_mass_msun: float, semi_major_axis_cm: float) -> float:
+    """Return the dominant circular GW frequency [Hz] at separation ``a`` [cm]."""
+    if total_mass_msun <= 0.0 or semi_major_axis_cm <= 0.0:
+        raise ValueError("binary mass and semi-major axis must be positive")
+    total_mass_g = total_mass_msun * const.msun
+    orbital_frequency_hz = (
+        np.sqrt(const.G * total_mass_g / semi_major_axis_cm**3)
+        / (2.0 * np.pi)
+    )
+    return float(2.0 * orbital_frequency_hz)
+
+
+def gw_radius_for_frequency_cm(total_mass_msun: float, gw_frequency_hz: float) -> float:
+    """Return the circular binary separation [cm] for a GW frequency [Hz]."""
+    if total_mass_msun <= 0.0 or gw_frequency_hz <= 0.0:
+        raise ValueError("binary mass and GW frequency must be positive")
+    total_mass_g = total_mass_msun * const.msun
+    return float(
+        (const.G * total_mass_g / (np.pi * gw_frequency_hz) ** 2)
+        ** (1.0 / 3.0)
+    )
+
+
+def peters_merger_time_myr(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    semi_major_axis_cm: float,
+    eccentricity: float = 0.0,
+) -> float:
+    """Return the Peters (1964) GW coalescence time [Myr].
+
+    The circular limit uses the analytic ``a^4 / (4 beta)`` expression.
+    For eccentric binaries, the standard Peters integral is evaluated
+    numerically without requiring SciPy.
+    """
+    if primary_mass_msun <= 0.0 or secondary_mass_msun <= 0.0:
+        raise ValueError("binary component masses must be positive")
+    if semi_major_axis_cm <= 0.0:
+        raise ValueError("semi-major axis must be positive")
+    if not 0.0 <= eccentricity < 1.0:
+        raise ValueError("eccentricity must satisfy 0 <= e < 1")
+
+    primary_mass_g = primary_mass_msun * const.msun
+    secondary_mass_g = secondary_mass_msun * const.msun
+    beta_cm4_s = (
+        64.0
+        / 5.0
+        * const.G**3
+        * primary_mass_g
+        * secondary_mass_g
+        * (primary_mass_g + secondary_mass_g)
+        / const.c**5
+    )
+    if eccentricity < PETERS_ECCENTRICITY_SMALL:
+        return float(semi_major_axis_cm**4 / (4.0 * beta_cm4_s) / const.Myr)
+
+    eccentricity = min(float(eccentricity), PETERS_ECCENTRICITY_MAX)
+    grid = np.linspace(
+        PETERS_ECCENTRICITY_SMALL,
+        eccentricity,
+        PETERS_ECCENTRICITY_INTEGRATION_POINTS,
+    )
+    integrand = (
+        grid ** (29.0 / 19.0)
+        * (1.0 + 121.0 / 304.0 * grid**2) ** (1181.0 / 2299.0)
+        / (1.0 - grid**2) ** 1.5
+    )
+    trapezoid = getattr(np, "trapezoid", np.trapz)
+    integral = float(trapezoid(integrand, grid))
+    c0_cm = (
+        semi_major_axis_cm
+        * (1.0 - eccentricity**2)
+        * eccentricity ** (-12.0 / 19.0)
+        * (1.0 + 121.0 / 304.0 * eccentricity**2) ** (-870.0 / 2299.0)
+    )
+    return float((12.0 / 19.0) * c0_cm**4 * integral / beta_cm4_s / const.Myr)
+
+
+def lisa_entry_radius_cm(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    min_gw_frequency_hz: float,
+) -> float:
+    """Return the separation [cm] where a circular binary reaches LISA's lower band."""
+    total_mass_msun = primary_mass_msun + secondary_mass_msun
+    entry_radius_cm = gw_radius_for_frequency_cm(total_mass_msun, min_gw_frequency_hz)
+    isco_radius_cm = (
+        ISCO_RADIUS_RG
+        * const.G
+        * total_mass_msun
+        * const.msun
+        / const.c**2
+    )
+    if entry_radius_cm <= isco_radius_cm:
+        return np.inf
+    return entry_radius_cm
+
+
+def peters_time_to_lisa_band_myr(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    semi_major_axis_cm: float,
+    min_gw_frequency_hz: float,
+    eccentricity: float = 0.0,
+) -> float:
+    """Return the GW time [Myr] from ``a`` to LISA lower-band entry."""
+    entry_radius_cm = lisa_entry_radius_cm(
+        primary_mass_msun,
+        secondary_mass_msun,
+        min_gw_frequency_hz,
+    )
+    if not np.isfinite(entry_radius_cm):
+        return np.inf
+    if semi_major_axis_cm <= entry_radius_cm:
+        return 0.0
+    start_time_myr = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        semi_major_axis_cm,
+        eccentricity,
+    )
+    entry_time_myr = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        entry_radius_cm,
+        eccentricity,
+    )
+    return float(max(0.0, start_time_myr - entry_time_myr))
+
+
+def imri_lisa_hubble_threshold_radius_cm(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    max_gw_time_myr: float,
+    min_gw_frequency_hz: float,
+    eccentricity: float = 0.0,
+) -> float:
+    """Return the outermost radius [cm] that reaches LISA within ``max_gw_time``.
+
+    This simplified demo keeps a fixed eccentricity when solving the threshold.
+    With the default ``e=0``, it is exactly the circular Peters solution.
+    """
+    if max_gw_time_myr <= 0.0:
+        raise ValueError("maximum GW time must be positive")
+    entry_radius_cm = lisa_entry_radius_cm(
+        primary_mass_msun,
+        secondary_mass_msun,
+        min_gw_frequency_hz,
+    )
+    if not np.isfinite(entry_radius_cm):
+        return np.inf
+    coefficient_myr_per_cm4 = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        1.0,
+        eccentricity,
+    )
+    entry_time_myr = coefficient_myr_per_cm4 * entry_radius_cm**4
+    threshold_time_myr = max_gw_time_myr + entry_time_myr
+    return float((threshold_time_myr / coefficient_myr_per_cm4) ** 0.25)
 
 
 def velocity_disp(M_SMBH: float) -> float:
