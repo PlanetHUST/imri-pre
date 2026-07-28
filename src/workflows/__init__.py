@@ -1,13 +1,9 @@
-"""Public API for the dynamical TDE-rate simulation."""
+"""Public API for the dynamical IMRI-rate simulation."""
 
 from .cli import build_parser, run_cli
 from .config import (
-    AVERAGED_RESULTS_FILENAME,
-    COMBINED_TIMESCALE_HISTOGRAM_FILENAME,
-    COPY_TIMESCALE_HISTOGRAM_FILENAME,
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     DISK_INNER_RADIUS_RG,
-    GEOMETRIC_FRACTION_HEATMAP_FILENAME,
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
     IMRI_GW_ECCENTRICITY,
@@ -15,18 +11,11 @@ from .config import (
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
     METADATA_FILENAME,
-    MIN_RELAXATION_TIME_MYR,
-    RATE_HEATMAP_FILENAME,
-    RATE_VS_SMBH_PLOT_FILENAME,
     SECONDS_PER_MINUTE,
-    PRIMARY_TIMESCALE_HISTOGRAM_FILENAME,
-    TIMESCALE_HISTOGRAM_FILENAME,
-    TIMESCALES_FILENAME,
-    VISUALIZATION_DIRECTORY,
     YEARS_PER_MYR,
-    TDEDynConfig,
+    IMRIDynConfig,
 )
-from .engine import TDEDynEngine
+from .engine import IMRIDynEngine
 from .models import (
     BoolArray,
     DampingResult,
@@ -34,20 +23,13 @@ from .models import (
     DiskProfiles,
     FloatArray,
     GeometricPopulation,
+    IMRIEventRecord,
+    IMRIDynAveragedResult,
+    IMRIDynSingleResult,
+    IntermediatePopulation,
     StellarPopulation,
-    TIMESCALE_COLUMNS,
-    TimescaleRecord,
-    TDEDynAveragedResult,
-    TDEDynSingleResult,
 )
-from .outputs import (
-    create_timescale_histograms_from_csv,
-    create_visualizations_from_csv,
-    print_timescale_statistics,
-    save_metadata,
-    save_results,
-    save_timescales,
-)
+from .outputs import save_events, save_metadata, save_results
 from .runtime import set_verbose, vprint
 from .workers import (
     get_hpc_cpu_count,
@@ -55,26 +37,16 @@ from .workers import (
     process_damping_task,
     run_damping_tasks_parallel,
 )
-from .workflow import (
-    debug_print_result,
-    main,
-    print_header,
-    run_imri_demo,
-    run_simulation,
-)
+from .workflow import debug_print_result, main, print_header, run_simulation
 
 __all__ = [
-    "AVERAGED_RESULTS_FILENAME",
     "BoolArray",
-    "COMBINED_TIMESCALE_HISTOGRAM_FILENAME",
-    "COPY_TIMESCALE_HISTOGRAM_FILENAME",
     "DISK_ACCRETION_RATE_G_S_PER_MSUN",
     "DISK_INNER_RADIUS_RG",
     "DampingResult",
     "DampingTask",
     "DiskProfiles",
     "FloatArray",
-    "GEOMETRIC_FRACTION_HEATMAP_FILENAME",
     "GeometricPopulation",
     "IMRI_AVERAGED_RESULTS_FILENAME",
     "IMRI_EVENTS_FILENAME",
@@ -82,25 +54,16 @@ __all__ = [
     "IMRI_LISA_MAX_GW_FREQUENCY_HZ",
     "IMRI_LISA_MIN_GW_FREQUENCY_HZ",
     "IMRI_MAX_GW_TIME_MYR",
+    "IMRIEventRecord",
+    "IMRIDynAveragedResult",
+    "IMRIDynConfig",
+    "IMRIDynEngine",
+    "IMRIDynSingleResult",
+    "IntermediatePopulation",
     "METADATA_FILENAME",
-    "MIN_RELAXATION_TIME_MYR",
-    "RATE_HEATMAP_FILENAME",
-    "RATE_VS_SMBH_PLOT_FILENAME",
     "SECONDS_PER_MINUTE",
-    "PRIMARY_TIMESCALE_HISTOGRAM_FILENAME",
     "StellarPopulation",
-    "TIMESCALE_COLUMNS",
-    "TIMESCALE_HISTOGRAM_FILENAME",
-    "TIMESCALES_FILENAME",
-    "TimescaleRecord",
-    "TDEDynAveragedResult",
-    "TDEDynConfig",
-    "TDEDynEngine",
-    "TDEDynSingleResult",
-    "VISUALIZATION_DIRECTORY",
     "YEARS_PER_MYR",
-    "create_visualizations_from_csv",
-    "create_timescale_histograms_from_csv",
     "build_parser",
     "debug_print_result",
     "get_hpc_cpu_count",
@@ -110,12 +73,10 @@ __all__ = [
     "process_damping_task",
     "run_cli",
     "run_damping_tasks_parallel",
-    "run_imri_demo",
     "run_simulation",
+    "save_events",
     "save_metadata",
     "save_results",
-    "save_timescales",
-    "print_timescale_statistics",
     "set_verbose",
     "vprint",
 ]

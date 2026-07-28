@@ -1,4 +1,4 @@
-"""Primary script for running the TDE-rate workflow."""
+"""Primary script for running the IMRI-rate workflow."""
 
 import sys
 from pathlib import Path

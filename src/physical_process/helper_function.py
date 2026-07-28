@@ -291,14 +291,16 @@ def t_migration_from_torque(
     return float(t_mig_s / const.Myr)
 
 
+###############################################
+
+
 def gw_frequency_hz(total_mass_msun: float, semi_major_axis_cm: float) -> float:
     """Return the dominant circular GW frequency [Hz] at separation ``a`` [cm]."""
     if total_mass_msun <= 0.0 or semi_major_axis_cm <= 0.0:
         raise ValueError("binary mass and semi-major axis must be positive")
     total_mass_g = total_mass_msun * const.msun
-    orbital_frequency_hz = (
-        np.sqrt(const.G * total_mass_g / semi_major_axis_cm**3)
-        / (2.0 * np.pi)
+    orbital_frequency_hz = np.sqrt(const.G * total_mass_g / semi_major_axis_cm**3) / (
+        2.0 * np.pi
     )
     return float(2.0 * orbital_frequency_hz)
 
@@ -309,8 +311,7 @@ def gw_radius_for_frequency_cm(total_mass_msun: float, gw_frequency_hz: float) -
         raise ValueError("binary mass and GW frequency must be positive")
     total_mass_g = total_mass_msun * const.msun
     return float(
-        (const.G * total_mass_g / (np.pi * gw_frequency_hz) ** 2)
-        ** (1.0 / 3.0)
+        (const.G * total_mass_g / (np.pi * gw_frequency_hz) ** 2) ** (1.0 / 3.0)
     )
 
 
@@ -375,14 +376,11 @@ def lisa_entry_radius_cm(
     min_gw_frequency_hz: float,
 ) -> float:
     """Return the separation [cm] where a circular binary reaches LISA's lower band."""
+
     total_mass_msun = primary_mass_msun + secondary_mass_msun
     entry_radius_cm = gw_radius_for_frequency_cm(total_mass_msun, min_gw_frequency_hz)
     isco_radius_cm = (
-        ISCO_RADIUS_RG
-        * const.G
-        * total_mass_msun
-        * const.msun
-        / const.c**2
+        ISCO_RADIUS_RG * const.G * total_mass_msun * const.msun / const.c**2
     )
     if entry_radius_cm <= isco_radius_cm:
         return np.inf
@@ -442,15 +440,18 @@ def imri_lisa_hubble_threshold_radius_cm(
     )
     if not np.isfinite(entry_radius_cm):
         return np.inf
+
     coefficient_myr_per_cm4 = peters_merger_time_myr(
         primary_mass_msun,
         secondary_mass_msun,
         1.0,
         eccentricity,
     )
-    entry_time_myr = coefficient_myr_per_cm4 * entry_radius_cm**4
-    threshold_time_myr = max_gw_time_myr + entry_time_myr
+    threshold_time_myr = max_gw_time_myr
     return float((threshold_time_myr / coefficient_myr_per_cm4) ** 0.25)
+
+
+######################################################
 
 
 def velocity_disp(M_SMBH: float) -> float:

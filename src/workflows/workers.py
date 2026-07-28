@@ -1,4 +1,4 @@
-"""Multiprocessing boundary for orbital damping tasks."""
+"""Multiprocessing boundary for IMRI orbital damping tasks."""
 
 import os
 from multiprocessing import Pool
@@ -45,7 +45,7 @@ def init_damping_worker(
 
 
 def process_damping_task(task: DampingTask) -> DampingResult:
-    """Run one primary or resupply damping task."""
+    """Run one damping task for a disk-crossing object."""
     if _WORKER_CALCULATOR is None:
         raise RuntimeError("damping worker was not initialized")
 
@@ -82,8 +82,6 @@ def process_damping_task(task: DampingTask) -> DampingResult:
     return {
         "task_kind": task["task_kind"],
         "idx": task["idx"],
-        "origin_primary_idx": task["origin_primary_idx"],
-        "copy_number": task["copy_number"],
         "final_time_s": final_time_s,
         "final_time_myr": final_time_s / const.Myr,
         "final_semi_major_axis_cm": final_axis_cm,
