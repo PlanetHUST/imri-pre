@@ -43,6 +43,7 @@ def run_simulation(config: IMRIDynConfig | None = None) -> pd.DataFrame:
     print(f"Grid size: {len(smbh_masses_msun)} x {len(nsc_masses_msun)} = {grid_size}")
     print(f"Repeats per point: {config.num_repeats}")
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
+    print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(
         "LISA GW band: "

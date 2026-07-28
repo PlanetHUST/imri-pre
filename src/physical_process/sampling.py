@@ -9,7 +9,7 @@ import numpy.typing as npt
 FloatArray = npt.NDArray[np.float64]
 
 SOLAR_METALLICITY = 0.0145
-POPULATION_III_THRESHOLD_SOLAR = 1.0e-5
+POPULATION_III_THRESHOLD_SOLAR = 1.0e-4
 POPULATION_II_MIN_RETAINED_MASS_MSUN = 1
 SAMPLING_SAFETY_FACTOR = 1.2
 POPULATION_II_APPROX_MEAN_MASS_MSUN = 0.35
@@ -123,7 +123,7 @@ def population_iii_lifetime_yr(mass_msun: FloatArray) -> FloatArray:
 def population_ii_lifetime_yr(mass_msun: FloatArray) -> FloatArray:
     """Return Pop II stellar lifetimes [yr] for masses in solar masses."""
     log_mass = np.log10(mass_msun)
-    return 10 ** (10.0 - 3.68 * log_mass + 1.413 * log_mass**2 - 0.186 * log_mass**3)
+    return 10 ** (10.0 - 3.68 * log_mass + 1.17 * log_mass**2 - 0.12 * log_mass**3)
 
 
 def TIII(m: FloatArray) -> FloatArray:

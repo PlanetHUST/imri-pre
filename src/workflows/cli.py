@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="M1,M2,...",
         help="comma-separated NSC mass values in Msun",
     )
-    parser.add_argument("--metallicity", type=float, default=0.01)
+    parser.add_argument("--metallicity", type=float, default=1e-5)
     parser.add_argument(
         "--initial-stellar-density-gamma",
         type=float,

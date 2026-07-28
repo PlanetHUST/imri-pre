@@ -41,7 +41,7 @@ class IMRIDynConfig:
         # Output location
         output_dir: str | Path = "./imri_dyn_results",
         # Stellar and NSC model parameters
-        metallicity: float = 0.01,
+        metallicity: float = 1e-5,
         initial_stellar_density_gamma: float = 7.0 / 4.0,
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
