@@ -2,6 +2,7 @@ __pycache__/
 .vscode/
 docs/
 .codex/
+.agents/
 figs/
 imri_dyn_results/
 *md

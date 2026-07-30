@@ -60,14 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--smbh-masses",
         type=_parse_mass_vector,
-        default=[3e3, 1e4, 3e4],
+        default=[1e3, 1e4, 1e5, 1e6],
         metavar="M1,M2,...",
         help="comma-separated SMBH mass values in Msun",
     )
     parser.add_argument(
         "--nsc-masses",
         type=_parse_mass_vector,
-        default=[2e5],
+        default=[2e5, 3e5],
         metavar="M1,M2,...",
         help="comma-separated NSC mass values in Msun",
     )
