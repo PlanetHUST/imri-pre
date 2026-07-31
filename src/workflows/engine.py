@@ -69,7 +69,7 @@ class IMRIDynEngine:
                 pagn_alpha = 0.01
                 pagn_disk = build_pagn_disk_profile(
                     m_smbh_msun,
-                    mdot_cgs=accretion_rate_g_s,
+                    accretion_rate_g_s=accretion_rate_g_s,
                     alpha=pagn_alpha,
                     eddington_ratio=0.1,
                 )
@@ -77,12 +77,12 @@ class IMRIDynEngine:
                 self.disk_cache[m_smbh_msun]["torque_alpha"] = pagn_alpha
                 vprint(
                     f"  cached pAGN disk for future torque work at "
-                    f"M_SMBH={m_smbh_msun:.3e} Msun"
+                    f"smbh_mass_msun={m_smbh_msun:.3e}"
                 )
             except Exception:
                 vprint(
-                    f"  pAGN disk unavailable for M_SMBH={m_smbh_msun:.3e} Msun; "
+                    f"  pAGN disk unavailable for smbh_mass_msun={m_smbh_msun:.3e}; "
                     f"using disk_solve migration only"
                 )
-            vprint(f"  cached disk for M_SMBH={m_smbh_msun:.3e} Msun")
+            vprint(f"  cached disk for smbh_mass_msun={m_smbh_msun:.3e}")
         return self.disk_cache[m_smbh_msun]

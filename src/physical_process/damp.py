@@ -1,6 +1,6 @@
 """
 damp.py - Orbital damping calculations for objects in AGN disks.
-Now accepts precomputed disk radial profiles (r_list, sigma_list, h_list)
+Now accepts precomputed disk radial profiles with unit-explicit names
 to avoid repeated recomputation.
 """
 
@@ -47,7 +47,6 @@ class TimescaleData(TypedDict):
 
 
 # ----------------------------------------------------------------------
-# Helper functions for closest‑index lookup (same as before)
 def h_gas(
     radius_cm: float, aspect_ratio: FloatArray, radius_grid_cm: FloatArray
 ) -> float:
@@ -71,23 +70,22 @@ def sigma_gas(
 class OrbitalState:
     """Immutable orbital state.
 
-    Legacy compact field names are retained: ``a`` [cm], ``e`` dimensionless,
-    ``i`` [rad], ``cosw`` dimensionless, and ``t`` [s].
+    Names are explicit about units for dimensional quantities.
     """
 
-    a: float  # semi‑major axis [cm]
-    e: float  # eccentricity
-    i: float  # inclination [rad]
-    cosw: float  # cosine of argument of periapsis
-    t: float = 0.0  # time [s]
+    semi_major_axis_cm: float
+    eccentricity: float
+    inclination_rad: float
+    cos_omega: float
+    time_s: float = 0.0
 
     @property
-    def sini(self) -> float:
-        return np.sin(self.i)
+    def sin_inclination(self) -> float:
+        return np.sin(self.inclination_rad)
 
     @property
-    def cosi(self) -> float:
-        return np.cos(self.i)
+    def cos_inclination(self) -> float:
+        return np.cos(self.inclination_rad)
 
     def update(self, **kwargs: float) -> "OrbitalState":
         """Return a new state with updated fields."""
@@ -104,11 +102,11 @@ class DiskProperties:
     The static method `from_agn` now uses precomputed lists.
     """
 
-    r: tuple[float, float]  # radii at positions 1 and 2 [cm]
-    H: float  # disk scale height at average radius [cm]
-    h: float  # h = H/r (dimensionless)
-    sigma: tuple[float, float]  # surface densities [g/cm^2]
-    rho: tuple[float, float]  # volume densities [g/cm^3]
+    radius_cm: tuple[float, float]
+    scale_height_cm: float
+    aspect_ratio: float
+    surface_density_g_cm2: tuple[float, float]
+    density_g_cm3: tuple[float, float]
 
     @classmethod
     def from_agn(
@@ -134,11 +132,11 @@ class DiskProperties:
         density_1_g_cm3 = sigma_1_g_cm2 / scale_height_cm
         density_2_g_cm3 = sigma_2_g_cm2 / scale_height_cm
         return cls(
-            r=(radius_1_cm, radius_2_cm),
-            H=scale_height_cm,
-            h=local_aspect_ratio,
-            sigma=(sigma_1_g_cm2, sigma_2_g_cm2),
-            rho=(density_1_g_cm3, density_2_g_cm3),
+            radius_cm=(radius_1_cm, radius_2_cm),
+            scale_height_cm=scale_height_cm,
+            aspect_ratio=local_aspect_ratio,
+            surface_density_g_cm2=(sigma_1_g_cm2, sigma_2_g_cm2),
+            density_g_cm3=(density_1_g_cm3, density_2_g_cm3),
         )
 
 
@@ -147,9 +145,9 @@ class DiskProperties:
 class DragProperties:
     """Drag-related quantities at the two orbital positions."""
 
-    rdrag: tuple[float, float]  # effective drag radii [cm]
-    vrel: tuple[float, float]  # relative velocities [cm/s]
-    tau: tuple[float, float]  # drag timescales [s]
+    drag_radius_cm: tuple[float, float]
+    relative_velocity_cm_s: tuple[float, float]
+    drag_time_s: tuple[float, float]
 
     @classmethod
     def compute(
@@ -161,23 +159,23 @@ class DragProperties:
         obj_type: str,
     ) -> "DragProperties":
         """Compute drag properties using orbital state and disk properties."""
-        smbh_mass_g = agn_properties.M_SMBH * const.msun
+        smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
 
         velocity_prefactor_cm_s = np.sqrt(
-            const.G * smbh_mass_g / state.a
-        ) / np.sqrt(1 - state.e**2)
+            const.G * smbh_mass_g / state.semi_major_axis_cm
+        ) / np.sqrt(1 - state.eccentricity**2)
 
         relative_velocity_1_cm_s = velocity_prefactor_cm_s * np.sqrt(
             2
-            - 3 * state.e * state.cosw
-            + state.e**2
-            - 2 * (1 - state.e * state.cosw) ** 1.5 * state.cosi
+            - 3 * state.eccentricity * state.cos_omega
+            + state.eccentricity**2
+            - 2 * (1 - state.eccentricity * state.cos_omega) ** 1.5 * state.cos_inclination
         )
         relative_velocity_2_cm_s = velocity_prefactor_cm_s * np.sqrt(
             2
-            + 3 * state.e * state.cosw
-            + state.e**2
-            - 2 * (1 + state.e * state.cosw) ** 1.5 * state.cosi
+            + 3 * state.eccentricity * state.cos_omega
+            + state.eccentricity**2
+            - 2 * (1 + state.eccentricity * state.cos_omega) ** 1.5 * state.cos_inclination
         )
 
         # Geometric radius (Bondi for BHs, stellar radius for stars)
@@ -207,7 +205,7 @@ class DragProperties:
             / (
                 np.pi
                 * drag_radius_1_cm**2
-                * disk.rho[0]
+                * disk.density_g_cm3[0]
                 * relative_velocity_1_cm_s
             )
         )
@@ -216,17 +214,17 @@ class DragProperties:
             / (
                 np.pi
                 * drag_radius_2_cm**2
-                * disk.rho[1]
+                * disk.density_g_cm3[1]
                 * relative_velocity_2_cm_s
             )
         )
         return cls(
-            rdrag=(drag_radius_1_cm, drag_radius_2_cm),
-            vrel=(
+            drag_radius_cm=(drag_radius_1_cm, drag_radius_2_cm),
+            relative_velocity_cm_s=(
                 float(relative_velocity_1_cm_s),
                 float(relative_velocity_2_cm_s),
             ),
-            tau=(float(drag_time_1_s), float(drag_time_2_s)),
+            drag_time_s=(float(drag_time_1_s), float(drag_time_2_s)),
         )
 
 
@@ -245,7 +243,7 @@ class TimescaleCalculator:
         aspect_ratio: FloatArray,
     ) -> None:
         self.agn_properties = agn_properties
-        self.smbh_mass_g = agn_properties.M_SMBH * const.msun
+        self.smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
         self.radius_grid_cm = radius_grid_cm
         self.surface_density_g_cm2 = surface_density_g_cm2
         self.aspect_ratio = aspect_ratio
@@ -255,10 +253,10 @@ class TimescaleCalculator:
     ) -> tuple[float, float]:
         """Return the two extremal radii (periapsis‑like and apoapsis‑like)."""
         radius_1_cm = (
-            state.a * (1 - state.e**2) / (1 - state.e * state.cosw)
+            state.semi_major_axis_cm * (1 - state.eccentricity**2) / (1 - state.eccentricity * state.cos_omega)
         )
         radius_2_cm = (
-            state.a * (1 - state.e**2) / (1 + state.e * state.cosw)
+            state.semi_major_axis_cm * (1 - state.eccentricity**2) / (1 + state.eccentricity * state.cos_omega)
         )
         return radius_1_cm, radius_2_cm
 
@@ -272,12 +270,12 @@ class TimescaleCalculator:
         velocity_1_cm_s = np.sqrt(
             const.G
             * self.smbh_mass_g
-            * (2 / radius_1_cm - 1 / state.a)
+            * (2 / radius_1_cm - 1 / state.semi_major_axis_cm)
         )
         velocity_2_cm_s = np.sqrt(
             const.G
             * self.smbh_mass_g
-            * (2 / radius_2_cm - 1 / state.a)
+            * (2 / radius_2_cm - 1 / state.semi_major_axis_cm)
         )
         return float(velocity_1_cm_s), float(velocity_2_cm_s)
 
@@ -286,7 +284,7 @@ class TimescaleCalculator:
         return float(
             2
             * np.pi
-            * np.sqrt(state.a**3 / const.G / self.smbh_mass_g)
+            * np.sqrt(state.semi_major_axis_cm**3 / const.G / self.smbh_mass_g)
         )
 
     def compute_crossing_times(
@@ -298,10 +296,10 @@ class TimescaleCalculator:
     ) -> tuple[float, float]:
         """Disk crossing times (time to pass through the disk thickness)."""
         crossing_time_1_s = (
-            2 * scale_height_cm / (velocity_1_cm_s * state.sini)
+            2 * scale_height_cm / (velocity_1_cm_s * state.sin_inclination)
         )
         crossing_time_2_s = (
-            2 * scale_height_cm / (velocity_2_cm_s * state.sini)
+            2 * scale_height_cm / (velocity_2_cm_s * state.sin_inclination)
         )
         return float(crossing_time_1_s), float(crossing_time_2_s)
 
@@ -343,7 +341,7 @@ class TimescaleCalculator:
         # Crossing times
         crossing_time_1_s, crossing_time_2_s = (
             self.compute_crossing_times(
-                disk_prop.H,
+                disk_prop.scale_height_cm,
                 velocity_1_cm_s,
                 velocity_2_cm_s,
                 state,
@@ -378,26 +376,25 @@ class DampingCalculator:
 
     def __init__(
         self,
-        AGN: AGN_properties,
+        agn_properties: AGN_properties,
         verbose: bool,
-        r_list: FloatArray,
-        sigma_list: FloatArray,
-        h_list: FloatArray,
+        radius_grid_cm: FloatArray,
+        surface_density_g_cm2: FloatArray,
+        aspect_ratio: FloatArray,
     ) -> None:
-        """Initialize from AGN state and disk grids.
-
-        Legacy keyword names are retained: ``r_list`` [cm], ``sigma_list``
-        [g/cm^2], and dimensionless ``h_list``.
-        """
-        self.AGN = AGN
+        """Initialize from AGN state and disk grids."""
+        self.agn_properties = agn_properties
         self.verbose = verbose
         self.timescale_calc = TimescaleCalculator(
-            AGN, r_list, sigma_list, h_list
+            agn_properties,
+            radius_grid_cm,
+            surface_density_g_cm2,
+            aspect_ratio,
         )
         self._setup_constants()
 
     def _setup_constants(self) -> None:
-        self.smbh_mass_g = self.AGN.M_SMBH * const.msun
+        self.smbh_mass_g = self.agn_properties.smbh_mass_msun * const.msun
         self.minimum_inclination_rad = np.deg2rad(
             MIN_EMBEDDED_INCLINATION_DEG
         )
@@ -413,7 +410,7 @@ class DampingCalculator:
             "crossing_time_s"
         ]
         orbital_period_s = timescales["orbital_period_s"]
-        drag_time_1_s, drag_time_2_s = timescales["drag"].tau
+        drag_time_1_s, drag_time_2_s = timescales["drag"].drag_time_s
 
         if (
             drag_time_1_s <= 0
@@ -443,37 +440,41 @@ class DampingCalculator:
         """Print detailed debug information."""
         print("#" * 50)
         print(f"Myr: {const.Myr:.3e} s")
-        print(f"rg: {self.AGN.rg:.3e} cm")
+        gravitational_radius_cm = self.agn_properties.gravitational_radius_cm
+        print(f"rg: {gravitational_radius_cm:.3e} cm")
         print(
             f"torb: {timescales['orbital_period_s']/const.Myr:.2e} Myr"
         )
         print(f"tdrag: {damping_time_s/const.Myr:.2e} Myr")
         print(f"mass: {mass_g/const.msun:.2e} Msun")
         print("\n=== Orbital Parameters ===")
-        print(f"a: {state.a/self.AGN.rg:.2e} rg")
-        print(f"e: {state.e:.3f}")
-        print(f"i: {np.degrees(state.i):.1f}°")
-        print(f"cosw: {state.cosw:.3f}")
+        print(f"a: {state.semi_major_axis_cm/gravitational_radius_cm:.2e} rg")
+        print(f"e: {state.eccentricity:.3f}")
+        print(f"i: {np.degrees(state.inclination_rad):.1f}°")
+        print(f"cosw: {state.cos_omega:.3f}")
         drag = timescales["drag"]
-        print(f"rdrag: {drag.rdrag[0]:3e}, {drag.rdrag[1]:3e} cm")
+        print(
+            "rdrag: "
+            f"{drag.drag_radius_cm[0]:3e}, {drag.drag_radius_cm[1]:3e} cm"
+        )
         print("\n=== Disk Properties ===")
         disk = timescales["disk"]
-        print(f"H: {disk.H/self.AGN.rg:.2e} rg")
-        print(f"sigma1: {disk.sigma[0]:.2e} g/cm²")
-        print(f"sigma2: {disk.sigma[1]:.2e} g/cm²")
-        print(f"rhod1: {disk.rho[0]:.2e} g/cm³")
-        print(f"rhod2: {disk.rho[1]:.2e} g/cm³")
+        print(f"H: {disk.scale_height_cm/gravitational_radius_cm:.2e} rg")
+        print(f"sigma1: {disk.surface_density_g_cm2[0]:.2e} g/cm²")
+        print(f"sigma2: {disk.surface_density_g_cm2[1]:.2e} g/cm²")
+        print(f"rhod1: {disk.density_g_cm3[0]:.2e} g/cm³")
+        print(f"rhod2: {disk.density_g_cm3[1]:.2e} g/cm³")
         print("\n=== Velocities ===")
-        print(f"vrel1: {drag.vrel[0]/1e5:.2e} km/s")
-        print(f"vrel2: {drag.vrel[1]/1e5:.2e} km/s")
+        print(f"vrel1: {drag.relative_velocity_cm_s[0]/1e5:.2e} km/s")
+        print(f"vrel2: {drag.relative_velocity_cm_s[1]/1e5:.2e} km/s")
         print("\n=== Timescales ===")
         crossing_time_1_s, crossing_time_2_s = timescales[
             "crossing_time_s"
         ]
         print(f"tcross1: {crossing_time_1_s/const.Myr:.2e} Myr")
         print(f"tcross2: {crossing_time_2_s/const.Myr:.2e} Myr")
-        print(f"tau1: {drag.tau[0]/const.Myr:.2e} Myr")
-        print(f"tau2: {drag.tau[1]/const.Myr:.2e} Myr")
+        print(f"tau1: {drag.drag_time_s[0]/const.Myr:.2e} Myr")
+        print(f"tau2: {drag.drag_time_s[1]/const.Myr:.2e} Myr")
 
     def compute_ode_coefficients(
         self,
@@ -483,76 +484,93 @@ class DampingCalculator:
         crossing_time_1_s: float,
         crossing_time_2_s: float,
     ) -> tuple[float, float, float, float, float, float]:
-        """Compute ODE coefficients for da/dt, de/dt, di/dt."""
+        """Compute per-orbit ODE coefficients for a, e, and inclination."""
         # Position 1 (periapsis‑like)
-        da1 = (
-            -state.a
+        delta_axis_1_cm_per_orbit = (
+            -state.semi_major_axis_cm
             / drag_time_1_s
             * 2
-            / (1 - state.e**2)
+            / (1 - state.eccentricity**2)
             * (
                 1
-                - 2 * state.e * state.cosw
-                + state.e**2
-                - (1 - state.e * state.cosw) ** 1.5 * state.cosi
+                - 2 * state.eccentricity * state.cos_omega
+                + state.eccentricity**2
+                - (1 - state.eccentricity * state.cos_omega) ** 1.5
+                * state.cos_inclination
             )
             * crossing_time_1_s
         )
-        de1 = (
+        delta_eccentricity_1_per_orbit = (
             -1
             / drag_time_1_s
             * (
-                2 * state.e
-                - 2 * state.cosw
-                - (state.e + state.e * state.cosw**2 - 2 * state.cosw)
-                / np.sqrt(1 - state.e * state.cosw)
-                * state.cosi
+                2 * state.eccentricity
+                - 2 * state.cos_omega
+                - (
+                    state.eccentricity
+                    + state.eccentricity * state.cos_omega**2
+                    - 2 * state.cos_omega
+                )
+                / np.sqrt(1 - state.eccentricity * state.cos_omega)
+                * state.cos_inclination
             )
             * crossing_time_1_s
         )
-        di1 = (
+        delta_inclination_1_rad_per_orbit = (
             -1
             / drag_time_1_s
-            * state.sini
-            / np.sqrt(1 - state.e * state.cosw)
+            * state.sin_inclination
+            / np.sqrt(1 - state.eccentricity * state.cos_omega)
             * crossing_time_1_s
         )
 
         # Position 2 (apoapsis‑like)
-        da2 = (
-            -state.a
+        delta_axis_2_cm_per_orbit = (
+            -state.semi_major_axis_cm
             / drag_time_2_s
             * 2
-            / (1 - state.e**2)
+            / (1 - state.eccentricity**2)
             * (
                 1
-                - 2 * state.e * state.cosw
-                + state.e**2
-                - (1 + state.e * state.cosw) ** 1.5 * state.cosi
+                - 2 * state.eccentricity * state.cos_omega
+                + state.eccentricity**2
+                - (1 + state.eccentricity * state.cos_omega) ** 1.5
+                * state.cos_inclination
             )
             * crossing_time_2_s
         )
-        de2 = (
+        delta_eccentricity_2_per_orbit = (
             -1
             / drag_time_2_s
             * (
-                2 * state.e
-                + 2 * state.cosw
-                - (state.e + state.e * state.cosw**2 - 2 * state.cosw)
-                / np.sqrt(1 + state.e * state.cosw)
-                * state.cosi
+                2 * state.eccentricity
+                + 2 * state.cos_omega
+                - (
+                    state.eccentricity
+                    + state.eccentricity * state.cos_omega**2
+                    - 2 * state.cos_omega
+                )
+                / np.sqrt(1 + state.eccentricity * state.cos_omega)
+                * state.cos_inclination
             )
             * crossing_time_2_s
         )
-        di2 = (
+        delta_inclination_2_rad_per_orbit = (
             -1
             / drag_time_2_s
-            * state.sini
-            / np.sqrt(1 + state.e * state.cosw)
+            * state.sin_inclination
+            / np.sqrt(1 + state.eccentricity * state.cos_omega)
             * crossing_time_2_s
         )
 
-        return da1, da2, di1, di2, de1, de2
+        return (
+            delta_axis_1_cm_per_orbit,
+            delta_axis_2_cm_per_orbit,
+            delta_inclination_1_rad_per_orbit,
+            delta_inclination_2_rad_per_orbit,
+            delta_eccentricity_1_per_orbit,
+            delta_eccentricity_2_per_orbit,
+        )
 
     def adaptive_time_step(
         self,
@@ -563,12 +581,14 @@ class DampingCalculator:
     ) -> float:
         """Return factor to multiply dt (1 = keep, >1 increase, <1 decrease)."""
         relative_axis_change = (
-            np.abs(delta_semi_major_axis_cm / state.a)
-            if state.a > 0
+            np.abs(delta_semi_major_axis_cm / state.semi_major_axis_cm)
+            if state.semi_major_axis_cm > 0
             else 0
         )
         relative_inclination_change = (
-            np.abs(delta_inclination_rad / state.i) if state.i > 0 else 0
+            np.abs(delta_inclination_rad / state.inclination_rad)
+            if state.inclination_rad > 0
+            else 0
         )
         if (
             relative_axis_change < 0.1 * tolerance
@@ -601,21 +621,21 @@ class DampingCalculator:
             raise ValueError("formation time must be nonnegative")
         state = initial_state
         formation_time_s = formation_time_myr * const.Myr
-        duty_cycle_s = self.AGN.AGNlifetime * const.Myr
+        duty_cycle_s = self.agn_properties.agn_lifetime_myr * const.Myr
 
         time_step_fraction = INITIAL_TIME_STEP_FRACTION
 
         iteration = 0
 
         while (
-            state.i > self.minimum_inclination_rad
+            state.inclination_rad > self.minimum_inclination_rad
             and iteration < max_iter
         ):
             iteration += 1
 
-            if state.e < 0:
-                state = state.update(e=0.0)
-            if state.e >= 1.0:
+            if state.eccentricity < 0:
+                state = state.update(eccentricity=0.0)
+            if state.eccentricity >= 1.0:
                 if self.verbose:
                     print("Warning: Orbit became unbound (e >= 1)")
                 break
@@ -623,7 +643,7 @@ class DampingCalculator:
             timescales = self.timescale_calc.compute_all_timescales(
                 mass_g, state, obj_type
             )
-            drag_time_1_s, drag_time_2_s = timescales["drag"].tau
+            drag_time_1_s, drag_time_2_s = timescales["drag"].drag_time_s
             crossing_time_1_s, crossing_time_2_s = timescales[
                 "crossing_time_s"
             ]
@@ -639,32 +659,47 @@ class DampingCalculator:
             )
 
             # Compute derivatives
-            da1, da2, di1, di2, de1, de2 = self.compute_ode_coefficients(
+            (
+                delta_axis_1_cm_per_orbit,
+                delta_axis_2_cm_per_orbit,
+                delta_inclination_1_rad_per_orbit,
+                delta_inclination_2_rad_per_orbit,
+                delta_eccentricity_1_per_orbit,
+                delta_eccentricity_2_per_orbit,
+            ) = self.compute_ode_coefficients(
                 state,
                 drag_time_1_s,
                 drag_time_2_s,
                 crossing_time_1_s,
                 crossing_time_2_s,
             )
-            delta_axis_per_orbit_cm = da1 + da2
-            delta_eccentricity_per_orbit = de1 + de2
-            delta_inclination_per_orbit_rad = di1 + di2
+            delta_axis_per_orbit_cm = (
+                delta_axis_1_cm_per_orbit + delta_axis_2_cm_per_orbit
+            )
+            delta_eccentricity_per_orbit = (
+                delta_eccentricity_1_per_orbit
+                + delta_eccentricity_2_per_orbit
+            )
+            delta_inclination_per_orbit_rad = (
+                delta_inclination_1_rad_per_orbit
+                + delta_inclination_2_rad_per_orbit
+            )
 
             new_semi_major_axis_cm = (
-                state.a
+                state.semi_major_axis_cm
                 + delta_axis_per_orbit_cm
                 * time_step_s
                 / orbital_period_s
             )
             new_eccentricity = max(
-                state.e
+                state.eccentricity
                 + delta_eccentricity_per_orbit
                 * time_step_s
                 / orbital_period_s,
                 0.0,
             )
             new_inclination_rad = (
-                state.i
+                state.inclination_rad
                 + delta_inclination_per_orbit_rad
                 * time_step_s
                 / orbital_period_s
@@ -672,13 +707,19 @@ class DampingCalculator:
 
             # Adaptive step control
             relative_axis_change = (
-                abs((new_semi_major_axis_cm - state.a) / state.a)
-                if state.a > 0
+                abs(
+                    (new_semi_major_axis_cm - state.semi_major_axis_cm)
+                    / state.semi_major_axis_cm
+                )
+                if state.semi_major_axis_cm > 0
                 else 0
             )
             relative_inclination_change = (
-                abs((new_inclination_rad - state.i) / state.i)
-                if state.i > self.minimum_inclination_rad
+                abs(
+                    (new_inclination_rad - state.inclination_rad)
+                    / state.inclination_rad
+                )
+                if state.inclination_rad > self.minimum_inclination_rad
                 else 0
             )
             maximum_relative_change = max(
@@ -697,10 +738,10 @@ class DampingCalculator:
                 )
 
             state = state.update(
-                a=float(new_semi_major_axis_cm),
-                e=float(new_eccentricity),
-                i=float(new_inclination_rad),
-                t=float(state.t + time_step_s),
+                semi_major_axis_cm=float(new_semi_major_axis_cm),
+                eccentricity=float(new_eccentricity),
+                inclination_rad=float(new_inclination_rad),
+                time_s=float(state.time_s + time_step_s),
             )
 
             # Star → BH transition handling
@@ -738,20 +779,20 @@ class DampingCalculator:
         if "test" in obj_type:
             return None
         if obj_type == "BH":
-            if state.t < duty_cycle_s:
+            if state.time_s < duty_cycle_s:
                 return None
             return (0.0, 0.0, 2)  # BH outside disk
         if obj_type == "Star":
-            if state.t <= formation_time_s:
+            if state.time_s <= formation_time_s:
                 return None
             black_hole_embedding_time_s = (
-                state.t
+                state.time_s
                 + self.damping_semi_analysis(mass_g, state, "BH")
             )
             if black_hole_embedding_time_s < duty_cycle_s:
                 return (
                     black_hole_embedding_time_s,
-                    state.a,
+                    state.semi_major_axis_cm,
                     1,
                 )
             return (0.0, 0.0, 2)
@@ -766,11 +807,11 @@ class DampingCalculator:
     ) -> tuple[float, float, int]:
         """Return final time [s], semi-major axis [cm], and object flag."""
         if "test" in obj_type:
-            return state.t, state.a, -1
-        if state.t > duty_cycle_s:
+            return state.time_s, state.semi_major_axis_cm, -1
+        if state.time_s > duty_cycle_s:
             return 0.0, 0.0, 2
-        if state.t <= formation_time_s:
+        if state.time_s <= formation_time_s:
             final_type_flag = 0
         else:
             final_type_flag = 1
-        return state.t, state.a, final_type_flag
+        return state.time_s, state.semi_major_axis_cm, final_type_flag

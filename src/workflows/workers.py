@@ -38,9 +38,9 @@ def init_damping_worker(
     _WORKER_CALCULATOR = DampingCalculator(
         agn_properties,
         verbose=False,
-        r_list=radius_cm,
-        sigma_list=surface_density_g_cm2,
-        h_list=aspect_ratio,
+        radius_grid_cm=radius_cm,
+        surface_density_g_cm2=surface_density_g_cm2,
+        aspect_ratio=aspect_ratio,
     )
 
 
@@ -51,11 +51,11 @@ def process_damping_task(task: DampingTask) -> DampingResult:
 
     try:
         state = OrbitalState(
-            task["semi_major_axis_cm"],
-            task["eccentricity"],
-            task["inclination_rad"],
-            task["cos_omega"],
-            task["state_time_s"],
+            semi_major_axis_cm=task["semi_major_axis_cm"],
+            eccentricity=task["eccentricity"],
+            inclination_rad=task["inclination_rad"],
+            cos_omega=task["cos_omega"],
+            time_s=task["state_time_s"],
         )
         final_time_s, final_axis_cm, object_type = (
             _WORKER_CALCULATOR.damping_simulation(

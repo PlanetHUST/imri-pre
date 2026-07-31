@@ -98,8 +98,8 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
             grid_index = smbh_index * len(nsc_masses_msun) + nsc_index + 1
             print_header(
                 f"Grid Point {grid_index}/{grid_size}: "
-                f"M_SMBH={smbh_mass_msun:.2e}, "
-                f"M_NSC={nsc_mass_msun:.2e}",
+                f"smbh_mass_msun={smbh_mass_msun:.2e}, "
+                f"nsc_mass_msun={nsc_mass_msun:.2e}",
                 72,
                 "-",
             )

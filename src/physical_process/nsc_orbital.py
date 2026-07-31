@@ -31,103 +31,127 @@ def get_cpu_count() -> int:
         return 2
 
 
-def initial_mass(N: int, min: float = 1e4, max: float = 1e5) -> FloatArray:
+def initial_mass(
+    sample_count: int,
+    min_mass_msun: float = 1e4,
+    max_mass_msun: float = 1e5,
+) -> FloatArray:
     """Return ``N`` logarithmically spaced masses [Msun].
 
-    ``min`` and ``max`` retain their historical parameter names for API
-    compatibility; both are measured in solar masses.
+    Both mass bounds are measured in solar masses.
     """
-    if N <= 0:
+    if sample_count <= 0:
         raise ValueError("number of mass samples must be positive")
-    if not 0.0 < min <= max:
+    if not 0.0 < min_mass_msun <= max_mass_msun:
         raise ValueError("mass bounds must satisfy 0 < min <= max")
-    return np.logspace(np.log10(min), np.log10(max), N)
+    return np.logspace(
+        np.log10(min_mass_msun),
+        np.log10(max_mass_msun),
+        sample_count,
+    )
 
 
-def get_NSC_mass(M_SMBH: float | FloatArray) -> float | FloatArray:
+def get_NSC_mass(smbh_mass_msun: float | FloatArray) -> float | FloatArray:
     """Estimate NSC mass [Msun] from SMBH mass [Msun]."""
-    m_smbh_msun = np.asarray(M_SMBH)
-    m_nsc_msun = NSC_TO_SMBH_MASS_RATIO * m_smbh_msun
-    return float(m_nsc_msun) if m_nsc_msun.ndim == 0 else m_nsc_msun
+    nsc_mass_msun = NSC_TO_SMBH_MASS_RATIO * np.asarray(smbh_mass_msun)
+    return float(nsc_mass_msun) if nsc_mass_msun.ndim == 0 else nsc_mass_msun
 
 
 def initial_star(
-    num: int,
-    M_SMBH: float,
-    rmax: float,
+    star_count: int,
+    smbh_mass_msun: float,
+    max_radius_cm: float,
     gamma: float = 7.0 / 4.0,
 ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
     """Sample orbital elements.
 
     Args:
-        num: Number of stellar orbits.
-        M_SMBH: SMBH mass [Msun].
-        rmax: Maximum semi-major axis [cm].
+        star_count: Number of stellar orbits.
+        smbh_mass_msun: SMBH mass [Msun].
+        max_radius_cm: Maximum semi-major axis [cm].
         gamma: Number-density power-law index.
 
     Returns:
         Semi-major axis [cm], eccentricity, inclination [rad], and
         ``cos(omega)``. The historical angular distributions are preserved.
     """
-    if num < 0:
+    if star_count < 0:
         raise ValueError("number of stars must be nonnegative")
-    if M_SMBH <= 0.0 or rmax <= 0.0:
+    if smbh_mass_msun <= 0.0 or max_radius_cm <= 0.0:
         raise ValueError("SMBH mass and maximum radius must be positive")
 
     volume_integral_exponent = 2.0 - gamma
     inverse_cdf_exponent = volume_integral_exponent + 1.0
-    gravitational_radius_cm = const.G * M_SMBH * const.msun / const.c**2
+    gravitational_radius_cm = const.G * smbh_mass_msun * const.msun / const.c**2
     minimum_radius_cm = DISK_INNER_RADIUS_RG * gravitational_radius_cm
-    if rmax < minimum_radius_cm:
+    if max_radius_cm < minimum_radius_cm:
         raise ValueError("maximum radius must exceed the inner orbital radius")
 
-    uniform_radius = np.random.random(num)
+    uniform_radius = np.random.random(star_count)
     semi_major_axis_cm = (
         minimum_radius_cm**inverse_cdf_exponent
         + uniform_radius
-        * (rmax**inverse_cdf_exponent - minimum_radius_cm**inverse_cdf_exponent)
+        * (
+            max_radius_cm**inverse_cdf_exponent
+            - minimum_radius_cm**inverse_cdf_exponent
+        )
     ) ** (1.0 / inverse_cdf_exponent)
-    eccentricity = np.sqrt(np.random.random(num))
-    inclination_rad = np.random.uniform(MIN_INCLINATION_RAD, MAX_INCLINATION_RAD, num)
-    cos_omega = np.random.random(num)
+    eccentricity = np.sqrt(np.random.random(star_count))
+    inclination_rad = np.random.uniform(
+        MIN_INCLINATION_RAD,
+        MAX_INCLINATION_RAD,
+        star_count,
+    )
+    cos_omega = np.random.random(star_count)
     return semi_major_axis_cm, eccentricity, inclination_rad, cos_omega
 
 
-def velocity_disp(M_SMBH: float) -> float:
+def velocity_disp(smbh_mass_msun: float) -> float:
     """Return NSC velocity dispersion [cm/s] for SMBH mass [Msun]."""
-    if M_SMBH <= 0.0:
+    if smbh_mass_msun <= 0.0:
         raise ValueError("SMBH mass must be positive")
     return float(
         VELOCITY_DISPERSION_NORMALIZATION_CM_S
-        * M_SMBH**VELOCITY_DISPERSION_MASS_EXPONENT
+        * smbh_mass_msun**VELOCITY_DISPERSION_MASS_EXPONENT
     )
 
 
-def number_R_MSC(M_SMBH: float, m: float, R: float, gamma: float = 1.3) -> float:
+def number_R_MSC(
+    smbh_mass_msun: float,
+    stellar_mass_g: float,
+    radius_cm: float,
+    gamma: float = 1.3,
+) -> float:
     """Return NSC stellar number density [cm^-3].
 
-    ``M_SMBH`` is in solar masses; stellar mass ``m`` is in grams and radius
-    ``R`` is in centimeters.
+    ``smbh_mass_msun`` is in solar masses, stellar mass is in grams, and
+    radius is in centimeters.
     """
-    if M_SMBH <= 0.0 or m <= 0.0 or R <= 0.0:
+    if smbh_mass_msun <= 0.0 or stellar_mass_g <= 0.0 or radius_cm <= 0.0:
         raise ValueError("masses and radius must be positive")
-    smbh_mass_g = M_SMBH * const.msun
-    influence_radius_cm = const.G * smbh_mass_g / velocity_disp(M_SMBH) ** 2
+    smbh_mass_g = smbh_mass_msun * const.msun
+    influence_radius_cm = (
+        const.G * smbh_mass_g / velocity_disp(smbh_mass_msun) ** 2
+    )
     return float(
         (3.0 - gamma)
         * smbh_mass_g
-        / (2.0 * np.pi * m)
+        / (2.0 * np.pi * stellar_mass_g)
         * influence_radius_cm ** (-3.0)
-        * (R / influence_radius_cm) ** (-gamma)
+        * (radius_cm / influence_radius_cm) ** (-gamma)
     )
 
 
-def t_relax(M_SMBH: float, R: float) -> float:
-    """Return the two-body relaxation time [s] at radius ``R`` [cm]."""
-    number_density_cm3 = number_R_MSC(M_SMBH, RELAXATION_REFERENCE_STELLAR_MASS_G, R)
+def t_relax(smbh_mass_msun: float, radius_cm: float) -> float:
+    """Return the two-body relaxation time [s] at radius ``radius_cm``."""
+    number_density_cm3 = number_R_MSC(
+        smbh_mass_msun,
+        RELAXATION_REFERENCE_STELLAR_MASS_G,
+        radius_cm,
+    )
     relaxation_time_s = (
         RELAXATION_COEFFICIENT
-        * velocity_disp(M_SMBH) ** 3
+        * velocity_disp(smbh_mass_msun) ** 3
         / (
             const.G**2
             * RELAXATION_REFERENCE_STELLAR_MASS_G**2

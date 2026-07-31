@@ -135,9 +135,9 @@ class IMRISingleWorkflow:
             inclination_rad,
             cos_omega,
         ) = nsc_orbital.initial_star(
-            len(mass_msun),
-            m_smbh_msun,
-            rmax=nsc_radius_cm,
+            star_count=len(mass_msun),
+            smbh_mass_msun=m_smbh_msun,
+            max_radius_cm=nsc_radius_cm,
             gamma=self.config.initial_stellar_density_gamma,
         )
 
@@ -272,7 +272,10 @@ class IMRISingleWorkflow:
         relaxation_time_myr_geo = (
             np.asarray(
                 [
-                    nsc_orbital.t_relax(agn_properties.M_SMBH, orbit_radius_cm)
+                    nsc_orbital.t_relax(
+                        agn_properties.smbh_mass_msun,
+                        orbit_radius_cm,
+                    )
                     for orbit_radius_cm in geo_pool["semi_major_axis_cm"]
                 ],
                 dtype=float,
@@ -516,9 +519,9 @@ class IMRISingleWorkflow:
             agn_properties,
             mass_g,
             start_radius_cm,
-            h_list=disk_data["aspect_ratio"],
-            sigma_list=disk_data["surface_density_g_cm2"],
-            r_list=disk_data["radius_cm"],
+            aspect_ratio=disk_data["aspect_ratio"],
+            surface_density_g_cm2=disk_data["surface_density_g_cm2"],
+            radius_grid_cm=disk_data["radius_cm"],
             consider_type_ii=self.config.consider_type_ii_migration,
         )
         if not np.isfinite(local_time_myr) or local_time_myr <= 0.0:

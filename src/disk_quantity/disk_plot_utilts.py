@@ -47,9 +47,9 @@ def _disk_profile_payload(
     if n_resolution is None:
         n_resolution = int(os.getenv("PAGN_DISK_N_RESOLUTION", "10000"))
 
-    mdot_cgs = None
+    accretion_rate_g_s = None
     if mdot_per_solar_mass is not None:
-        mdot_cgs = float(smbh_mass) * float(mdot_per_solar_mass)
+        accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
 
     profile = build_pagn_disk_profile(
         smbh_mass,
@@ -58,15 +58,18 @@ def _disk_profile_payload(
         eddington_ratio=eddington_ratio,
         alpha=alpha,
         b=0,
-        mdot_cgs=mdot_cgs,
+        accretion_rate_g_s=accretion_rate_g_s,
     )
 
-    r_over_rg = np.asarray(profile.r_list, dtype=float) / profile.rg
-    q_values = np.asarray(profile.Q_list, dtype=float)
+    r_over_rg = (
+        np.asarray(profile.radius_cm, dtype=float)
+        / profile.gravitational_radius_cm
+    )
+    q_values = np.asarray(profile.toomre_q, dtype=float)
     r_out_over_rg = _q1_radius_over_rg(
         r_over_rg,
         q_values,
-        fallback=float(profile.r_out / profile.rg),
+        fallback=float(profile.outer_radius_cm / profile.gravitational_radius_cm),
     )
 
     return {
@@ -74,13 +77,13 @@ def _disk_profile_payload(
         "disk_model": profile.model_name,
         "r_over_rg": r_over_rg,
         "r_out_over_rg": r_out_over_rg,
-        "tc": np.asarray(profile.Tc_list, dtype=float),
+        "tc": np.asarray(profile.temperature_k, dtype=float),
         "q": q_values,
-        "sigma": np.asarray(profile.sigma_list, dtype=float),
-        "tau": np.asarray(profile.tau_list, dtype=float),
-        "h_over_r": np.asarray(profile.h_list, dtype=float),
-        "cs": np.asarray(profile.cs_list, dtype=float),
-        "rho": np.asarray(profile.rho_list, dtype=float),
+        "sigma": np.asarray(profile.surface_density_g_cm2, dtype=float),
+        "tau": np.asarray(profile.optical_depth, dtype=float),
+        "h_over_r": np.asarray(profile.aspect_ratio, dtype=float),
+        "cs": np.asarray(profile.sound_speed_cm_s, dtype=float),
+        "rho": np.asarray(profile.density_g_cm3, dtype=float),
     }
 
 
@@ -92,7 +95,7 @@ def _solved_disk_profile_payload(
     if mdot_per_solar_mass is None:
         mdot_per_solar_mass = LEGACY_DISK_MDOT_PER_SOLAR_MASS
 
-    mdot_cgs = float(smbh_mass) * float(mdot_per_solar_mass)
+    accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
     (
         outer_radius_cm,
         radius_cm,
@@ -103,7 +106,7 @@ def _solved_disk_profile_payload(
         aspect_ratio,
         sound_speed_cm_s,
         density_g_cm3,
-    ) = radial_structure(float(smbh_mass), mdot_cgs)
+    ) = radial_structure(float(smbh_mass), accretion_rate_g_s)
     rg_cm = const.G * float(smbh_mass) * const.msun / const.c**2
 
     return {
@@ -136,9 +139,9 @@ def _disk_torque_payload(
     if n_resolution is None:
         n_resolution = int(os.getenv("PAGN_DISK_N_RESOLUTION", "30000"))
 
-    mdot_cgs = None
+    accretion_rate_g_s = None
     if mdot_per_solar_mass is not None:
-        mdot_cgs = float(smbh_mass) * float(mdot_per_solar_mass)
+        accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
 
     disk_profile = build_pagn_disk_profile(
         smbh_mass,
@@ -147,7 +150,7 @@ def _disk_torque_payload(
         eddington_ratio=eddington_ratio,
         alpha=alpha,
         b=0,
-        mdot_cgs=mdot_cgs,
+        accretion_rate_g_s=accretion_rate_g_s,
     )
     params = MigrationParameters(alpha=alpha)
     torque_profile = compute_torque_profile(
@@ -158,11 +161,16 @@ def _disk_torque_payload(
     )
     trap_radii_cm = find_stable_traps(torque_profile)
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
-    q_radius_over_rg = np.asarray(disk_profile.r_list, dtype=float) / disk_profile.rg
+    q_radius_over_rg = (
+        np.asarray(disk_profile.radius_cm, dtype=float)
+        / disk_profile.gravitational_radius_cm
+    )
     r_out_over_rg = _q1_radius_over_rg(
         q_radius_over_rg,
-        np.asarray(disk_profile.Q_list, dtype=float),
-        fallback=float(disk_profile.r_out / disk_profile.rg),
+        np.asarray(disk_profile.toomre_q, dtype=float),
+        fallback=float(
+            disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
+        ),
     )
 
     return {
@@ -174,7 +182,8 @@ def _disk_torque_payload(
         "gamma_i_cgs": np.asarray(torque_profile.gamma_i, dtype=float) * 1.0e7,
         "gamma_th_cgs": np.asarray(torque_profile.gamma_th, dtype=float) * 1.0e7,
         "trap_radii_over_rg": (
-            np.asarray(trap_radii_cm, dtype=float) / disk_profile.rg
+            np.asarray(trap_radii_cm, dtype=float)
+            / disk_profile.gravitational_radius_cm
         ),
     }
 

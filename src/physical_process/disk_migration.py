@@ -17,71 +17,91 @@ FloatArray = npt.NDArray[np.float64]
 TYPE_II_GAP_PARAMETER_THRESHOLD = 11.0
 
 
-def find_closest_index(r_list: FloatArray, r: float) -> int:
+def find_closest_index(radius_grid_cm: FloatArray, radius_cm: float) -> int:
     """Return the index of the radius [cm] nearest to ``r`` [cm]."""
-    radius_cm = np.asarray(r_list, dtype=float)
-    if radius_cm.size == 0:
+    radius_grid = np.asarray(radius_grid_cm, dtype=float)
+    if radius_grid.size == 0:
         raise ValueError("radius grid must not be empty")
-    insertion_index = int(np.searchsorted(radius_cm, r))
+    insertion_index = int(np.searchsorted(radius_grid, radius_cm))
     if insertion_index == 0:
         return 0
-    if insertion_index == len(radius_cm):
-        return len(radius_cm) - 1
+    if insertion_index == len(radius_grid):
+        return len(radius_grid) - 1
     left_index = insertion_index - 1
-    if abs(radius_cm[left_index] - r) <= abs(radius_cm[insertion_index] - r):
+    if (
+        abs(radius_grid[left_index] - radius_cm)
+        <= abs(radius_grid[insertion_index] - radius_cm)
+    ):
         return left_index
     return insertion_index
 
 
-def h_gas(r: float, h_list: FloatArray, r_list: FloatArray) -> float:
-    """Return dimensionless disk aspect ratio at radius ``r`` [cm]."""
-    return float(h_list[find_closest_index(r_list, r)])
+def h_gas(
+    radius_cm: float,
+    aspect_ratio: FloatArray,
+    radius_grid_cm: FloatArray,
+) -> float:
+    """Return dimensionless disk aspect ratio at radius ``radius_cm``."""
+    return float(aspect_ratio[find_closest_index(radius_grid_cm, radius_cm)])
 
 
-def sigma_gas(r: float, sigma_list: FloatArray, r_list: FloatArray) -> float:
-    """Return disk surface density [g/cm^2] at radius ``r`` [cm]."""
-    return float(sigma_list[find_closest_index(r_list, r)])
+def sigma_gas(
+    radius_cm: float,
+    surface_density_g_cm2: FloatArray,
+    radius_grid_cm: FloatArray,
+) -> float:
+    """Return disk surface density [g/cm^2] at radius ``radius_cm``."""
+    return float(
+        surface_density_g_cm2[find_closest_index(radius_grid_cm, radius_cm)]
+    )
 
 
 def type_ii_gap_parameter(
-    AGN: AGN_properties,
-    m_g: float,
-    R: float,
-    h_list: FloatArray,
-    r_list: FloatArray,
+    agn_properties: AGN_properties,
+    object_mass_g: float,
+    orbital_radius_cm: float,
+    aspect_ratio: FloatArray,
+    radius_grid_cm: FloatArray,
 ) -> float:
     """Return the gap-opening parameter for type-II migration."""
-    if m_g <= 0.0 or R <= 0.0:
+    if object_mass_g <= 0.0 or orbital_radius_cm <= 0.0:
         raise ValueError("object mass and orbital radius must be positive")
-    smbh_mass_g = AGN.M_SMBH * const.msun
-    aspect_ratio = h_gas(R, h_list, r_list)
-    return float(m_g**2 / (DISK_VISCOSITY_ALPHA * aspect_ratio**2 * smbh_mass_g**2))
+    smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
+    local_aspect_ratio = h_gas(orbital_radius_cm, aspect_ratio, radius_grid_cm)
+    return float(
+        object_mass_g**2
+        / (DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2)
+    )
 
 
 def type_ii_threshold_mass_msun(
-    AGN: AGN_properties,
-    R: float,
-    h_list: FloatArray,
-    r_list: FloatArray,
+    agn_properties: AGN_properties,
+    orbital_radius_cm: float,
+    aspect_ratio: FloatArray,
+    radius_grid_cm: FloatArray,
 ) -> float:
     """Return the local stellar mass threshold [Msun] for K > 11."""
-    if R <= 0.0:
+    if orbital_radius_cm <= 0.0:
         raise ValueError("orbital radius must be positive")
-    aspect_ratio = h_gas(R, h_list, r_list)
+    local_aspect_ratio = h_gas(
+        orbital_radius_cm,
+        aspect_ratio,
+        radius_grid_cm,
+    )
     return float(
         np.sqrt(TYPE_II_GAP_PARAMETER_THRESHOLD * DISK_VISCOSITY_ALPHA)
-        * aspect_ratio
-        * AGN.M_SMBH
+        * local_aspect_ratio
+        * agn_properties.smbh_mass_msun
     )
 
 
 def t_migration(
-    AGN: AGN_properties,
-    m_g: float,
-    R: float,
-    h_list: FloatArray,
-    sigma_list: FloatArray,
-    r_list: FloatArray,
+    agn_properties: AGN_properties,
+    object_mass_g: float,
+    orbital_radius_cm: float,
+    aspect_ratio: FloatArray,
+    surface_density_g_cm2: FloatArray,
+    radius_grid_cm: FloatArray,
     consider_type_ii: bool = True,
 ) -> float:
     """Return type-I or gap-opening type-II migration time [Myr].
@@ -91,31 +111,38 @@ def t_migration(
     type-II timescale ``t = 1 / (alpha h^2 Omega)`` when
     ``consider_type_ii`` is enabled.
     """
-    if m_g <= 0.0 or R <= 0.0:
+    if object_mass_g <= 0.0 or orbital_radius_cm <= 0.0:
         raise ValueError("object mass and orbital radius must be positive")
-    smbh_mass_g = AGN.M_SMBH * const.msun
-    aspect_ratio = h_gas(R, h_list, r_list)
-    surface_density_g_cm2 = sigma_gas(R, sigma_list, r_list)
-    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / R**3)
-    gap_parameter = m_g**2 / (DISK_VISCOSITY_ALPHA * aspect_ratio**2 * smbh_mass_g**2)
+    smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
+    local_aspect_ratio = h_gas(orbital_radius_cm, aspect_ratio, radius_grid_cm)
+    local_surface_density_g_cm2 = sigma_gas(
+        orbital_radius_cm,
+        surface_density_g_cm2,
+        radius_grid_cm,
+    )
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / orbital_radius_cm**3)
+    gap_parameter = (
+        object_mass_g**2
+        / (DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2)
+    )
     if consider_type_ii and gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD:
         migration_time_s = 1.0 / (
-            DISK_VISCOSITY_ALPHA * aspect_ratio**2 * orbital_frequency_rad_s
+            DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * orbital_frequency_rad_s
         )
     else:
         migration_time_s = (
             smbh_mass_g**2
-            * aspect_ratio**2
-            / m_g
-            / surface_density_g_cm2
-            / R**2
+            * local_aspect_ratio**2
+            / object_mass_g
+            / local_surface_density_g_cm2
+            / orbital_radius_cm**2
             / orbital_frequency_rad_s
         )
     return float(migration_time_s / const.Myr)
 
 
 def t_migration_from_torque(
-    r_grid_cm: FloatArray,
+    radius_grid_cm: FloatArray,
     gamma_tot_cgs: FloatArray,
     migrator_mass_g: float,
     r_ini_cm: float,
@@ -128,7 +155,7 @@ def t_migration_from_torque(
         t_mig = integral(R_ini -> R_fin) m * R^2 * Omega / Gamma_tot dR
 
     Args:
-        r_grid_cm: radial grid [cm] from the torque computation.
+        radius_grid_cm: radial grid [cm] from the torque computation.
         gamma_tot_cgs: total torque [g cm^2 s^-2] at each radius, including
             Type-I, thermal, and Type-II contributions.
         migrator_mass_g: migrator (stellar) mass [g].
@@ -148,60 +175,73 @@ def t_migration_from_torque(
 
     smbh_mass_g = smbh_mass_msun * const.msun
 
-    r_grid = np.asarray(r_grid_cm, dtype=float)
-    gamma = np.asarray(gamma_tot_cgs, dtype=float)
-    if r_grid.shape != gamma.shape:
+    radius_grid = np.asarray(radius_grid_cm, dtype=float)
+    torque_cgs = np.asarray(gamma_tot_cgs, dtype=float)
+    if radius_grid.shape != torque_cgs.shape:
         raise ValueError("radius and torque grids must have the same shape")
 
-    finite = np.isfinite(r_grid) & np.isfinite(gamma)
-    r_grid = r_grid[finite]
-    gamma = gamma[finite]
-    if r_grid.size < 2:
+    finite = np.isfinite(radius_grid) & np.isfinite(torque_cgs)
+    radius_grid = radius_grid[finite]
+    torque_cgs = torque_cgs[finite]
+    if radius_grid.size < 2:
         return np.inf
 
-    order = np.argsort(r_grid)
-    r_grid = r_grid[order]
-    gamma = gamma[order]
-    unique_r, unique_indices = np.unique(r_grid, return_index=True)
-    r_grid = unique_r
-    gamma = gamma[unique_indices]
-    if r_grid.size < 2:
+    order = np.argsort(radius_grid)
+    radius_grid = radius_grid[order]
+    torque_cgs = torque_cgs[order]
+    unique_radius_cm, unique_indices = np.unique(radius_grid, return_index=True)
+    radius_grid = unique_radius_cm
+    torque_cgs = torque_cgs[unique_indices]
+    if radius_grid.size < 2:
         return np.inf
 
-    r_min = min(r_ini_cm, r_fin_cm)
-    r_max = max(r_ini_cm, r_fin_cm)
-    if r_min < r_grid[0] or r_max > r_grid[-1]:
+    min_radius_cm = min(r_ini_cm, r_fin_cm)
+    max_radius_cm = max(r_ini_cm, r_fin_cm)
+    if min_radius_cm < radius_grid[0] or max_radius_cm > radius_grid[-1]:
         return np.inf
 
-    mask = (r_grid >= r_min) & (r_grid <= r_max)
-    r_seg = np.concatenate(
-        ([r_min], r_grid[mask & (r_grid > r_min) & (r_grid < r_max)], [r_max])
+    mask = (radius_grid >= min_radius_cm) & (radius_grid <= max_radius_cm)
+    segment_radius_cm = np.concatenate(
+        (
+            [min_radius_cm],
+            radius_grid[
+                mask & (radius_grid > min_radius_cm) & (radius_grid < max_radius_cm)
+            ],
+            [max_radius_cm],
+        )
     )
-    gamma_seg = np.interp(r_seg, r_grid, gamma)
+    segment_torque_cgs = np.interp(segment_radius_cm, radius_grid, torque_cgs)
 
-    if r_seg.size < 2:
+    if segment_radius_cm.size < 2:
         return np.inf
 
-    if np.any(gamma_seg == 0.0):
+    if np.any(segment_torque_cgs == 0.0):
         return np.inf
-    sign_changes = np.where(np.sign(gamma_seg[1:]) != np.sign(gamma_seg[:-1]))[0]
+    sign_changes = np.where(
+        np.sign(segment_torque_cgs[1:]) != np.sign(segment_torque_cgs[:-1])
+    )[0]
     if sign_changes.size > 0:
         return np.inf
 
-    omega = np.sqrt(const.G * smbh_mass_g / r_seg**3)
-    integrand = migrator_mass_g * r_seg**2 * omega / gamma_seg
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / segment_radius_cm**3)
+    integrand = (
+        migrator_mass_g
+        * segment_radius_cm**2
+        * orbital_frequency_rad_s
+        / segment_torque_cgs
+    )
 
     if r_ini_cm > r_fin_cm:
-        r_integral = r_seg[::-1]
+        integration_radius_cm = segment_radius_cm[::-1]
         integrand_integral = integrand[::-1]
     else:
-        r_integral = r_seg
+        integration_radius_cm = segment_radius_cm
         integrand_integral = integrand
 
     trapezoid = getattr(np, "trapezoid", np.trapz)
-    t_mig_s = float(trapezoid(integrand_integral, r_integral))
+    migration_time_s = float(trapezoid(integrand_integral, integration_radius_cm))
 
-    if not np.isfinite(t_mig_s) or t_mig_s <= 0.0:
+    if not np.isfinite(migration_time_s) or migration_time_s <= 0.0:
         return np.inf
 
-    return float(t_mig_s / const.Myr)
+    return float(migration_time_s / const.Myr)

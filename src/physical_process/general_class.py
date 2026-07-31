@@ -32,43 +32,45 @@ class general_flags:
 
 
 class BBH_properties:
-    """Binary black-hole population arrays with legacy attribute names."""
+    """Binary black-hole population arrays with unit-explicit names."""
 
-    def __init__(self, numBH: int) -> None:
-        self.numBH = numBH
-        self.idi: IntArray = np.zeros(numBH, dtype=int)
-        self.m1: FloatArray = np.zeros(numBH, dtype=float)  # Msun
-        self.m2: FloatArray = np.zeros(numBH, dtype=float)  # Msun
-        self.sma: FloatArray = np.zeros(numBH, dtype=float)  # Rsun
-        self.ecc: FloatArray = np.zeros(numBH, dtype=float)
-        self.sma2: FloatArray = np.zeros(numBH, dtype=float)  # Rsun
-        self.ecc2: FloatArray = np.zeros(numBH, dtype=float)
-        self.ecc10: FloatArray = np.zeros(numBH, dtype=float)
-        self.ecc0p1: FloatArray = np.zeros(numBH, dtype=float)
-        self.chi1: FloatArray = np.zeros(numBH, dtype=float)
-        self.chi2: FloatArray = np.zeros(numBH, dtype=float)
-        self.th1: FloatArray = np.zeros(numBH, dtype=float)  # rad
-        self.th2: FloatArray = np.zeros(numBH, dtype=float)  # rad
-        self.A: FloatArray = np.zeros(numBH, dtype=float)  # cm
-        self.mmerg: FloatArray = np.zeros(numBH, dtype=float)  # Msun
-        self.chimerg: FloatArray = np.zeros(numBH, dtype=float)
-        self.vk: FloatArray = np.zeros(numBH, dtype=float)  # cm/s
-        self.m2min: float = 3.0  # Msun
-        self.trapreach_time: FloatArray = np.zeros(numBH, dtype=float)  # Myr
+    def __init__(self, num_binaries: int) -> None:
+        self.num_binaries = num_binaries
+        self.object_id: IntArray = np.zeros(num_binaries, dtype=int)
+        self.primary_mass_msun: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.secondary_mass_msun: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.semi_major_axis_rsun: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.eccentricity: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.second_semi_major_axis_rsun: FloatArray = np.zeros(
+            num_binaries, dtype=float
+        )
+        self.second_eccentricity: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.eccentricity_10hz: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.eccentricity_0p1hz: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.primary_spin: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.secondary_spin: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.primary_spin_angle_rad: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.secondary_spin_angle_rad: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.separation_cm: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.merger_mass_msun: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.merger_spin: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.kick_velocity_cm_s: FloatArray = np.zeros(num_binaries, dtype=float)
+        self.min_secondary_mass_msun: float = 3.0
+        self.trap_reach_time_myr: FloatArray = np.zeros(num_binaries, dtype=float)
 
 
 class stellar_properties:
     """Stellar population arrays with units documented on each attribute."""
 
-    def __init__(self, numBH: int) -> None:
-        self.numBH = numBH
-        self.idi: IntArray = np.zeros(numBH, dtype=int)
-        self.m: FloatArray = np.zeros(numBH, dtype=float)  # Msun
-        self.mBH: FloatArray = np.zeros(numBH, dtype=float)  # Msun
-        self.a: FloatArray = np.zeros(numBH, dtype=float)  # cm
-        self.ecc: FloatArray = np.zeros(numBH, dtype=float)
-        self.i: FloatArray = np.zeros(numBH, dtype=float)  # rad
-        self.cosw: FloatArray = np.zeros(numBH, dtype=float)
+    def __init__(self, num_stars: int) -> None:
+        self.num_stars = num_stars
+        self.object_id: IntArray = np.zeros(num_stars, dtype=int)
+        self.mass_msun: FloatArray = np.zeros(num_stars, dtype=float)
+        self.remnant_mass_msun: FloatArray = np.zeros(num_stars, dtype=float)
+        self.semi_major_axis_cm: FloatArray = np.zeros(num_stars, dtype=float)
+        self.eccentricity: FloatArray = np.zeros(num_stars, dtype=float)
+        self.inclination_rad: FloatArray = np.zeros(num_stars, dtype=float)
+        self.cos_omega: FloatArray = np.zeros(num_stars, dtype=float)
 
     def init_Stellar(self) -> None:
         """Compatibility placeholder for the historical initialization API."""
@@ -77,35 +79,37 @@ class stellar_properties:
 class AGN_properties:
     """AGN scalar properties.
 
-    ``M_SMBH`` is in solar masses, ``AGNlifetime`` is in Myr, radii are in
-    centimeters, and ``sigma`` is in cm/s. Legacy names are retained because
-    the damping API consumes them directly.
+    Attribute names carry their physical units where applicable.
     """
 
     def __init__(self) -> None:
-        self.AGNlifetime: float = 0.0
-        self.vesc: float = 0.0
-        self.M_SMBH: float = 0.0
-        self.rg: float = 0.0
-        self.alpha: float = 0.0
-        self.rtrap: float = 0.0
-        self.maverage: float = 0.0
-        self.sigma: float = 0.0
+        self.agn_lifetime_myr: float = 0.0
+        self.escape_velocity_cm_s: float = 0.0
+        self.smbh_mass_msun: float = 0.0
+        self.gravitational_radius_cm: float = 0.0
+        self.viscosity_alpha: float = 0.0
+        self.migration_trap_radius_cm: float = 0.0
+        self.average_stellar_mass_msun: float = 0.0
+        self.velocity_dispersion_cm_s: float = 0.0
 
-    def init_AGN(self, MSMBH: float, dutycycle: float) -> None:
+    def init_AGN(self, smbh_mass_msun: float, duty_cycle_myr: float) -> None:
         """Initialize an AGN from SMBH mass [Msun] and lifetime [Myr]."""
-        if MSMBH <= 0.0:
+        if smbh_mass_msun <= 0.0:
             raise ValueError("SMBH mass must be positive")
-        if dutycycle < 0.0:
+        if duty_cycle_myr < 0.0:
             raise ValueError("AGN duty cycle must be nonnegative")
 
-        self.M_SMBH = float(MSMBH)
-        self.AGNlifetime = float(dutycycle)
-        self.alpha = AGN_VISCOSITY_ALPHA
-        self.rg = const.G * self.M_SMBH * const.msun / const.c**2
-        self.rtrap = MIGRATION_TRAP_RADIUS_RG * self.rg
-        self.sigma = VELOCITY_DISPERSION_REFERENCE_CM_S * (
-            self.M_SMBH / VELOCITY_DISPERSION_REFERENCE_MASS_MSUN
+        self.smbh_mass_msun = float(smbh_mass_msun)
+        self.agn_lifetime_myr = float(duty_cycle_myr)
+        self.viscosity_alpha = AGN_VISCOSITY_ALPHA
+        self.gravitational_radius_cm = (
+            const.G * self.smbh_mass_msun * const.msun / const.c**2
+        )
+        self.migration_trap_radius_cm = (
+            MIGRATION_TRAP_RADIUS_RG * self.gravitational_radius_cm
+        )
+        self.velocity_dispersion_cm_s = VELOCITY_DISPERSION_REFERENCE_CM_S * (
+            self.smbh_mass_msun / VELOCITY_DISPERSION_REFERENCE_MASS_MSUN
         ) ** VELOCITY_DISPERSION_MASS_SLOPE
 
 
