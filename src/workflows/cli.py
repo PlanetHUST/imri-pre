@@ -10,10 +10,22 @@ from .config import (
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
+    IMRI_HUBBLE_CONSTANT_PER_MYR,
+    IMRI_REDSHIFT,
     IMRIDynConfig,
     SECONDS_PER_MINUTE,
 )
 from .workflow import run_simulation
+
+DEFAULT_NUM_REPEATS = 1
+DEFAULT_OUTPUT_DIR = Path("./imri_dyn_results")
+DEFAULT_DAMPING_CPU_COUNT = None
+DEFAULT_DUTY_CYCLE_MYR = 10.0
+DEFAULT_SMBH_MASSES_MSUN = (1e3, 1e4, 1e5, 1e6)
+DEFAULT_NSC_MASSES_MSUN = (2e5, 3e5)
+DEFAULT_METALLICITY = 1e-5
+DEFAULT_INITIAL_STELLAR_DENSITY_GAMMA = 7.0 / 4.0
+DEFAULT_CHECKPOINT_GRID_INTERVAL = 5
 
 
 def _parse_mass_vector(value: str) -> list[float]:
@@ -39,43 +51,48 @@ def build_parser() -> argparse.ArgumentParser:
         "num_repeats",
         nargs="?",
         type=int,
-        default=1,
+        default=DEFAULT_NUM_REPEATS,
         help="Monte Carlo repeats per grid point",
     )
     parser.add_argument(
         "output_dir",
         nargs="?",
         type=Path,
-        default=Path("./imri_dyn_results"),
+        default=DEFAULT_OUTPUT_DIR,
         help="output directory",
     )
     parser.add_argument(
         "damping_cpu_count",
         nargs="?",
         type=int,
-        default=None,
+        default=DEFAULT_DAMPING_CPU_COUNT,
         help="worker count; scheduler/local CPU count is used when omitted",
     )
-    parser.add_argument("--duty-cycle-myr", type=float, default=10.0)
+    parser.add_argument(
+        "--duty-cycle-myr",
+        type=float,
+        default=DEFAULT_DUTY_CYCLE_MYR,
+    )
     parser.add_argument(
         "--smbh-masses",
         type=_parse_mass_vector,
-        default=[1e3, 1e4, 1e5, 1e6],
+        default=DEFAULT_SMBH_MASSES_MSUN,
         metavar="M1,M2,...",
         help="comma-separated SMBH mass values in Msun",
     )
     parser.add_argument(
         "--nsc-masses",
         type=_parse_mass_vector,
-        default=[2e5, 3e5],
+        default=DEFAULT_NSC_MASSES_MSUN,
         metavar="M1,M2,...",
         help="comma-separated NSC mass values in Msun",
     )
-    parser.add_argument("--metallicity", type=float, default=1e-5)
+    parser.add_argument("--metallicity", type=float, default=DEFAULT_METALLICITY)
+
     parser.add_argument(
         "--initial-stellar-density-gamma",
         type=float,
-        default=7.0 / 4.0,
+        default=DEFAULT_INITIAL_STELLAR_DENSITY_GAMMA,
         help="initial stellar radial number-density power-law index",
     )
     parser.add_argument(
@@ -113,9 +130,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="fixed eccentricity used by the simplified Peters threshold",
     )
     parser.add_argument(
+        "--redshift",
+        "--red-shift",
+        dest="redshift",
+        type=float,
+        default=IMRI_REDSHIFT,
+        help="source redshift used for LISA frequency and time-budget conversion",
+    )
+    parser.add_argument(
+        "--hubble-constant-per-myr",
+        type=float,
+        default=IMRI_HUBBLE_CONSTANT_PER_MYR,
+        help="linear redshift-time coefficient H0 in 1/Myr",
+    )
+    parser.add_argument(
         "--checkpoint-interval",
         type=int,
-        default=5,
+        default=DEFAULT_CHECKPOINT_GRID_INTERVAL,
         help="save partial CSV results every N grid points",
     )
     parser.add_argument(
@@ -143,6 +174,8 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
         max_gw_time_myr=arguments.max_gw_time_myr,
         gw_eccentricity=arguments.gw_eccentricity,
+        redshift=arguments.redshift,
+        hubble_constant_per_myr=arguments.hubble_constant_per_myr,
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,

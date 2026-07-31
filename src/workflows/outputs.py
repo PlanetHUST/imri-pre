@@ -8,6 +8,8 @@ from typing import Any, Sequence
 
 import pandas as pd
 
+import physical_process.helper_function as helpers
+
 from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
@@ -99,8 +101,29 @@ def save_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "consider_type_ii_migration": config.consider_type_ii_migration,
+            "redshift": config.redshift,
+            "hubble_constant_per_myr": config.hubble_constant_per_myr,
+            "redshift_transport_time_myr": helpers.redshift_transport_time_myr(
+                config.redshift,
+                config.hubble_constant_per_myr,
+            ),
+            "source_frame_gw_time_budget_myr": (
+                helpers.redshift_source_time_budget_myr(
+                    config.redshift,
+                    config.hubble_constant_per_myr,
+                    config.max_gw_time_myr,
+                )
+            ),
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
+            "source_lisa_min_gw_frequency_hz": helpers.source_frame_gw_frequency_hz(
+                config.lisa_min_gw_frequency_hz,
+                config.redshift,
+            ),
             "lisa_max_gw_frequency_hz": config.lisa_max_gw_frequency_hz,
+            "source_lisa_max_gw_frequency_hz": helpers.source_frame_gw_frequency_hz(
+                config.lisa_max_gw_frequency_hz,
+                config.redshift,
+            ),
             "max_gw_time_myr": config.max_gw_time_myr,
             "gw_eccentricity": config.gw_eccentricity,
             "damping_cpu_count": config.damping_cpu_count,

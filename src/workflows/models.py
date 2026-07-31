@@ -82,20 +82,31 @@ class IMRIEventRecord(TypedDict):
     m_smbh_msun: float
     m_nsc_msun: float
     repeat: int
+    redshift: float
     object_index: int
     mass_msun: float
+    redshifted_total_mass_msun: float
     formation_time_myr: float
     damping_time_myr: float
     bh_embedding_time_myr: float
     start_radius_cm: float
     start_radius_rg: float
+    observed_lisa_min_gw_frequency_hz: float
+    source_lisa_min_gw_frequency_hz: float
+    observed_lisa_max_gw_frequency_hz: float
+    source_lisa_max_gw_frequency_hz: float
     lisa_entry_radius_cm: float
     lisa_entry_radius_rg: float
     inner_radius_cm: float
     inner_radius_rg: float
     start_gw_frequency_hz: float
+    start_observed_gw_frequency_hz: float
     inner_gw_frequency_hz: float
+    inner_observed_gw_frequency_hz: float
+    redshift_transport_time_myr: float
+    gw_time_budget_source_myr: float
     gw_time_to_lisa_myr: float
+    gw_time_to_lisa_observed_myr: float
     migration_time_myr: float
     arrival_time_myr: float
     bh_candidate: bool

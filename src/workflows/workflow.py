@@ -5,10 +5,13 @@ import time
 import numpy as np
 import pandas as pd
 
+import physical_process.helper_function as helpers
+
 from .config import IMRIDynConfig, SECONDS_PER_MINUTE
 from .engine import IMRIDynEngine
 from .models import IMRIDynAveragedResult, IMRIDynSingleResult
 from .outputs import save_events, save_metadata, save_results
+from .single_work import IMRISingleWorkflow
 
 
 def print_header(text: str, width: int = 72, char: str = "=") -> None:
@@ -31,10 +34,8 @@ def debug_print_result(result: IMRIDynSingleResult) -> None:
     print("================================\n")
 
 
-def run_simulation(config: IMRIDynConfig | None = None) -> pd.DataFrame:
+def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     """Run the configured IMRI mass grid and return averaged results."""
-    if config is None:
-        config = IMRIDynConfig()
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     print_header("IMRI DYN SIMULATION", 72, "#")
@@ -45,19 +46,49 @@ def run_simulation(config: IMRIDynConfig | None = None) -> pd.DataFrame:
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
+    print(f"Redshift: {config.redshift:.3e}")
+    source_lisa_min_hz = helpers.source_frame_gw_frequency_hz(
+        config.lisa_min_gw_frequency_hz,
+        config.redshift,
+    )
+    source_lisa_max_hz = helpers.source_frame_gw_frequency_hz(
+        config.lisa_max_gw_frequency_hz,
+        config.redshift,
+    )
+    redshift_transport_time_myr = helpers.redshift_transport_time_myr(
+        config.redshift,
+        config.hubble_constant_per_myr,
+    )
+    source_gw_time_budget_myr = helpers.redshift_source_time_budget_myr(
+        config.redshift,
+        config.hubble_constant_per_myr,
+        config.max_gw_time_myr,
+    )
     print(
-        "LISA GW band: "
+        "Observed LISA GW band: "
         f"{config.lisa_min_gw_frequency_hz:.3e} to "
         f"{config.lisa_max_gw_frequency_hz:.3e} Hz"
     )
-    print(f"Maximum GW time: {config.max_gw_time_myr:.3e} Myr")
+    print(
+        "Source-frame LISA GW band: "
+        f"{source_lisa_min_hz:.3e} to "
+        f"{source_lisa_max_hz:.3e} Hz"
+    )
+    print(
+        "Redshift transport time: "
+        f"{redshift_transport_time_myr:.3e} Myr"
+    )
+    print(
+        "Source-frame GW time budget: "
+        f"{source_gw_time_budget_myr:.3e} Myr"
+    )
     print(f"Output directory: {config.output_dir}")
     print(
         "Damping CPU count: "
         f"{config.damping_cpu_count if config.damping_cpu_count is not None else 'auto'}"
     )
 
-    engine = IMRIDynEngine(config)
+    single_work = IMRISingleWorkflow(IMRIDynEngine(config))
     averaged_results: list[IMRIDynAveragedResult] = []
     simulation_count = 0
     start_time_s = time.time()
@@ -75,7 +106,7 @@ def run_simulation(config: IMRIDynConfig | None = None) -> pd.DataFrame:
             repeat_results: list[IMRIDynSingleResult] = []
             for repeat_index in range(config.num_repeats):
                 print(f"Repeat {repeat_index + 1}/{config.num_repeats}")
-                result = engine.run_single_simulation(
+                result = single_work.run_single_simulation(
                     float(smbh_mass_msun),
                     float(nsc_mass_msun),
                     repeat_index,

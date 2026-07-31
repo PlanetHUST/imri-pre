@@ -294,22 +294,116 @@ def t_migration_from_torque(
 ###############################################
 
 
-def gw_frequency_hz(total_mass_msun: float, semi_major_axis_cm: float) -> float:
-    """Return the dominant circular GW frequency [Hz] at separation ``a`` [cm]."""
-    if total_mass_msun <= 0.0 or semi_major_axis_cm <= 0.0:
+def source_frame_gw_frequency_hz(
+    observed_gw_frequency_hz: float,
+    redshift: float,
+) -> float:
+    """Return source-frame GW frequency [Hz] from an observed frequency."""
+    if (
+        not np.isfinite(observed_gw_frequency_hz)
+        or observed_gw_frequency_hz <= 0.0
+    ):
+        raise ValueError("observed GW frequency must be positive")
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    return float(observed_gw_frequency_hz / (1.0 + redshift))
+
+
+def observed_frame_time_myr(source_time_myr: float, redshift: float) -> float:
+    """Return observed-frame time [Myr] from a source-frame duration."""
+    if np.isnan(source_time_myr) or source_time_myr < 0.0:
+        raise ValueError("source-frame time must be nonnegative")
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    return float(source_time_myr * (1.0 + redshift))
+
+
+def redshifted_mass_msun(source_mass_msun: float, redshift: float) -> float:
+    """Return observed-frame redshifted mass [Msun]."""
+    if not np.isfinite(source_mass_msun) or source_mass_msun <= 0.0:
+        raise ValueError("source mass must be positive")
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    return float(source_mass_msun * (1.0 + redshift))
+
+
+def redshift_transport_time_myr(
+    redshift: float,
+    hubble_constant_per_myr: float,
+) -> float:
+    """Return the prompt's linear light-transport time ``z / H0`` [Myr]."""
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    if (
+        not np.isfinite(hubble_constant_per_myr)
+        or hubble_constant_per_myr <= 0.0
+    ):
+        raise ValueError("Hubble constant must be positive")
+    return float(redshift / hubble_constant_per_myr)
+
+
+def redshift_source_time_budget_myr(
+    redshift: float,
+    hubble_constant_per_myr: float,
+    zero_redshift_limit_myr: float,
+) -> float:
+    """Return the source-frame GW time budget for an IMRI at redshift ``z``.
+
+    For nonzero redshift this applies the prompt's ``t_src = t_obs / (1 + z)``
+    to the transport time. At ``z = 0``, use the existing local Hubble-time
+    budget to keep local-universe runs backward compatible.
+    """
+    if (
+        not np.isfinite(zero_redshift_limit_myr)
+        or zero_redshift_limit_myr <= 0.0
+    ):
+        raise ValueError("zero-redshift GW time limit must be positive")
+    if redshift == 0.0:
+        return float(zero_redshift_limit_myr)
+    return float(
+        redshift_transport_time_myr(redshift, hubble_constant_per_myr)
+        / (1.0 + redshift)
+    )
+
+
+def gw_frequency_hz(
+    total_mass_msun: float,
+    semi_major_axis_cm: float,
+    redshift: float = 0.0,
+) -> float:
+    """Return the dominant circular GW frequency [Hz] at separation ``a`` [cm].
+
+    When ``redshift`` is nonzero, the frequency relation uses the redshifted
+    observed mass ``M_z = M * (1 + z)`` requested by the prompt.
+    """
+    if (
+        not np.isfinite(total_mass_msun)
+        or total_mass_msun <= 0.0
+        or not np.isfinite(semi_major_axis_cm)
+        or semi_major_axis_cm <= 0.0
+    ):
         raise ValueError("binary mass and semi-major axis must be positive")
-    total_mass_g = total_mass_msun * const.msun
+    total_mass_g = redshifted_mass_msun(total_mass_msun, redshift) * const.msun
     orbital_frequency_hz = np.sqrt(const.G * total_mass_g / semi_major_axis_cm**3) / (
         2.0 * np.pi
     )
     return float(2.0 * orbital_frequency_hz)
 
 
-def gw_radius_for_frequency_cm(total_mass_msun: float, gw_frequency_hz: float) -> float:
+def gw_radius_for_frequency_cm(
+    total_mass_msun: float,
+    gw_frequency_hz: float,
+    redshift: float = 0.0,
+) -> float:
     """Return the circular binary separation [cm] for a GW frequency [Hz]."""
-    if total_mass_msun <= 0.0 or gw_frequency_hz <= 0.0:
+    if (
+        not np.isfinite(total_mass_msun)
+        or total_mass_msun <= 0.0
+        or not np.isfinite(gw_frequency_hz)
+        or gw_frequency_hz <= 0.0
+    ):
         raise ValueError("binary mass and GW frequency must be positive")
-    total_mass_g = total_mass_msun * const.msun
+    total_mass_g = redshifted_mass_msun(total_mass_msun, redshift) * const.msun
     return float(
         (const.G * total_mass_g / (np.pi * gw_frequency_hz) ** 2) ** (1.0 / 3.0)
     )
@@ -374,11 +468,20 @@ def lisa_entry_radius_cm(
     primary_mass_msun: float,
     secondary_mass_msun: float,
     min_gw_frequency_hz: float,
+    redshift: float = 0.0,
 ) -> float:
     """Return the separation [cm] where a circular binary reaches LISA's lower band."""
 
     total_mass_msun = primary_mass_msun + secondary_mass_msun
-    entry_radius_cm = gw_radius_for_frequency_cm(total_mass_msun, min_gw_frequency_hz)
+    source_min_gw_frequency_hz = source_frame_gw_frequency_hz(
+        min_gw_frequency_hz,
+        redshift,
+    )
+    entry_radius_cm = gw_radius_for_frequency_cm(
+        total_mass_msun,
+        source_min_gw_frequency_hz,
+        redshift,
+    )
     isco_radius_cm = (
         ISCO_RADIUS_RG * const.G * total_mass_msun * const.msun / const.c**2
     )
@@ -393,12 +496,14 @@ def peters_time_to_lisa_band_myr(
     semi_major_axis_cm: float,
     min_gw_frequency_hz: float,
     eccentricity: float = 0.0,
+    redshift: float = 0.0,
 ) -> float:
     """Return the GW time [Myr] from ``a`` to LISA lower-band entry."""
     entry_radius_cm = lisa_entry_radius_cm(
         primary_mass_msun,
         secondary_mass_msun,
         min_gw_frequency_hz,
+        redshift,
     )
     if not np.isfinite(entry_radius_cm):
         return np.inf
@@ -425,6 +530,7 @@ def imri_lisa_hubble_threshold_radius_cm(
     max_gw_time_myr: float,
     min_gw_frequency_hz: float,
     eccentricity: float = 0.0,
+    redshift: float = 0.0,
 ) -> float:
     """Return the outermost radius [cm] that reaches LISA within ``max_gw_time``.
 
@@ -437,6 +543,7 @@ def imri_lisa_hubble_threshold_radius_cm(
         primary_mass_msun,
         secondary_mass_msun,
         min_gw_frequency_hz,
+        redshift,
     )
     if not np.isfinite(entry_radius_cm):
         return np.inf
@@ -447,7 +554,13 @@ def imri_lisa_hubble_threshold_radius_cm(
         1.0,
         eccentricity,
     )
-    threshold_time_myr = max_gw_time_myr
+    entry_time_myr = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        entry_radius_cm,
+        eccentricity,
+    )
+    threshold_time_myr = max_gw_time_myr + entry_time_myr
     return float((threshold_time_myr / coefficient_myr_per_cm4) ** 0.25)
 
 

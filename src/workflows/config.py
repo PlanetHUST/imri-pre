@@ -21,6 +21,8 @@ IMRI_LISA_MIN_GW_FREQUENCY_HZ = 1.0e-3
 IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
 IMRI_MAX_GW_TIME_MYR = 13.6e3
 IMRI_GW_ECCENTRICITY = 0.0
+IMRI_REDSHIFT = 0.0
+IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
 
 
 class IMRIDynConfig:
@@ -33,31 +35,35 @@ class IMRIDynConfig:
 
     def __init__(
         self,
+        *,
         # Sampling and runtime controls
-        smbh_masses_msun: Sequence[float] = (3e3, 1e4, 3e4),
-        nsc_masses_msun: Sequence[float] = (2e5,),
-        num_repeats: int = 3,
-        duty_cycle_myr: float = 10.0,
+        smbh_masses_msun: Sequence[float],
+        nsc_masses_msun: Sequence[float],
+        num_repeats: int,
+        duty_cycle_myr: float,
         # Output location
-        output_dir: str | Path = "./imri_dyn_results",
+        output_dir: str | Path,
         # Stellar and NSC model parameters
-        metallicity: float = 1e-5,
-        initial_stellar_density_gamma: float = 7.0 / 4.0,
+        metallicity: float,
+        initial_stellar_density_gamma: float,
+        # Disk-crossing and migration controls
+        use_disk_inner_radius: bool,
+        consider_type_ii_migration: bool,
+        # Simplified IMRI controls
+        lisa_min_gw_frequency_hz: float,
+        lisa_max_gw_frequency_hz: float,
+        max_gw_time_myr: float,
+        gw_eccentricity: float,
+        redshift: float,
+        hubble_constant_per_myr: float,
+        # Execution controls
+        damping_cpu_count: int | None,
+        checkpoint_grid_interval: int,
+        print_debug_results: bool,
+        # Internal NSC model parameters
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
         nsc_radius_reference_mass_msun: float = 3.6e6,
-        # Disk-crossing and migration controls
-        use_disk_inner_radius: bool = True,
-        consider_type_ii_migration: bool = True,
-        # Simplified IMRI controls
-        lisa_min_gw_frequency_hz: float = IMRI_LISA_MIN_GW_FREQUENCY_HZ,
-        lisa_max_gw_frequency_hz: float = IMRI_LISA_MAX_GW_FREQUENCY_HZ,
-        max_gw_time_myr: float = IMRI_MAX_GW_TIME_MYR,
-        gw_eccentricity: float = IMRI_GW_ECCENTRICITY,
-        # Execution controls
-        damping_cpu_count: int | None = None,
-        checkpoint_grid_interval: int = 5,
-        print_debug_results: bool = False,
     ) -> None:
         if len(smbh_masses_msun) == 0 or len(nsc_masses_msun) == 0:
             raise ValueError("SMBH and NSC mass vectors must not be empty")
@@ -77,6 +83,10 @@ class IMRIDynConfig:
             raise ValueError("maximum GW time must be positive")
         if not 0.0 <= gw_eccentricity < 1.0:
             raise ValueError("GW eccentricity must satisfy 0 <= e < 1")
+        if not np.isfinite(redshift) or redshift < 0.0:
+            raise ValueError("redshift must be nonnegative")
+        if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
+            raise ValueError("Hubble constant must be positive")
 
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
@@ -96,6 +106,8 @@ class IMRIDynConfig:
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr
         self.gw_eccentricity = gw_eccentricity
+        self.redshift = redshift
+        self.hubble_constant_per_myr = hubble_constant_per_myr
 
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval
