@@ -6,6 +6,7 @@ from typing import Dict, Mapping, Sequence, Tuple, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 import src.physical_process.constants as const
@@ -25,7 +26,7 @@ plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
 
 
-def _save(fig: plt.Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
+def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
     """Save each figure in both PNG and PDF form for quick view and publication."""
     outdir = Path(outdir)
     outdir.mkdir(exist_ok=True)
@@ -359,7 +360,7 @@ def plot_agn_disk_parameter_profiles(
     #     )
     axes[0].legend(loc="best", framealpha=0.8, fontsize=LEGEND_FONTSIZE)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
     _save(fig, output_dir, "agn_disk_parameter_profiles")
     plt.close(fig)
 

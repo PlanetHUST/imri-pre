@@ -7,3 +7,5 @@ figs/
 imri_dyn_results/
 *md
 .gitigonre
+pyright.out
+.ipynb

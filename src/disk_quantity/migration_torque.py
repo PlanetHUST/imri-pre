@@ -107,7 +107,7 @@ def radial_log_slope(radius, values, *, smoothing: float = 0.005, k: int = 3):
     spline = UnivariateSpline(
         radius_log, values_log, k=spline_order, s=float(smoothing), ext=0
     )
-    return spline.derivative()(radius_log)
+    return np.asarray(spline.derivative()(radius_log), dtype=float)
 
 
 def total_pressure(disk):

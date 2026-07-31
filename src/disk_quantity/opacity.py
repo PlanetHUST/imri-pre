@@ -3118,7 +3118,7 @@ inter = RegularGridInterpolator(
     kappa_data,
     method="linear",
     bounds_error=False,
-    fill_value=None,
+    fill_value=float("nan"),
 )
 
 

@@ -6,11 +6,20 @@ to avoid repeated recomputation.
 
 import numpy as np
 import numpy.typing as npt
-import constants as const
 from dataclasses import dataclass
 from typing import TypedDict
-from helper_function import find_closest_index
-from general_class import AGN_properties
+
+try:
+    import physical_process.constants as const
+    from physical_process.general_class import AGN_properties
+except ImportError:
+    import constants as const
+    from general_class import AGN_properties
+
+try:
+    from physical_process.disk_migration import find_closest_index
+except ImportError:
+    from disk_migration import find_closest_index
 
 FloatArray = npt.NDArray[np.float64]
 

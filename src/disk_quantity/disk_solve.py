@@ -150,6 +150,9 @@ def fun_disk_in(
     optical_depth = (-quadratic_b + np.sqrt(discriminant)) / (2 * quadratic_a)
     relative_error = 1.0
     surface_density_g_cm2 = Sigma
+    scale_height_cm = np.nan
+    density_g_cm3 = np.nan
+    opacity_cm2_g = np.nan
     while abs(relative_error) > SURFACE_DENSITY_RELATIVE_TOLERANCE:
         surface_density_step_g_cm2 = surface_density_g_cm2 / 1.0e4
         scale_height_cm = np.sqrt(
@@ -234,6 +237,10 @@ def fun_disk(
     surface_density_g_cm2 = Sigma
     relative_error = 1.0
     outer_iterations = 0
+    optical_depth = np.nan
+    aspect_ratio = np.nan
+    sound_speed_cm_s = np.nan
+    density_g_cm3 = np.nan
 
     while abs(relative_error) >= TEMPERATURE_RELATIVE_TOLERANCE:
         temperature_step_k = temperature_k / 1.0e4

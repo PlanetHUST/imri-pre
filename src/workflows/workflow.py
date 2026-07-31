@@ -5,7 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 
-import physical_process.helper_function as helpers
+import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import IMRIDynConfig, SECONDS_PER_MINUTE
 from .engine import IMRIDynEngine
@@ -47,19 +47,19 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(f"Redshift: {config.redshift:.3e}")
-    source_lisa_min_hz = helpers.source_frame_gw_frequency_hz(
+    source_lisa_min_hz = gw_helpers.source_frame_gw_frequency_hz(
         config.lisa_min_gw_frequency_hz,
         config.redshift,
     )
-    source_lisa_max_hz = helpers.source_frame_gw_frequency_hz(
+    source_lisa_max_hz = gw_helpers.source_frame_gw_frequency_hz(
         config.lisa_max_gw_frequency_hz,
         config.redshift,
     )
-    redshift_transport_time_myr = helpers.redshift_transport_time_myr(
+    redshift_transport_time_myr = gw_helpers.redshift_transport_time_myr(
         config.redshift,
         config.hubble_constant_per_myr,
     )
-    source_gw_time_budget_myr = helpers.redshift_source_time_budget_myr(
+    source_gw_time_budget_myr = gw_helpers.redshift_source_time_budget_myr(
         config.redshift,
         config.hubble_constant_per_myr,
         config.max_gw_time_myr,

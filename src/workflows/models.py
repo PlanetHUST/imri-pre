@@ -1,6 +1,6 @@
 """Typed payloads and result containers for the IMRI workflow."""
 
-from typing import Any, Sequence, TypedDict
+from typing import Any, NotRequired, Sequence, TypedDict
 
 import numpy as np
 import numpy.typing as npt
@@ -40,15 +40,15 @@ class DampingResult(TypedDict):
     mass_msun: float
 
 
-class DiskProfiles(TypedDict, total=False):
+class DiskProfiles(TypedDict):
     inner_radius_cm: float
     outer_radius_cm: float
     radius_cm: FloatArray
     surface_density_g_cm2: FloatArray
     aspect_ratio: FloatArray
     gravitational_radius_cm: float
-    torque_disk: object
-    torque_alpha: float
+    torque_disk: NotRequired[object]
+    torque_alpha: NotRequired[float]
 
 
 class StellarPopulation(TypedDict):

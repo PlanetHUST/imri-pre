@@ -8,7 +8,7 @@ from typing import Any, Sequence
 
 import pandas as pd
 
-import physical_process.helper_function as helpers
+import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
@@ -18,7 +18,7 @@ from .config import (
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult
 
-IMRI_RESULT_COLUMNS = (
+IMRI_RESULT_COLUMNS = [
     "m_smbh_msun",
     "m_nsc_msun",
     "num_repeats",
@@ -33,8 +33,8 @@ IMRI_RESULT_COLUMNS = (
     "imri_rate_mean_per_myr",
     "imri_mass_rate_mean_msun_per_myr",
     "mean_relaxation_time_geo_mean_myr",
-)
-IMRI_EVENT_COLUMNS = tuple(IMRIEventRecord.__annotations__)
+]
+IMRI_EVENT_COLUMNS = list(IMRIEventRecord.__annotations__)
 
 
 def save_results(
@@ -42,7 +42,7 @@ def save_results(
     output_dir: Path,
 ) -> pd.DataFrame:
     """Save averaged IMRI results with units encoded in column names."""
-    frame = pd.DataFrame(
+    frame = pd.DataFrame.from_records(
         [result.to_dict() for result in averaged_results],
         columns=IMRI_RESULT_COLUMNS,
     )
@@ -103,24 +103,24 @@ def save_metadata(
             "consider_type_ii_migration": config.consider_type_ii_migration,
             "redshift": config.redshift,
             "hubble_constant_per_myr": config.hubble_constant_per_myr,
-            "redshift_transport_time_myr": helpers.redshift_transport_time_myr(
+            "redshift_transport_time_myr": gw_helpers.redshift_transport_time_myr(
                 config.redshift,
                 config.hubble_constant_per_myr,
             ),
             "source_frame_gw_time_budget_myr": (
-                helpers.redshift_source_time_budget_myr(
+                gw_helpers.redshift_source_time_budget_myr(
                     config.redshift,
                     config.hubble_constant_per_myr,
                     config.max_gw_time_myr,
                 )
             ),
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
-            "source_lisa_min_gw_frequency_hz": helpers.source_frame_gw_frequency_hz(
+            "source_lisa_min_gw_frequency_hz": gw_helpers.source_frame_gw_frequency_hz(
                 config.lisa_min_gw_frequency_hz,
                 config.redshift,
             ),
             "lisa_max_gw_frequency_hz": config.lisa_max_gw_frequency_hz,
-            "source_lisa_max_gw_frequency_hz": helpers.source_frame_gw_frequency_hz(
+            "source_lisa_max_gw_frequency_hz": gw_helpers.source_frame_gw_frequency_hz(
                 config.lisa_max_gw_frequency_hz,
                 config.redshift,
             ),

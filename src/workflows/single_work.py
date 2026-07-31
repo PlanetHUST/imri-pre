@@ -5,8 +5,10 @@ from typing import Sequence
 import numpy as np
 
 import physical_process.constants as const
+import physical_process.disk_migration as disk_migration
 import physical_process.general_class as agn
-import physical_process.helper_function as helpers
+import physical_process.gw_frequency_radius as gw_helpers
+import physical_process.nsc_orbital as nsc_orbital
 import physical_process.sampling as stellar_sampling
 
 from .config import IMRIDynConfig, YEARS_PER_MYR
@@ -132,7 +134,7 @@ class IMRISingleWorkflow:
             eccentricity,
             inclination_rad,
             cos_omega,
-        ) = helpers.initial_star(
+        ) = nsc_orbital.initial_star(
             len(mass_msun),
             m_smbh_msun,
             rmax=nsc_radius_cm,
@@ -270,7 +272,7 @@ class IMRISingleWorkflow:
         relaxation_time_myr_geo = (
             np.asarray(
                 [
-                    helpers.t_relax(agn_properties.M_SMBH, orbit_radius_cm)
+                    nsc_orbital.t_relax(agn_properties.M_SMBH, orbit_radius_cm)
                     for orbit_radius_cm in geo_pool["semi_major_axis_cm"]
                 ],
                 dtype=float,
@@ -348,23 +350,23 @@ class IMRISingleWorkflow:
         start_radius_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + compact_mass_msun
         redshift = self.config.redshift
-        redshifted_total_mass_msun = helpers.redshifted_mass_msun(
+        redshifted_total_mass_msun = gw_helpers.redshifted_mass_msun(
             total_mass_msun,
             redshift,
         )
-        source_lisa_min_gw_frequency_hz = helpers.source_frame_gw_frequency_hz(
+        source_lisa_min_gw_frequency_hz = gw_helpers.source_frame_gw_frequency_hz(
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        source_lisa_max_gw_frequency_hz = helpers.source_frame_gw_frequency_hz(
+        source_lisa_max_gw_frequency_hz = gw_helpers.source_frame_gw_frequency_hz(
             self.config.lisa_max_gw_frequency_hz,
             redshift,
         )
-        redshift_transport_time_myr = helpers.redshift_transport_time_myr(
+        redshift_transport_time_myr = gw_helpers.redshift_transport_time_myr(
             redshift,
             self.config.hubble_constant_per_myr,
         )
-        gw_time_budget_source_myr = helpers.redshift_source_time_budget_myr(
+        gw_time_budget_source_myr = gw_helpers.redshift_source_time_budget_myr(
             redshift,
             self.config.hubble_constant_per_myr,
             self.config.max_gw_time_myr,
@@ -375,13 +377,13 @@ class IMRISingleWorkflow:
             and damping_result["formation_time_myr"]
             < damping_result["damping_time_myr"]
         )
-        lisa_entry_radius_cm = helpers.lisa_entry_radius_cm(
+        lisa_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        inner_radius_cm = helpers.imri_lisa_hubble_threshold_radius_cm(
+        inner_radius_cm = gw_helpers.imri_lisa_hubble_threshold_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             gw_time_budget_source_myr,
@@ -390,7 +392,7 @@ class IMRISingleWorkflow:
             redshift,
         )
         gw_time_to_lisa_myr = (
-            helpers.peters_time_to_lisa_band_myr(
+            gw_helpers.peters_time_to_lisa_band_myr(
                 result.m_smbh_msun,
                 compact_mass_msun,
                 inner_radius_cm,
@@ -401,7 +403,7 @@ class IMRISingleWorkflow:
             if np.isfinite(inner_radius_cm)
             else np.inf
         )
-        gw_time_to_lisa_observed_myr = helpers.observed_frame_time_myr(
+        gw_time_to_lisa_observed_myr = gw_helpers.observed_frame_time_myr(
             gw_time_to_lisa_myr,
             redshift,
         )
@@ -435,12 +437,12 @@ class IMRISingleWorkflow:
             outcome = "misses_duty_cycle"
         else:
             outcome = "imri"
-        start_gw_frequency_hz = helpers.gw_frequency_hz(
+        start_gw_frequency_hz = gw_helpers.gw_frequency_hz(
             total_mass_msun,
             start_radius_cm,
         )
         inner_gw_frequency_hz = (
-            helpers.gw_frequency_hz(total_mass_msun, inner_radius_cm)
+            gw_helpers.gw_frequency_hz(total_mass_msun, inner_radius_cm)
             if np.isfinite(inner_radius_cm)
             else np.nan
         )
@@ -471,14 +473,14 @@ class IMRISingleWorkflow:
             "inner_radius_cm": inner_radius_cm,
             "inner_radius_rg": inner_radius_cm / rg_cm,
             "start_gw_frequency_hz": start_gw_frequency_hz,
-            "start_observed_gw_frequency_hz": helpers.gw_frequency_hz(
+            "start_observed_gw_frequency_hz": gw_helpers.gw_frequency_hz(
                 total_mass_msun,
                 start_radius_cm,
                 redshift,
             ),
             "inner_gw_frequency_hz": inner_gw_frequency_hz,
             "inner_observed_gw_frequency_hz": (
-                helpers.gw_frequency_hz(
+                gw_helpers.gw_frequency_hz(
                     total_mass_msun,
                     inner_radius_cm,
                     redshift,
@@ -510,7 +512,7 @@ class IMRISingleWorkflow:
             return np.inf
         if start_radius_cm <= target_radius_cm:
             return 0.0
-        local_time_myr = helpers.t_migration(
+        local_time_myr = disk_migration.t_migration(
             agn_properties,
             mass_g,
             start_radius_cm,

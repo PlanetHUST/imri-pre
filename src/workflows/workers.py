@@ -5,7 +5,7 @@ from multiprocessing import Pool
 from typing import Sequence
 
 import physical_process.constants as const
-import physical_process.helper_function as helpers
+import physical_process.nsc_orbital as nsc_orbital
 from physical_process.damp import DampingCalculator, OrbitalState
 from physical_process.general_class import AGN_properties
 
@@ -24,7 +24,7 @@ def get_hpc_cpu_count() -> int:
                 return max(1, int(value))
             except ValueError:
                 pass
-    return helpers.get_cpu_count()
+    return nsc_orbital.get_cpu_count()
 
 
 def init_damping_worker(
