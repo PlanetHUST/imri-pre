@@ -42,8 +42,7 @@ def _vprint_population_ranges(
         vprint(f"{label}: no objects")
         return
     vprint(
-        f"{label} mass range is "
-        f"{mass_msun.min():.3e} to {mass_msun.max():.3e} Msun"
+        f"{label} mass range is " f"{mass_msun.min():.3e} to {mass_msun.max():.3e} Msun"
     )
     vprint(
         f"{label} formation time range is "
@@ -165,15 +164,11 @@ class IMRISingleWorkflow:
                     "task_kind": "primary",
                     "idx": index,
                     "mass_g": float(geo_pool["mass_msun"][index] * const.msun),
-                    "semi_major_axis_cm": float(
-                        geo_pool["semi_major_axis_cm"][index]
-                    ),
+                    "semi_major_axis_cm": float(geo_pool["semi_major_axis_cm"][index]),
                     "eccentricity": float(geo_pool["eccentricity"][index]),
                     "inclination_rad": float(geo_pool["inclination_rad"][index]),
                     "cos_omega": float(geo_pool["cos_omega"][index]),
-                    "formation_time_myr": float(
-                        geo_pool["formation_time_myr"][index]
-                    ),
+                    "formation_time_myr": float(geo_pool["formation_time_myr"][index]),
                     "state_time_s": 0.0,
                     "type_flag": int(flags.type_flag[index]),
                 }
@@ -313,17 +308,17 @@ class IMRISingleWorkflow:
         disk_data: DiskProfiles,
         damping_results: Sequence[DampingResult],
     ) -> None:
-        """Classify embedded compact objects as IMRI candidates."""
+        """Classify embedded BHs and delayed-BH embedded stars as IMRI candidates."""
         rg_cm = disk_data["gravitational_radius_cm"]
         for damping_result in damping_results:
             if damping_result["obj_type"] == 0:
                 result.embedded_star_count += 1
-                continue
-            if damping_result["obj_type"] != 1:
+            elif damping_result["obj_type"] == 1:
+                result.embedded_bh_count += 1
+            else:
                 result.outside_or_failed_count += 1
                 continue
 
-            result.embedded_bh_count += 1
             event = self._imri_event_record(
                 result,
                 agn_properties,
@@ -353,10 +348,8 @@ class IMRISingleWorkflow:
         start_radius_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + compact_mass_msun
         redshift = self.config.redshift
-        redshifted_total_mass_msun = gw_helpers.redshifted_mass_msun(
-            total_mass_msun,
-            redshift,
-        )
+        formation_time_myr = damping_result["formation_time_myr"]
+        damping_time_myr = damping_result["damping_time_myr"]
         source_lisa_min_gw_frequency_hz = gw_helpers.source_frame_gw_frequency_hz(
             self.config.lisa_min_gw_frequency_hz,
             redshift,
@@ -374,19 +367,13 @@ class IMRISingleWorkflow:
             self.config.hubble_constant_per_myr,
             self.config.max_gw_time_myr,
         )
-        bh_candidate = bool(
-            np.isfinite(damping_result["formation_time_myr"])
-            and np.isfinite(damping_result["damping_time_myr"])
-            and damping_result["formation_time_myr"]
-            < damping_result["damping_time_myr"]
-        )
         lisa_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        inner_radius_cm = gw_helpers.imri_lisa_hubble_threshold_radius_cm(
+        inner_radius_cm = gw_helpers.imri_lisa_time_buget_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             gw_time_budget_source_myr,
@@ -410,18 +397,29 @@ class IMRISingleWorkflow:
             gw_time_to_lisa_myr,
             redshift,
         )
-        migration_time_myr = self.semi_analytic_migration_time_to_radius_myr(
+        migration_time_myr = self.torque_migration_time_to_radius_myr(
             agn_properties,
             disk_data,
             damping_result["mass_g"],
             start_radius_cm,
             inner_radius_cm,
         )
+        bh_candidate = bool(
+            np.isfinite(formation_time_myr)
+            and np.isfinite(damping_time_myr)
+            and np.isfinite(migration_time_myr)
+            and formation_time_myr < damping_time_myr + migration_time_myr
+        )
+        if damping_result["obj_type"] == 1:
+            bh_embedding_time_myr = damping_result["final_time_myr"]
+        elif bh_candidate:
+            bh_embedding_time_myr = formation_time_myr
+        else:
+            bh_embedding_time_myr = np.nan
         arrival_time_myr = damping_result["final_time_myr"] + migration_time_myr
         reaches_lisa_in_time = bool(
             np.isfinite(gw_time_to_lisa_myr)
-            and gw_time_to_lisa_myr
-            <= gw_time_budget_source_myr * (1.0 + 1.0e-10)
+            and gw_time_to_lisa_myr <= gw_time_budget_source_myr * (1.0 + 1.0e-10)
         )
         reaches_inner_before_duty = bool(
             np.isfinite(arrival_time_myr)
@@ -430,12 +428,12 @@ class IMRISingleWorkflow:
         counted_as_imri = bool(
             bh_candidate and reaches_lisa_in_time and reaches_inner_before_duty
         )
-        if not bh_candidate:
-            outcome = "not_bh_before_damping"
+        if not np.isfinite(migration_time_myr):
+            outcome = "migration_unavailable"
+        elif not bh_candidate:
+            outcome = "not_bh_before_inner_radius"
         elif not reaches_lisa_in_time:
             outcome = "no_lisa_entry_within_gw_time"
-        elif not np.isfinite(migration_time_myr):
-            outcome = "migration_unavailable"
         elif not reaches_inner_before_duty:
             outcome = "misses_duty_cycle"
         else:
@@ -457,19 +455,14 @@ class IMRISingleWorkflow:
             "redshift": redshift,
             "object_index": damping_result["idx"],
             "mass_msun": compact_mass_msun,
-            "redshifted_total_mass_msun": redshifted_total_mass_msun,
-            "formation_time_myr": damping_result["formation_time_myr"],
-            "damping_time_myr": damping_result["damping_time_myr"],
-            "bh_embedding_time_myr": damping_result["final_time_myr"],
+            "formation_time_myr": formation_time_myr,
+            "damping_time_myr": damping_time_myr,
+            "bh_embedding_time_myr": bh_embedding_time_myr,
             "start_radius_cm": start_radius_cm,
             "start_radius_rg": start_radius_cm / rg_cm,
-            "observed_lisa_min_gw_frequency_hz": (
-                self.config.lisa_min_gw_frequency_hz
-            ),
+            "observed_lisa_min_gw_frequency_hz": (self.config.lisa_min_gw_frequency_hz),
             "source_lisa_min_gw_frequency_hz": source_lisa_min_gw_frequency_hz,
-            "observed_lisa_max_gw_frequency_hz": (
-                self.config.lisa_max_gw_frequency_hz
-            ),
+            "observed_lisa_max_gw_frequency_hz": (self.config.lisa_max_gw_frequency_hz),
             "source_lisa_max_gw_frequency_hz": source_lisa_max_gw_frequency_hz,
             "lisa_entry_radius_cm": lisa_entry_radius_cm,
             "lisa_entry_radius_rg": lisa_entry_radius_cm / rg_cm,
@@ -479,14 +472,12 @@ class IMRISingleWorkflow:
             "start_observed_gw_frequency_hz": gw_helpers.gw_frequency_hz(
                 total_mass_msun,
                 start_radius_cm,
-                redshift,
             ),
             "inner_gw_frequency_hz": inner_gw_frequency_hz,
             "inner_observed_gw_frequency_hz": (
                 gw_helpers.gw_frequency_hz(
                     total_mass_msun,
                     inner_radius_cm,
-                    redshift,
                 )
                 if np.isfinite(inner_gw_frequency_hz)
                 else np.nan
@@ -501,6 +492,45 @@ class IMRISingleWorkflow:
             "counted_as_imri": counted_as_imri,
             "outcome": outcome,
         }
+
+    def torque_migration_time_to_radius_myr(
+        self,
+        agn_properties: agn.AGN_properties,
+        disk_data: DiskProfiles,
+        mass_g: float,
+        start_radius_cm: float,
+        target_radius_cm: float,
+    ) -> float:
+        """Integrate the cached pAGN torque profile from start to target radius."""
+        if not np.isfinite(target_radius_cm) or start_radius_cm <= 0.0:
+            return np.inf
+        if start_radius_cm <= target_radius_cm:
+            return 0.0
+
+        migrator_mass_msun = mass_g / const.msun
+        torque_profile = self.engine.get_torque_profile(
+            disk_data,
+            agn_properties.smbh_mass_msun,
+            migrator_mass_msun,
+        )
+        if torque_profile is None:
+            return self.semi_analytic_migration_time_to_radius_myr(
+                agn_properties,
+                disk_data,
+                mass_g,
+                start_radius_cm,
+                target_radius_cm,
+            )
+
+        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float) * 1.0e7
+        return disk_migration.t_migration_from_torque(
+            np.asarray(torque_profile.radius_cm, dtype=float),
+            torque_cgs,
+            mass_g,
+            start_radius_cm,
+            target_radius_cm,
+            agn_properties.smbh_mass_msun,
+        )
 
     def semi_analytic_migration_time_to_radius_myr(
         self,

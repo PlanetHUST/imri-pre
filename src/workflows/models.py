@@ -85,7 +85,6 @@ class IMRIEventRecord(TypedDict):
     redshift: float
     object_index: int
     mass_msun: float
-    redshifted_total_mass_msun: float
     formation_time_myr: float
     damping_time_myr: float
     bh_embedding_time_myr: float

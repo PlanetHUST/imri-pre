@@ -198,14 +198,16 @@ def comp_gamma_th(dpressure_dlogr, disk, migrator_mass, params):
 
 
 def comp_gamma_type_ii(alpha, migrator_mass, h_over_r, radius, omega):
-    """Return Type-II (viscous-limited) migration torque [J].
+    """Return inward Type-II (viscous-limited) migration torque [J].
 
     Gamma_type,ii = alpha * m * h^2 * R^2 * Omega^2
 
     pAGN stores mass in kg, radius in metres, and Omega in s^-1, so the
-    returned torque uses the same SI units as the other torque terms.
+    returned torque uses the same SI units as the other torque terms. The
+    migration integrator treats negative torque as inward angular-momentum
+    loss, so this returns the signed inward torque.
     """
-    return alpha * migrator_mass * h_over_r**2 * radius**2 * omega**2
+    return -alpha * migrator_mass * h_over_r**2 * radius**2 * omega**2
 
 
 def compute_torque_profile(
