@@ -17,6 +17,11 @@ METER_TO_CM = 100.0
 KG_M2_TO_G_CM2 = 0.1
 KG_M3_TO_G_CM3 = 1.0e-3
 M2_KG_TO_CM2_G = 10.0
+TOOMRE_Q_OUTER_BOUNDARY = 1.0
+SIRKO_Q_SEARCH_MAX_RADIUS_RG = 1.0e12
+SIRKO_Q_SEARCH_RADIUS_FACTOR = 10.0
+SIRKO_Q_SEARCH_RESOLUTION = 600
+SIRKO_Q_BOUNDARY_PADDING = 1.05
 
 
 @dataclass
@@ -109,13 +114,130 @@ def _disk_radius_attr_cm(disk, fallback_cm: float, *names: str) -> float:
     return float(fallback_cm)
 
 
+def _toomre_q_outer_radius_cm(
+    radius_cm: np.ndarray,
+    toomre_q: np.ndarray,
+    *,
+    fallback_cm: float,
+) -> float:
+    """Return the outer disk radius [cm] where the Toomre parameter reaches Q=1."""
+    outer_radius_cm = _find_toomre_q_outer_radius_cm(radius_cm, toomre_q)
+    if outer_radius_cm is None:
+        return float(fallback_cm)
+    return outer_radius_cm
+
+
+def _find_toomre_q_outer_radius_cm(
+    radius_cm: np.ndarray,
+    toomre_q: np.ndarray,
+) -> float | None:
+    """Return the first outward Q=1 self-gravity boundary [cm], if present."""
+    radius_values_cm = np.asarray(radius_cm, dtype=float)
+    q_values = np.asarray(toomre_q, dtype=float)
+    n_values = min(radius_values_cm.size, q_values.size)
+    if n_values == 0:
+        return None
+
+    radius_values_cm = radius_values_cm[:n_values]
+    q_values = q_values[:n_values]
+    valid = (
+        np.isfinite(radius_values_cm)
+        & np.isfinite(q_values)
+        & (radius_values_cm > 0.0)
+        & (q_values > 0.0)
+    )
+    radius_values_cm = radius_values_cm[valid]
+    q_values = q_values[valid]
+    if radius_values_cm.size == 0:
+        return None
+
+    order = np.argsort(radius_values_cm)
+    radius_values_cm = radius_values_cm[order]
+    q_values = q_values[order]
+    log_radius_cm = np.log10(radius_values_cm)
+    log_q_ratio = np.log10(q_values / TOOMRE_Q_OUTER_BOUNDARY)
+    boundary_tolerance = 1.0e-8
+
+    seen_stable_disk = False
+    outermost_exact_radius_cm = None
+    for idx, q_ratio_value in enumerate(log_q_ratio):
+        if q_ratio_value > boundary_tolerance:
+            seen_stable_disk = True
+            continue
+        if np.isclose(q_ratio_value, 0.0, rtol=0.0, atol=boundary_tolerance):
+            outermost_exact_radius_cm = float(radius_values_cm[idx])
+            if seen_stable_disk:
+                return outermost_exact_radius_cm
+            continue
+        if seen_stable_disk and idx > 0 and q_ratio_value < -boundary_tolerance:
+            previous_q_ratio = log_q_ratio[idx - 1]
+            if previous_q_ratio <= boundary_tolerance:
+                return float(radius_values_cm[idx])
+            x0, x1 = log_radius_cm[idx - 1], log_radius_cm[idx]
+            y0, y1 = previous_q_ratio, q_ratio_value
+            if y1 == y0:
+                return float(radius_values_cm[idx])
+            return float(10.0 ** (x0 - y0 * (x1 - x0) / (y1 - y0)))
+
+    if outermost_exact_radius_cm is not None:
+        return outermost_exact_radius_cm
+    return None
+
+
+def _reset_sirko_solve_state(disk) -> None:
+    disk.i = 0
+    disk.isf = -1
+    disk.Mdisk = 0.0
+
+
+def _solve_sirko_disk_with_q_outer_radius(disk, n_resolution: int, ct) -> None:
+    """Solve a Sirko pAGN disk with its outer edge set by the first Q=1 radius."""
+    initial_outer_radius_m = float(disk.Rmax)
+    gravitational_radius_m = ct.G * float(disk.Mbh) / ct.c**2
+    max_search_radius_m = SIRKO_Q_SEARCH_MAX_RADIUS_RG * gravitational_radius_m
+    search_radius_m = initial_outer_radius_m
+    search_resolution = min(int(n_resolution), SIRKO_Q_SEARCH_RESOLUTION)
+    q_outer_radius_cm = None
+
+    while search_radius_m <= max_search_radius_m:
+        disk.Rmax = search_radius_m
+        _reset_sirko_solve_state(disk)
+        disk.solve_disk(N=search_resolution)
+        q_outer_radius_cm = _find_toomre_q_outer_radius_cm(
+            np.asarray(disk.R, dtype=float) * METER_TO_CM,
+            np.asarray(disk.Q, dtype=float),
+        )
+        if q_outer_radius_cm is not None:
+            break
+        search_radius_m *= SIRKO_Q_SEARCH_RADIUS_FACTOR
+
+    if q_outer_radius_cm is None:
+        disk.Rmax = initial_outer_radius_m
+    else:
+        disk.Rmax = (
+            q_outer_radius_cm / METER_TO_CM * SIRKO_Q_BOUNDARY_PADDING
+        )
+    _reset_sirko_solve_state(disk)
+    disk.solve_disk(N=n_resolution)
+
+
+def _set_disk_outer_radius_cm(disk, outer_radius_cm: float) -> None:
+    """Mirror the Q=1 boundary onto common pAGN outer-radius attributes."""
+    outer_radius_m = float(outer_radius_cm) / METER_TO_CM
+    for name in ("Rout", "R_out"):
+        try:
+            setattr(disk, name, outer_radius_m)
+        except AttributeError:
+            continue
+
+
 def build_pagn_disk_profile(
     smbh_mass_msun: float,
     *,
     model: str = "sirko",
     n_resolution: int = 10000,
     eddington_ratio: float = 0.5,
-    alpha: float = 0.01,
+    alpha: float = 0.1,
     b: int = 0,
     accretion_rate_g_s: Optional[float] = None,
     thompson_rout_rg: float = 1.0e7,
@@ -140,22 +262,22 @@ def build_pagn_disk_profile(
             else:
                 kwargs["le"] = float(eddington_ratio)
             disk = Sirko.SirkoAGN(**kwargs)
+            _solve_sirko_disk_with_q_outer_radius(disk, int(n_resolution), ct)
         elif model_key == "thompson":
-            thompson_outer_radius_m = (
-                float(thompson_rout_rg) * (ct.G * smbh_mass_kg / ct.c**2)
+            thompson_outer_radius_m = float(thompson_rout_rg) * (
+                ct.G * smbh_mass_kg / ct.c**2
             )
             kwargs = dict(Mbh=smbh_mass_kg, Rout=thompson_outer_radius_m)
             if thompson_outer_accretion_rate_msun_per_yr is not None:
                 kwargs["Mdot_out"] = (
-                    float(thompson_outer_accretion_rate_msun_per_yr)
-                    * ct.MSun
-                    / ct.yr
+                    float(thompson_outer_accretion_rate_msun_per_yr) * ct.MSun / ct.yr
                 )
             disk = Thompson.ThompsonAGN(**kwargs)
         else:
             raise ValueError("model must be 'sirko' or 'thompson'")
 
-        disk.solve_disk(N=int(n_resolution))
+        if model_key != "sirko":
+            disk.solve_disk(N=int(n_resolution))
 
     _sort_disk_profile_arrays(disk)
 
@@ -181,12 +303,18 @@ def build_pagn_disk_profile(
         "Rin",
         "R_in",
     )
-    outer_radius_cm = _disk_radius_attr_cm(
+    fallback_outer_radius_cm = _disk_radius_attr_cm(
         disk,
         float(np.nanmax(radius_cm)),
         "Rout",
         "R_out",
     )
+    outer_radius_cm = _toomre_q_outer_radius_cm(
+        radius_cm,
+        toomre_q,
+        fallback_cm=fallback_outer_radius_cm,
+    )
+    _set_disk_outer_radius_cm(disk, outer_radius_cm)
 
     return PagnDiskProfile(
         model_name=model_key,

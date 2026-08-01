@@ -14,6 +14,7 @@ from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from .config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     DISK_INNER_RADIUS_RG,
+    PAGN_ALPHA,
     IMRIDynConfig,
 )
 from .models import DiskProfiles
@@ -45,7 +46,7 @@ class IMRIDynEngine:
         if m_smbh_msun not in self.disk_cache:
             accretion_rate_g_s = DISK_ACCRETION_RATE_G_S_PER_MSUN * m_smbh_msun
             try:
-                pagn_alpha = 0.01
+                pagn_alpha = PAGN_ALPHA
                 pagn_disk = build_pagn_disk_profile(
                     m_smbh_msun,
                     accretion_rate_g_s=accretion_rate_g_s,

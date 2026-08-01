@@ -24,7 +24,8 @@ IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
     ("m_nsc_msun", "m_nsc_msun"),
     ("num_repeats", "n_repeat"),
-    ("gravitational_radius_cm", "rg_cm"),
+    # ("gravitational_radius_cm", "rg_cm"),
+    ("disk_outer_radius_mpc", "r_disk_out_mpc"),
     ("disk_outer_radius_rg", "r_disk_out_rg"),
     ("f_geo_mean", "f_geo"),
     ("disk_crossing_objects_mean", "n_disk_cross"),
@@ -32,21 +33,21 @@ IMRI_RESULT_COLUMN_MAP = [
     ("embedded_bh_count_mean", "n_emb_bh"),
     ("migration_formed_bh_count_mean", "n_mfbh"),
     ("bh_candidate_count_mean", "n_bh_candi"),
-    ("no_imri_count_mean", "n_no_imri"),
+    # ("no_imri_count_mean", "n_no_imri"),
     ("imri_candidate_count_mean", "n_imri"),
     ("imri_candidate_count_min", "n_imri_min"),
     ("imri_candidate_count_max", "n_imri_max"),
     ("imri_candidate_mass_mean_msun", "m_imri_msun"),
     ("imri_candidate_rate_mean_per_myr", "rate_imri_per_myr"),
-    ("imri_candidate_mass_rate_mean_msun_per_myr", "mdot_imri_msun_per_myr"),
+    # ("imri_candidate_mass_rate_mean_msun_per_myr", "mdot_imri_msun_per_myr"),
+    ("no_detectable_imri_count_mean", "n_nondet"),
+    ("detectable_imri_rate_mean_per_myr", "rate_det_per_myr"),
     ("detectable_imri_count_mean", "n_det"),
     ("detectable_imri_count_min", "n_det_min"),
     ("detectable_imri_count_max", "n_det_max"),
-    ("detectable_imri_mass_mean_msun", "m_det_msun"),
-    ("detectable_imri_rate_mean_per_myr", "rate_det_per_myr"),
-    ("detectable_imri_mass_rate_mean_msun_per_myr", "mdot_det_msun_per_myr"),
-    ("no_detectable_imri_count_mean", "n_nondet"),
-    ("mean_relaxation_time_geo_mean_myr", "t_relax_geo_myr"),
+    # ("detectable_imri_mass_mean_msun", "m_det_msun"),
+    # ("detectable_imri_mass_rate_mean_msun_per_myr", "mdot_det_msun_per_myr"),
+    # ("mean_relaxation_time_geo_mean_myr", "t_relax_geo_myr"),
 ]
 IMRI_RESULT_COLUMNS = [
     output_name for _source_name, output_name in IMRI_RESULT_COLUMN_MAP
@@ -81,7 +82,10 @@ def _gravitational_radius_cm(m_smbh_msun: float) -> float:
     return float(const.G * m_smbh_msun * const.msun / const.c**2)
 
 
-def _mean_disk_outer_radius_rg(averaged_result: IMRIDynAveragedResult) -> float:
+def _mean_disk_outer_radius_rg_pc(
+    averaged_result: IMRIDynAveragedResult,
+) -> tuple[float, float]:
+
     radii_rg: list[float] = []
     for result in averaged_result.results:
         if result.disk_outer_radius_cm is None:
@@ -91,7 +95,7 @@ def _mean_disk_outer_radius_rg(averaged_result: IMRIDynAveragedResult) -> float:
             radii_rg.append(float(result.disk_outer_radius_cm / rg_cm))
     if not radii_rg:
         return np.nan
-    return float(np.mean(radii_rg))
+    return float(np.mean(radii_rg)), float(np.mean(radii_rg) * rg_cm)
 
 
 def _result_output_record(
@@ -101,7 +105,9 @@ def _result_output_record(
     record["gravitational_radius_cm"] = _gravitational_radius_cm(
         averaged_result.m_smbh_msun
     )
-    record["disk_outer_radius_rg"] = _mean_disk_outer_radius_rg(averaged_result)
+    rout_rg, rout_cm = _mean_disk_outer_radius_rg_pc(averaged_result)
+    record["disk_outer_radius_rg"] = rout_rg
+    record["disk_outer_radius_mpc"] = rout_cm / (1e-3 * const.parsec)
     return {
         output_name: record[source_name]
         for source_name, output_name in IMRI_RESULT_COLUMN_MAP
@@ -205,12 +211,8 @@ def save_metadata(
             "duty_cycle_myr": config.duty_cycle_myr,
             "metallicity": config.metallicity,
             "initial_stellar_density_gamma": config.initial_stellar_density_gamma,
-            "nsc_radius_pc_at_reference_mass": (
-                config.nsc_radius_pc_at_reference_mass
-            ),
-            "nsc_radius_reference_mass_msun": (
-                config.nsc_radius_reference_mass_msun
-            ),
+            "nsc_radius_pc_at_reference_mass": (config.nsc_radius_pc_at_reference_mass),
+            "nsc_radius_reference_mass_msun": (config.nsc_radius_reference_mass_msun),
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "consider_type_ii_migration": config.consider_type_ii_migration,
