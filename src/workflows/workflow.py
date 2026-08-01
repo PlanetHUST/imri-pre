@@ -28,9 +28,12 @@ def debug_print_result(result: IMRIDynSingleResult) -> None:
     print(f"Disk crossing: {result.disk_crossing_objects}")
     print(f"Embedded stars: {result.embedded_star_count}")
     print(f"Embedded BHs: {result.embedded_bh_count}")
+    print(f"Migration-formed BHs: {result.migration_formed_bh_count}")
     print(f"BH candidates: {result.bh_candidate_count}")
-    print(f"IMRI count: {result.imri_count}")
-    print(f"IMRI mass: {result.imri_mass_msun:.3e} Msun")
+    print(f"IMRI candidates: {result.imri_count}")
+    print(f"Detectable IMRIs: {result.detectable_imri_count}")
+    print(f"IMRI candidate mass: {result.imri_mass_msun:.3e} Msun")
+    print(f"Detectable IMRI mass: {result.detectable_imri_mass_msun:.3e} Msun")
     print("================================\n")
 
 
@@ -156,13 +159,23 @@ def _print_result_summary(result: IMRIDynSingleResult) -> None:
     print(f"  total sampled objects : {result.total_sampled_objects:.3e}")
     print(f"  disk-crossing objects : {result.disk_crossing_objects:.3e}")
     print(f"  f_geo                 : {result.f_geo:.3e}")
+    print(f"  embedded stars        : {result.embedded_star_count:.3e}")
     print(f"  embedded BHs          : {result.embedded_bh_count:.3e}")
+    print(f"  migration-formed BHs  : {result.migration_formed_bh_count:.3e}")
     print(f"  BH candidates         : {result.bh_candidate_count:.3e}")
-    print(f"  IMRI count            : {result.imri_count:.3e}")
-    print(f"  IMRI rate             : {result.imri_rate_per_myr:.3e} /Myr")
+    print(f"  IMRI candidates       : {result.imri_count:.3e}")
+    print(f"  no-IMRI objects       : {result.no_imri_count:.3e}")
+    print(f"  detectable IMRIs      : {result.detectable_imri_count:.3e}")
+    print(f"  non-detectable IMRIs  : {result.no_detectable_imri_count:.3e}")
+    print(f"  IMRI candidate rate   : {result.imri_rate_per_myr:.3e} /Myr")
+    print(f"  detectable IMRI rate  : {result.detectable_imri_rate_per_myr:.3e} /Myr")
     print(
-        f"  IMRI mass rate        : "
+        f"  candidate mass rate   : "
         f"{result.imri_mass_rate_msun_per_myr:.3e} Msun/Myr"
+    )
+    print(
+        f"  detectable mass rate  : "
+        f"{result.detectable_imri_mass_rate_msun_per_myr:.3e} Msun/Myr"
     )
 
 

@@ -12,7 +12,9 @@ import physical_process.nsc_orbital as nsc_orbital
 import physical_process.sampling as stellar_sampling
 
 from .config import IMRIDynConfig, YEARS_PER_MYR
+from .detect_rate import classify_detectability
 from .engine import IMRIDynEngine
+from .event_rate import BH_ORIGIN_MIGRATION_FORMED, classify_event_rate
 from .models import (
     BoolArray,
     DampingResult,
@@ -27,6 +29,30 @@ from .models import (
 )
 from .runtime import vprint
 from .workers import get_hpc_cpu_count, run_damping_tasks_parallel
+
+MICROHERTZ_IN_HZ = 1.0e-6
+MILLIHERTZ_IN_HZ = 1.0e-3
+
+
+def _safe_gw_frequency_hz(total_mass_msun: float, radius_cm: float) -> float:
+    if not np.isfinite(radius_cm) or radius_cm <= 0.0:
+        return np.nan
+    return gw_helpers.gw_frequency_hz(total_mass_msun, radius_cm)
+
+
+def _safe_observed_gw_frequency_hz(
+    source_frequency_hz: float,
+    redshift: float,
+) -> float:
+    if not np.isfinite(source_frequency_hz) or source_frequency_hz <= 0.0:
+        return np.nan
+    return gw_helpers.observed_frame_gw_frequency_hz(source_frequency_hz, redshift)
+
+
+def _scaled_frequency(frequency_hz: float, scale_hz: float) -> float:
+    if not np.isfinite(frequency_hz):
+        return np.nan
+    return float(frequency_hz / scale_hz)
 
 
 def _vprint_population_ranges(
@@ -329,12 +355,27 @@ class IMRISingleWorkflow:
             result.imri_events.append(event)
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
-            if event["counted_as_imri"]:
+            if event["bh_origin"] == BH_ORIGIN_MIGRATION_FORMED:
+                result.migration_formed_bh_count += 1
+            if event["is_imri_candidate"]:
                 result.imri_count += 1
                 result.imri_mass_msun += event["mass_msun"]
+                if event["is_lisa_detectable"]:
+                    result.detectable_imri_count += 1
+                    result.detectable_imri_mass_msun += event["mass_msun"]
+                else:
+                    result.no_detectable_imri_count += 1
+            else:
+                result.no_imri_count += 1
 
         result.imri_rate_per_myr = result.imri_count / self.duty_cycle_myr
         result.imri_mass_rate_msun_per_myr = result.imri_mass_msun / self.duty_cycle_myr
+        result.detectable_imri_rate_per_myr = (
+            result.detectable_imri_count / self.duty_cycle_myr
+        )
+        result.detectable_imri_mass_rate_msun_per_myr = (
+            result.detectable_imri_mass_msun / self.duty_cycle_myr
+        )
 
     def _imri_event_record(
         self,
@@ -350,14 +391,6 @@ class IMRISingleWorkflow:
         redshift = self.config.redshift
         formation_time_myr = damping_result["formation_time_myr"]
         damping_time_myr = damping_result["damping_time_myr"]
-        source_lisa_min_gw_frequency_hz = gw_helpers.source_frame_gw_frequency_hz(
-            self.config.lisa_min_gw_frequency_hz,
-            redshift,
-        )
-        source_lisa_max_gw_frequency_hz = gw_helpers.source_frame_gw_frequency_hz(
-            self.config.lisa_max_gw_frequency_hz,
-            redshift,
-        )
         redshift_transport_time_myr = gw_helpers.redshift_transport_time_myr(
             redshift,
             self.config.hubble_constant_per_myr,
@@ -367,13 +400,13 @@ class IMRISingleWorkflow:
             self.config.hubble_constant_per_myr,
             self.config.max_gw_time_myr,
         )
-        lisa_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
+        r_entry_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        inner_radius_cm = gw_helpers.imri_lisa_time_buget_radius_cm(
+        r_imri_cm = gw_helpers.imri_lisa_time_buget_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             gw_time_budget_source_myr,
@@ -381,20 +414,20 @@ class IMRISingleWorkflow:
             self.config.gw_eccentricity,
             redshift,
         )
-        gw_time_to_lisa_myr = (
+        gw_time_from_r_imri_to_entry_myr = (
             gw_helpers.peters_time_to_lisa_band_myr(
                 result.m_smbh_msun,
                 compact_mass_msun,
-                inner_radius_cm,
+                r_imri_cm,
                 self.config.lisa_min_gw_frequency_hz,
                 self.config.gw_eccentricity,
                 redshift,
             )
-            if np.isfinite(inner_radius_cm)
+            if np.isfinite(r_imri_cm)
             else np.inf
         )
-        gw_time_to_lisa_observed_myr = gw_helpers.observed_frame_time_myr(
-            gw_time_to_lisa_myr,
+        gw_time_from_r_imri_to_entry_observed_myr = gw_helpers.observed_frame_time_myr(
+            gw_time_from_r_imri_to_entry_myr,
             redshift,
         )
         migration_time_myr = self.torque_migration_time_to_radius_myr(
@@ -402,50 +435,39 @@ class IMRISingleWorkflow:
             disk_data,
             damping_result["mass_g"],
             start_radius_cm,
-            inner_radius_cm,
+            r_imri_cm,
         )
-        bh_candidate = bool(
-            np.isfinite(formation_time_myr)
-            and np.isfinite(damping_time_myr)
-            and np.isfinite(migration_time_myr)
-            and formation_time_myr < damping_time_myr + migration_time_myr
+        event_decision = classify_event_rate(
+            object_type=damping_result["obj_type"],
+            formation_time_myr=formation_time_myr,
+            damping_time_myr=damping_time_myr,
+            final_time_myr=damping_result["final_time_myr"],
+            migration_time_myr=migration_time_myr,
+            duty_cycle_myr=self.config.duty_cycle_myr,
         )
-        if damping_result["obj_type"] == 1:
-            bh_embedding_time_myr = damping_result["final_time_myr"]
-        elif bh_candidate:
-            bh_embedding_time_myr = formation_time_myr
-        else:
-            bh_embedding_time_myr = np.nan
-        arrival_time_myr = damping_result["final_time_myr"] + migration_time_myr
-        reaches_lisa_in_time = bool(
-            np.isfinite(gw_time_to_lisa_myr)
-            and gw_time_to_lisa_myr <= gw_time_budget_source_myr * (1.0 + 1.0e-10)
+
+        f_start_source_hz = _safe_gw_frequency_hz(total_mass_msun, start_radius_cm)
+        f_imri_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_imri_cm)
+        f_entry_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_entry_cm)
+        f_start_observed_hz = _safe_observed_gw_frequency_hz(
+            f_start_source_hz,
+            redshift,
         )
-        reaches_inner_before_duty = bool(
-            np.isfinite(arrival_time_myr)
-            and arrival_time_myr <= self.config.duty_cycle_myr
+        f_imri_observed_hz = _safe_observed_gw_frequency_hz(
+            f_imri_source_hz,
+            redshift,
         )
-        counted_as_imri = bool(
-            bh_candidate and reaches_lisa_in_time and reaches_inner_before_duty
+        f_entry_observed_hz = _safe_observed_gw_frequency_hz(
+            f_entry_source_hz,
+            redshift,
         )
-        if not np.isfinite(migration_time_myr):
-            outcome = "migration_unavailable"
-        elif not bh_candidate:
-            outcome = "not_bh_before_inner_radius"
-        elif not reaches_lisa_in_time:
-            outcome = "no_lisa_entry_within_gw_time"
-        elif not reaches_inner_before_duty:
-            outcome = "misses_duty_cycle"
-        else:
-            outcome = "imri"
-        start_gw_frequency_hz = gw_helpers.gw_frequency_hz(
-            total_mass_msun,
-            start_radius_cm,
-        )
-        inner_gw_frequency_hz = (
-            gw_helpers.gw_frequency_hz(total_mass_msun, inner_radius_cm)
-            if np.isfinite(inner_radius_cm)
-            else np.nan
+        detect_decision = classify_detectability(
+            is_imri_candidate=event_decision.is_imri_candidate,
+            source_frequency_hz=f_entry_source_hz,
+            redshift=redshift,
+            min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
+            max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
+            snr_threshold=self.config.snr_threshold,
         )
 
         return {
@@ -455,42 +477,56 @@ class IMRISingleWorkflow:
             "redshift": redshift,
             "object_index": damping_result["idx"],
             "mass_msun": compact_mass_msun,
+            "bh_origin": event_decision.bh_origin,
+            "event_rate_class": event_decision.event_rate_class,
+            "detect_rate_class": detect_decision.detect_rate_class,
             "formation_time_myr": formation_time_myr,
             "damping_time_myr": damping_time_myr,
-            "bh_embedding_time_myr": bh_embedding_time_myr,
+            "bh_embedding_time_myr": event_decision.bh_embedding_time_myr,
             "start_radius_cm": start_radius_cm,
             "start_radius_rg": start_radius_cm / rg_cm,
-            "observed_lisa_min_gw_frequency_hz": (self.config.lisa_min_gw_frequency_hz),
-            "source_lisa_min_gw_frequency_hz": source_lisa_min_gw_frequency_hz,
-            "observed_lisa_max_gw_frequency_hz": (self.config.lisa_max_gw_frequency_hz),
-            "source_lisa_max_gw_frequency_hz": source_lisa_max_gw_frequency_hz,
-            "lisa_entry_radius_cm": lisa_entry_radius_cm,
-            "lisa_entry_radius_rg": lisa_entry_radius_cm / rg_cm,
-            "inner_radius_cm": inner_radius_cm,
-            "inner_radius_rg": inner_radius_cm / rg_cm,
-            "start_gw_frequency_hz": start_gw_frequency_hz,
-            "start_observed_gw_frequency_hz": gw_helpers.gw_frequency_hz(
-                total_mass_msun,
-                start_radius_cm,
+            "r_imri_cm": r_imri_cm,
+            "r_imri_rg": r_imri_cm / rg_cm,
+            "r_entry_cm": r_entry_cm,
+            "r_entry_rg": r_entry_cm / rg_cm,
+            "f_start_src_microhz": _scaled_frequency(
+                f_start_source_hz,
+                MICROHERTZ_IN_HZ,
             ),
-            "inner_gw_frequency_hz": inner_gw_frequency_hz,
-            "inner_observed_gw_frequency_hz": (
-                gw_helpers.gw_frequency_hz(
-                    total_mass_msun,
-                    inner_radius_cm,
-                )
-                if np.isfinite(inner_gw_frequency_hz)
-                else np.nan
+            "f_start_obs_microhz": _scaled_frequency(
+                f_start_observed_hz,
+                MICROHERTZ_IN_HZ,
+            ),
+            "f_imri_src_microhz": _scaled_frequency(
+                f_imri_source_hz,
+                MICROHERTZ_IN_HZ,
+            ),
+            "f_imri_obs_microhz": _scaled_frequency(
+                f_imri_observed_hz,
+                MICROHERTZ_IN_HZ,
+            ),
+            "f_entry_src_mhz": _scaled_frequency(
+                f_entry_source_hz,
+                MILLIHERTZ_IN_HZ,
+            ),
+            "f_entry_obs_mhz": _scaled_frequency(
+                f_entry_observed_hz,
+                MILLIHERTZ_IN_HZ,
             ),
             "redshift_transport_time_myr": redshift_transport_time_myr,
             "gw_time_budget_source_myr": gw_time_budget_source_myr,
-            "gw_time_to_lisa_myr": gw_time_to_lisa_myr,
-            "gw_time_to_lisa_observed_myr": gw_time_to_lisa_observed_myr,
+            "gw_time_from_r_imri_to_entry_myr": gw_time_from_r_imri_to_entry_myr,
+            "gw_time_from_r_imri_to_entry_observed_myr": (
+                gw_time_from_r_imri_to_entry_observed_myr
+            ),
             "migration_time_myr": migration_time_myr,
-            "arrival_time_myr": arrival_time_myr,
-            "bh_candidate": bh_candidate,
-            "counted_as_imri": counted_as_imri,
-            "outcome": outcome,
+            "arrival_time_myr": event_decision.arrival_time_myr,
+            "bh_candidate": event_decision.bh_candidate,
+            "is_imri_candidate": event_decision.is_imri_candidate,
+            "is_lisa_detectable": detect_decision.is_lisa_detectable,
+            "snr_proxy": detect_decision.snr_proxy,
+            "event_rate_reason": event_decision.event_rate_reason,
+            "detect_rate_reason": detect_decision.detect_rate_reason,
         }
 
     def torque_migration_time_to_radius_myr(

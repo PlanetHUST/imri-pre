@@ -24,14 +24,24 @@ IMRI_RESULT_COLUMNS = [
     "num_repeats",
     "f_geo_mean",
     "disk_crossing_objects_mean",
+    "embedded_star_count_mean",
     "embedded_bh_count_mean",
+    "migration_formed_bh_count_mean",
     "bh_candidate_count_mean",
-    "imri_count_mean",
-    "imri_count_min",
-    "imri_count_max",
-    "imri_mass_mean_msun",
-    "imri_rate_mean_per_myr",
-    "imri_mass_rate_mean_msun_per_myr",
+    "no_imri_count_mean",
+    "imri_candidate_count_mean",
+    "imri_candidate_count_min",
+    "imri_candidate_count_max",
+    "imri_candidate_mass_mean_msun",
+    "imri_candidate_rate_mean_per_myr",
+    "imri_candidate_mass_rate_mean_msun_per_myr",
+    "detectable_imri_count_mean",
+    "detectable_imri_count_min",
+    "detectable_imri_count_max",
+    "detectable_imri_mass_mean_msun",
+    "detectable_imri_rate_mean_per_myr",
+    "detectable_imri_mass_rate_mean_msun_per_myr",
+    "no_detectable_imri_count_mean",
     "mean_relaxation_time_geo_mean_myr",
 ]
 IMRI_EVENT_COLUMNS = list(IMRIEventRecord.__annotations__)
@@ -56,7 +66,7 @@ def save_events(
     averaged_results: Sequence[IMRIDynAveragedResult],
     output_dir: Path,
 ) -> pd.DataFrame:
-    """Save one row per embedded BH evaluated for IMRI delivery."""
+    """Save one row per embedded BH or delayed-BH object evaluated for IMRI."""
     records: list[IMRIEventRecord] = []
     for averaged_result in averaged_results:
         for result in averaged_result.results:
@@ -124,6 +134,7 @@ def save_metadata(
                 config.lisa_max_gw_frequency_hz,
                 config.redshift,
             ),
+            "snr_threshold": config.snr_threshold,
             "max_gw_time_myr": config.max_gw_time_myr,
             "gw_eccentricity": config.gw_eccentricity,
             "damping_cpu_count": config.damping_cpu_count,

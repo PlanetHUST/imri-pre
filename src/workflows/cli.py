@@ -12,6 +12,7 @@ from .config import (
     IMRI_MAX_GW_TIME_MYR,
     IMRI_HUBBLE_CONSTANT_PER_MYR,
     IMRI_REDSHIFT,
+    IMRI_SNR_THRESHOLD,
     IMRIDynConfig,
     SECONDS_PER_MINUTE,
 )
@@ -22,7 +23,7 @@ DEFAULT_OUTPUT_DIR = Path("./imri_dyn_results")
 DEFAULT_DAMPING_CPU_COUNT = None
 DEFAULT_DUTY_CYCLE_MYR = 10.0
 DEFAULT_SMBH_MASSES_MSUN = (1e3, 1e4, 1e5, 1e6)
-DEFAULT_NSC_MASSES_MSUN = (2e5, 3e5)
+DEFAULT_NSC_MASSES_MSUN = (2e5,)
 DEFAULT_METALLICITY = 1e-5
 DEFAULT_INITIAL_STELLAR_DENSITY_GAMMA = 7.0 / 4.0
 DEFAULT_CHECKPOINT_GRID_INTERVAL = 5
@@ -144,6 +145,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="linear redshift-time coefficient H0 in 1/Myr",
     )
     parser.add_argument(
+        "--snr-threshold",
+        type=float,
+        default=IMRI_SNR_THRESHOLD,
+        help="single-frequency proxy threshold for detectable IMRI sources",
+    )
+    parser.add_argument(
         "--checkpoint-interval",
         type=int,
         default=DEFAULT_CHECKPOINT_GRID_INTERVAL,
@@ -176,6 +183,7 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         gw_eccentricity=arguments.gw_eccentricity,
         redshift=arguments.redshift,
         hubble_constant_per_myr=arguments.hubble_constant_per_myr,
+        snr_threshold=arguments.snr_threshold,
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,

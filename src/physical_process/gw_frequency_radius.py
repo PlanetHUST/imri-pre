@@ -25,6 +25,18 @@ def source_frame_gw_frequency_hz(
     return float(observed_gw_frequency_hz / (1.0 + redshift))
 
 
+def observed_frame_gw_frequency_hz(
+    source_gw_frequency_hz: float,
+    redshift: float,
+) -> float:
+    """Return observed-frame GW frequency [Hz] from a source-frame frequency."""
+    if not np.isfinite(source_gw_frequency_hz) or source_gw_frequency_hz <= 0.0:
+        raise ValueError("source GW frequency must be positive")
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    return float(source_gw_frequency_hz * (1.0 + redshift))
+
+
 def observed_frame_time_myr(source_time_myr: float, redshift: float) -> float:
     """Return observed-frame time [Myr] from a source-frame duration."""
     if np.isnan(source_time_myr) or source_time_myr < 0.0:

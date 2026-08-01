@@ -28,9 +28,8 @@ def find_closest_index(radius_grid_cm: FloatArray, radius_cm: float) -> int:
     if insertion_index == len(radius_grid):
         return len(radius_grid) - 1
     left_index = insertion_index - 1
-    if (
-        abs(radius_grid[left_index] - radius_cm)
-        <= abs(radius_grid[insertion_index] - radius_cm)
+    if abs(radius_grid[left_index] - radius_cm) <= abs(
+        radius_grid[insertion_index] - radius_cm
     ):
         return left_index
     return insertion_index
@@ -51,9 +50,7 @@ def sigma_gas(
     radius_grid_cm: FloatArray,
 ) -> float:
     """Return disk surface density [g/cm^2] at radius ``radius_cm``."""
-    return float(
-        surface_density_g_cm2[find_closest_index(radius_grid_cm, radius_cm)]
-    )
+    return float(surface_density_g_cm2[find_closest_index(radius_grid_cm, radius_cm)])
 
 
 def type_ii_gap_parameter(
@@ -121,9 +118,8 @@ def t_migration(
         radius_grid_cm,
     )
     orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / orbital_radius_cm**3)
-    gap_parameter = (
-        object_mass_g**2
-        / (DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2)
+    gap_parameter = object_mass_g**2 / (
+        DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
     )
     if consider_type_ii and gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD:
         migration_time_s = 1.0 / (
@@ -151,8 +147,9 @@ def t_migration_from_torque(
 ) -> float:
     """Return migration time [Myr] by integrating the torque profile.
 
-    Uses the formula from prompt.md:
-        t_mig = integral(R_ini -> R_fin) m * R^2 * Omega / Gamma_tot dR
+    Uses ``dL/dt = Gamma_tot`` for circular angular momentum
+    ``L = m R^2 Omega``:
+        t_mig = integral(R_ini -> R_fin) m * R * Omega / (2 Gamma_tot) dR
 
     Args:
         radius_grid_cm: radial grid [cm] from the torque computation.
@@ -225,8 +222,9 @@ def t_migration_from_torque(
 
     orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / segment_radius_cm**3)
     integrand = (
-        migrator_mass_g
-        * segment_radius_cm**2
+        0.5
+        * migrator_mass_g
+        * segment_radius_cm
         * orbital_frequency_rad_s
         / segment_torque_cgs
     )
@@ -238,8 +236,7 @@ def t_migration_from_torque(
         integration_radius_cm = segment_radius_cm
         integrand_integral = integrand
 
-    trapezoid = getattr(np, "trapezoid", np.trapz)
-    migration_time_s = float(trapezoid(integrand_integral, integration_radius_cm))
+    migration_time_s = float(np.trapezoid(integrand_integral, integration_radius_cm))
 
     if not np.isfinite(migration_time_s) or migration_time_s <= 0.0:
         return np.inf

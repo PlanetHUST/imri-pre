@@ -85,32 +85,36 @@ class IMRIEventRecord(TypedDict):
     redshift: float
     object_index: int
     mass_msun: float
+    bh_origin: str
+    event_rate_class: str
+    detect_rate_class: str
     formation_time_myr: float
     damping_time_myr: float
     bh_embedding_time_myr: float
     start_radius_cm: float
     start_radius_rg: float
-    observed_lisa_min_gw_frequency_hz: float
-    source_lisa_min_gw_frequency_hz: float
-    observed_lisa_max_gw_frequency_hz: float
-    source_lisa_max_gw_frequency_hz: float
-    lisa_entry_radius_cm: float
-    lisa_entry_radius_rg: float
-    inner_radius_cm: float
-    inner_radius_rg: float
-    start_gw_frequency_hz: float
-    start_observed_gw_frequency_hz: float
-    inner_gw_frequency_hz: float
-    inner_observed_gw_frequency_hz: float
+    r_imri_cm: float
+    r_imri_rg: float
+    r_entry_cm: float
+    r_entry_rg: float
+    f_start_src_microhz: float
+    f_start_obs_microhz: float
+    f_imri_src_microhz: float
+    f_imri_obs_microhz: float
+    f_entry_src_mhz: float
+    f_entry_obs_mhz: float
     redshift_transport_time_myr: float
     gw_time_budget_source_myr: float
-    gw_time_to_lisa_myr: float
-    gw_time_to_lisa_observed_myr: float
+    gw_time_from_r_imri_to_entry_myr: float
+    gw_time_from_r_imri_to_entry_observed_myr: float
     migration_time_myr: float
     arrival_time_myr: float
     bh_candidate: bool
-    counted_as_imri: bool
-    outcome: str
+    is_imri_candidate: bool
+    is_lisa_detectable: bool
+    snr_proxy: float
+    event_rate_reason: str
+    detect_rate_reason: str
 
 
 class IMRIDynSingleResult:
@@ -127,12 +131,19 @@ class IMRIDynSingleResult:
         self.f_geo = 0.0
         self.embedded_star_count = 0
         self.embedded_bh_count = 0
+        self.migration_formed_bh_count = 0
         self.outside_or_failed_count = 0
         self.bh_candidate_count = 0
+        self.no_imri_count = 0
         self.imri_count = 0
         self.imri_mass_msun = 0.0
         self.imri_rate_per_myr = 0.0
         self.imri_mass_rate_msun_per_myr = 0.0
+        self.detectable_imri_count = 0
+        self.no_detectable_imri_count = 0
+        self.detectable_imri_mass_msun = 0.0
+        self.detectable_imri_rate_per_myr = 0.0
+        self.detectable_imri_mass_rate_msun_per_myr = 0.0
         self.disk_inner_radius_cm: float | None = None
         self.disk_outer_radius_cm: float | None = None
         self.nsc_radius_cm: float | None = None
@@ -151,12 +162,21 @@ class IMRIDynSingleResult:
             "f_geo": self.f_geo,
             "embedded_star_count": self.embedded_star_count,
             "embedded_bh_count": self.embedded_bh_count,
+            "migration_formed_bh_count": self.migration_formed_bh_count,
             "outside_or_failed_count": self.outside_or_failed_count,
             "bh_candidate_count": self.bh_candidate_count,
+            "no_imri_count": self.no_imri_count,
             "imri_count": self.imri_count,
             "imri_mass_msun": self.imri_mass_msun,
             "imri_rate_per_myr": self.imri_rate_per_myr,
             "imri_mass_rate_msun_per_myr": self.imri_mass_rate_msun_per_myr,
+            "detectable_imri_count": self.detectable_imri_count,
+            "no_detectable_imri_count": self.no_detectable_imri_count,
+            "detectable_imri_mass_msun": self.detectable_imri_mass_msun,
+            "detectable_imri_rate_per_myr": self.detectable_imri_rate_per_myr,
+            "detectable_imri_mass_rate_msun_per_myr": (
+                self.detectable_imri_mass_rate_msun_per_myr
+            ),
             "disk_inner_radius_cm": self.disk_inner_radius_cm,
             "disk_outer_radius_cm": self.disk_outer_radius_cm,
             "nsc_radius_cm": self.nsc_radius_cm,
@@ -192,15 +212,45 @@ class IMRIDynAveragedResult:
             "disk_crossing_objects_mean": float(
                 np.mean(values("disk_crossing_objects"))
             ),
+            "embedded_star_count_mean": float(np.mean(values("embedded_star_count"))),
             "embedded_bh_count_mean": float(np.mean(values("embedded_bh_count"))),
+            "migration_formed_bh_count_mean": float(
+                np.mean(values("migration_formed_bh_count"))
+            ),
             "bh_candidate_count_mean": float(np.mean(values("bh_candidate_count"))),
-            "imri_count_mean": float(np.mean(values("imri_count"))),
-            "imri_count_min": float(np.min(values("imri_count"))),
-            "imri_count_max": float(np.max(values("imri_count"))),
-            "imri_mass_mean_msun": float(np.mean(values("imri_mass_msun"))),
-            "imri_rate_mean_per_myr": float(np.mean(values("imri_rate_per_myr"))),
-            "imri_mass_rate_mean_msun_per_myr": float(
+            "no_imri_count_mean": float(np.mean(values("no_imri_count"))),
+            "imri_candidate_count_mean": float(np.mean(values("imri_count"))),
+            "imri_candidate_count_min": float(np.min(values("imri_count"))),
+            "imri_candidate_count_max": float(np.max(values("imri_count"))),
+            "imri_candidate_mass_mean_msun": float(
+                np.mean(values("imri_mass_msun"))
+            ),
+            "imri_candidate_rate_mean_per_myr": float(
+                np.mean(values("imri_rate_per_myr"))
+            ),
+            "imri_candidate_mass_rate_mean_msun_per_myr": float(
                 np.mean(values("imri_mass_rate_msun_per_myr"))
+            ),
+            "detectable_imri_count_mean": float(
+                np.mean(values("detectable_imri_count"))
+            ),
+            "detectable_imri_count_min": float(
+                np.min(values("detectable_imri_count"))
+            ),
+            "detectable_imri_count_max": float(
+                np.max(values("detectable_imri_count"))
+            ),
+            "detectable_imri_mass_mean_msun": float(
+                np.mean(values("detectable_imri_mass_msun"))
+            ),
+            "detectable_imri_rate_mean_per_myr": float(
+                np.mean(values("detectable_imri_rate_per_myr"))
+            ),
+            "detectable_imri_mass_rate_mean_msun_per_myr": float(
+                np.mean(values("detectable_imri_mass_rate_msun_per_myr"))
+            ),
+            "no_detectable_imri_count_mean": float(
+                np.mean(values("no_detectable_imri_count"))
             ),
             "mean_relaxation_time_geo_mean_myr": float(
                 np.mean(values("mean_relaxation_time_myr_geo"))

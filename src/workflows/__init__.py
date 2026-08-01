@@ -12,12 +12,30 @@ from .config import (
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
     IMRI_REDSHIFT,
+    IMRI_SNR_THRESHOLD,
     METADATA_FILENAME,
     SECONDS_PER_MINUTE,
     YEARS_PER_MYR,
     IMRIDynConfig,
 )
+from .detect_rate import (
+    DEFAULT_SNR_THRESHOLD,
+    DETECTION_CLASS_DETECTABLE,
+    DETECTION_CLASS_NOT_DETECTABLE,
+    DetectRateDecision,
+    classify_detectability,
+    single_frequency_snr_proxy,
+)
 from .engine import IMRIDynEngine
+from .event_rate import (
+    BH_ORIGIN_EMBEDDED,
+    BH_ORIGIN_MIGRATION_FORMED,
+    BH_ORIGIN_NOT_FORMED,
+    EVENT_RATE_IMRI_CANDIDATE,
+    EVENT_RATE_NO_IMRI,
+    EventRateDecision,
+    classify_event_rate,
+)
 from .models import (
     BoolArray,
     DampingResult,
@@ -43,12 +61,22 @@ from .workers import (
 from .workflow import debug_print_result, main, print_header, run_simulation
 
 __all__ = [
+    "BH_ORIGIN_EMBEDDED",
+    "BH_ORIGIN_MIGRATION_FORMED",
+    "BH_ORIGIN_NOT_FORMED",
     "BoolArray",
     "DISK_ACCRETION_RATE_G_S_PER_MSUN",
     "DISK_INNER_RADIUS_RG",
     "DampingResult",
     "DampingTask",
+    "DEFAULT_SNR_THRESHOLD",
+    "DETECTION_CLASS_DETECTABLE",
+    "DETECTION_CLASS_NOT_DETECTABLE",
     "DiskProfiles",
+    "EVENT_RATE_IMRI_CANDIDATE",
+    "EVENT_RATE_NO_IMRI",
+    "DetectRateDecision",
+    "EventRateDecision",
     "FloatArray",
     "GeometricPopulation",
     "IMRI_AVERAGED_RESULTS_FILENAME",
@@ -59,6 +87,7 @@ __all__ = [
     "IMRI_LISA_MIN_GW_FREQUENCY_HZ",
     "IMRI_MAX_GW_TIME_MYR",
     "IMRI_REDSHIFT",
+    "IMRI_SNR_THRESHOLD",
     "IMRIEventRecord",
     "IMRIDynAveragedResult",
     "IMRIDynConfig",
@@ -71,6 +100,8 @@ __all__ = [
     "StellarPopulation",
     "YEARS_PER_MYR",
     "build_parser",
+    "classify_detectability",
+    "classify_event_rate",
     "debug_print_result",
     "get_hpc_cpu_count",
     "init_damping_worker",
@@ -84,5 +115,6 @@ __all__ = [
     "save_metadata",
     "save_results",
     "set_verbose",
+    "single_frequency_snr_proxy",
     "vprint",
 ]

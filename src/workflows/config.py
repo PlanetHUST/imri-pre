@@ -23,6 +23,7 @@ IMRI_MAX_GW_TIME_MYR = 13.6e3
 IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
 IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
+IMRI_SNR_THRESHOLD = 20.0
 
 
 class IMRIDynConfig:
@@ -56,6 +57,7 @@ class IMRIDynConfig:
         gw_eccentricity: float,
         redshift: float,
         hubble_constant_per_myr: float,
+        snr_threshold: float,
         # Execution controls
         damping_cpu_count: int | None,
         checkpoint_grid_interval: int,
@@ -87,6 +89,8 @@ class IMRIDynConfig:
             raise ValueError("redshift must be nonnegative")
         if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
             raise ValueError("Hubble constant must be positive")
+        if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
+            raise ValueError("SNR threshold must be positive")
 
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
@@ -108,6 +112,7 @@ class IMRIDynConfig:
         self.gw_eccentricity = gw_eccentricity
         self.redshift = redshift
         self.hubble_constant_per_myr = hubble_constant_per_myr
+        self.snr_threshold = snr_threshold
 
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval
