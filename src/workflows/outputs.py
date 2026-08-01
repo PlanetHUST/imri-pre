@@ -4,10 +4,12 @@ import json
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Sequence, cast
 
+import numpy as np
 import pandas as pd
 
+import physical_process.constants as const
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import (
@@ -18,33 +20,133 @@ from .config import (
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult
 
-IMRI_RESULT_COLUMNS = [
-    "m_smbh_msun",
-    "m_nsc_msun",
-    "num_repeats",
-    "f_geo_mean",
-    "disk_crossing_objects_mean",
-    "embedded_star_count_mean",
-    "embedded_bh_count_mean",
-    "migration_formed_bh_count_mean",
-    "bh_candidate_count_mean",
-    "no_imri_count_mean",
-    "imri_candidate_count_mean",
-    "imri_candidate_count_min",
-    "imri_candidate_count_max",
-    "imri_candidate_mass_mean_msun",
-    "imri_candidate_rate_mean_per_myr",
-    "imri_candidate_mass_rate_mean_msun_per_myr",
-    "detectable_imri_count_mean",
-    "detectable_imri_count_min",
-    "detectable_imri_count_max",
-    "detectable_imri_mass_mean_msun",
-    "detectable_imri_rate_mean_per_myr",
-    "detectable_imri_mass_rate_mean_msun_per_myr",
-    "no_detectable_imri_count_mean",
-    "mean_relaxation_time_geo_mean_myr",
+IMRI_RESULT_COLUMN_MAP = [
+    ("m_smbh_msun", "m_smbh_msun"),
+    ("m_nsc_msun", "m_nsc_msun"),
+    ("num_repeats", "n_repeat"),
+    ("gravitational_radius_cm", "rg_cm"),
+    ("disk_outer_radius_rg", "r_disk_out_rg"),
+    ("f_geo_mean", "f_geo"),
+    ("disk_crossing_objects_mean", "n_disk_cross"),
+    ("embedded_star_count_mean", "n_emb_star"),
+    ("embedded_bh_count_mean", "n_emb_bh"),
+    ("migration_formed_bh_count_mean", "n_mfbh"),
+    ("bh_candidate_count_mean", "n_bh_candi"),
+    ("no_imri_count_mean", "n_no_imri"),
+    ("imri_candidate_count_mean", "n_imri"),
+    ("imri_candidate_count_min", "n_imri_min"),
+    ("imri_candidate_count_max", "n_imri_max"),
+    ("imri_candidate_mass_mean_msun", "m_imri_msun"),
+    ("imri_candidate_rate_mean_per_myr", "rate_imri_per_myr"),
+    ("imri_candidate_mass_rate_mean_msun_per_myr", "mdot_imri_msun_per_myr"),
+    ("detectable_imri_count_mean", "n_det"),
+    ("detectable_imri_count_min", "n_det_min"),
+    ("detectable_imri_count_max", "n_det_max"),
+    ("detectable_imri_mass_mean_msun", "m_det_msun"),
+    ("detectable_imri_rate_mean_per_myr", "rate_det_per_myr"),
+    ("detectable_imri_mass_rate_mean_msun_per_myr", "mdot_det_msun_per_myr"),
+    ("no_detectable_imri_count_mean", "n_nondet"),
+    ("mean_relaxation_time_geo_mean_myr", "t_relax_geo_myr"),
 ]
+IMRI_RESULT_COLUMNS = [
+    output_name for _source_name, output_name in IMRI_RESULT_COLUMN_MAP
+]
+
 IMRI_EVENT_COLUMNS = list(IMRIEventRecord.__annotations__)
+EVENT_HIDDEN_COLUMNS = {
+    "start_radius_cm",
+    "r_imri_cm",
+    "r_entry_cm",
+    "redshift_transport_time_myr",
+    "gw_time_budget_source_myr",
+}
+EVENT_FREQUENCY_COLUMNS = {
+    "f_start_src_microhz": ("f_start_src", 1.0e-6),
+    "f_start_obs_microhz": ("f_start_obs", 1.0e-6),
+    "f_imri_src_microhz": ("f_imri_src", 1.0e-6),
+    "f_imri_obs_microhz": ("f_imri_obs", 1.0e-6),
+    "f_entry_src_mhz": ("f_entry_src", 1.0e-3),
+    "f_entry_obs_mhz": ("f_entry_obs", 1.0e-3),
+}
+FREQUENCY_UNITS_HZ = [
+    ("hz", 1.0),
+    ("milli_hz", 1.0e-3),
+    ("micro_hz", 1.0e-6),
+    ("nano_hz", 1.0e-9),
+    ("pico_hz", 1.0e-12),
+]
+
+
+def _gravitational_radius_cm(m_smbh_msun: float) -> float:
+    return float(const.G * m_smbh_msun * const.msun / const.c**2)
+
+
+def _mean_disk_outer_radius_rg(averaged_result: IMRIDynAveragedResult) -> float:
+    radii_rg: list[float] = []
+    for result in averaged_result.results:
+        if result.disk_outer_radius_cm is None:
+            continue
+        rg_cm = _gravitational_radius_cm(result.m_smbh_msun)
+        if rg_cm > 0.0 and np.isfinite(result.disk_outer_radius_cm):
+            radii_rg.append(float(result.disk_outer_radius_cm / rg_cm))
+    if not radii_rg:
+        return np.nan
+    return float(np.mean(radii_rg))
+
+
+def _result_output_record(
+    averaged_result: IMRIDynAveragedResult,
+) -> dict[str, float | int]:
+    record = dict(averaged_result.to_dict())
+    record["gravitational_radius_cm"] = _gravitational_radius_cm(
+        averaged_result.m_smbh_msun
+    )
+    record["disk_outer_radius_rg"] = _mean_disk_outer_radius_rg(averaged_result)
+    return {
+        output_name: record[source_name]
+        for source_name, output_name in IMRI_RESULT_COLUMN_MAP
+    }
+
+
+def _choose_frequency_unit(values_hz: pd.Series) -> tuple[str, float]:
+    numeric = np.asarray(pd.to_numeric(values_hz, errors="coerce"), dtype=float)
+    finite_nonzero = np.abs(numeric[np.isfinite(numeric) & (numeric != 0.0)])
+    if finite_nonzero.size == 0:
+        return "hz", 1.0
+
+    reference_hz = float(np.median(finite_nonzero))
+    for unit_name, scale_hz in FREQUENCY_UNITS_HZ:
+        if reference_hz / scale_hz >= 1.0:
+            return unit_name, scale_hz
+    return FREQUENCY_UNITS_HZ[-1]
+
+
+def _format_event_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    output_frame = pd.DataFrame(index=frame.index)
+
+    for column_name in IMRI_EVENT_COLUMNS:
+        if column_name in EVENT_HIDDEN_COLUMNS:
+            continue
+        source_series = cast(pd.Series, frame[column_name])
+        if column_name in EVENT_FREQUENCY_COLUMNS:
+            base_name, source_scale_hz = EVENT_FREQUENCY_COLUMNS[column_name]
+            values_hz = (
+                pd.Series(
+                    np.asarray(
+                        pd.to_numeric(source_series, errors="coerce"),
+                        dtype=float,
+                    ),
+                    index=frame.index,
+                )
+                * source_scale_hz
+            )
+            unit_name, output_scale_hz = _choose_frequency_unit(values_hz)
+            output_name = f"{base_name}_{unit_name}"
+            output_frame[output_name] = values_hz / output_scale_hz
+            continue
+        output_frame[column_name] = source_series
+
+    return output_frame
 
 
 def save_results(
@@ -53,7 +155,7 @@ def save_results(
 ) -> pd.DataFrame:
     """Save averaged IMRI results with units encoded in column names."""
     frame = pd.DataFrame.from_records(
-        [result.to_dict() for result in averaged_results],
+        [_result_output_record(result) for result in averaged_results],
         columns=IMRI_RESULT_COLUMNS,
     )
     path = output_dir / IMRI_AVERAGED_RESULTS_FILENAME
@@ -71,7 +173,8 @@ def save_events(
     for averaged_result in averaged_results:
         for result in averaged_result.results:
             records.extend(result.imri_events)
-    frame = pd.DataFrame.from_records(records, columns=IMRI_EVENT_COLUMNS)
+    raw_frame = pd.DataFrame.from_records(records, columns=IMRI_EVENT_COLUMNS)
+    frame = _format_event_frame(raw_frame)
     path = output_dir / IMRI_EVENTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.6e")
     print(f"saved: {path}")

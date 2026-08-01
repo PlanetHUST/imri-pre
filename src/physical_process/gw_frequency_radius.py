@@ -163,8 +163,7 @@ def peters_merger_time_myr(
         * (1.0 + 121.0 / 304.0 * grid**2) ** (1181.0 / 2299.0)
         / (1.0 - grid**2) ** 1.5
     )
-    trapezoid = getattr(np, "trapezoid", np.trapz)
-    integral = float(trapezoid(integrand, grid))
+    integral = float(np.trapezoid(integrand, grid))
     c0_cm = (
         semi_major_axis_cm
         * (1.0 - eccentricity**2)
