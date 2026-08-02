@@ -25,6 +25,9 @@ IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
 IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
 IMRI_SNR_THRESHOLD = 20.0
+IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
+IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
+IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
 
 
 class IMRIDynConfig:
@@ -59,6 +62,9 @@ class IMRIDynConfig:
         redshift: float,
         hubble_constant_per_myr: float,
         snr_threshold: float,
+        cosmic_merge_time_myr: float,
+        cosmic_merge_smbh_mass_factor: float,
+        cosmic_merge_radius_factor: float,
         # Execution controls
         damping_cpu_count: int | None,
         checkpoint_grid_interval: int,
@@ -92,6 +98,20 @@ class IMRIDynConfig:
             raise ValueError("Hubble constant must be positive")
         if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
             raise ValueError("SNR threshold must be positive")
+        if not np.isfinite(cosmic_merge_time_myr) and cosmic_merge_time_myr != np.inf:
+            raise ValueError("cosmic merge time must be finite or infinity")
+        if cosmic_merge_time_myr <= 0.0:
+            raise ValueError("cosmic merge time must be positive")
+        if (
+            not np.isfinite(cosmic_merge_smbh_mass_factor)
+            or cosmic_merge_smbh_mass_factor <= 0.0
+        ):
+            raise ValueError("cosmic merger SMBH mass factor must be positive")
+        if (
+            not np.isfinite(cosmic_merge_radius_factor)
+            or cosmic_merge_radius_factor <= 0.0
+        ):
+            raise ValueError("cosmic merger radius factor must be positive")
 
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
@@ -114,6 +134,9 @@ class IMRIDynConfig:
         self.redshift = redshift
         self.hubble_constant_per_myr = hubble_constant_per_myr
         self.snr_threshold = snr_threshold
+        self.cosmic_merge_time_myr = cosmic_merge_time_myr
+        self.cosmic_merge_smbh_mass_factor = cosmic_merge_smbh_mass_factor
+        self.cosmic_merge_radius_factor = cosmic_merge_radius_factor
 
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval

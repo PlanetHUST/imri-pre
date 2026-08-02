@@ -13,6 +13,9 @@ from .config import (
     IMRI_MAX_GW_TIME_MYR,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
+    IMRI_COSMIC_MERGE_RADIUS_FACTOR,
+    IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
+    IMRI_COSMIC_MERGE_TIME_MYR,
     METADATA_FILENAME,
     SECONDS_PER_MINUTE,
     YEARS_PER_MYR,
@@ -26,6 +29,7 @@ from .detect_rate import (
     classify_detectability,
     single_frequency_snr_proxy,
 )
+from .cosmic_merge import CosmicMergeModel
 from .engine import IMRIDynEngine
 from .event_rate import (
     BH_ORIGIN_EMBEDDED,
@@ -36,6 +40,7 @@ from .event_rate import (
     EventRateDecision,
     classify_event_rate,
 )
+from .redshift_evolve import LinearRedshiftEvolution, RedshiftEvolutionState
 from .models import (
     BoolArray,
     DampingResult,
@@ -72,6 +77,7 @@ __all__ = [
     "DEFAULT_SNR_THRESHOLD",
     "DETECTION_CLASS_DETECTABLE",
     "DETECTION_CLASS_NOT_DETECTABLE",
+    "CosmicMergeModel",
     "DiskProfiles",
     "EVENT_RATE_IMRI_CANDIDATE",
     "EVENT_RATE_NO_IMRI",
@@ -80,6 +86,9 @@ __all__ = [
     "FloatArray",
     "GeometricPopulation",
     "IMRI_AVERAGED_RESULTS_FILENAME",
+    "IMRI_COSMIC_MERGE_RADIUS_FACTOR",
+    "IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR",
+    "IMRI_COSMIC_MERGE_TIME_MYR",
     "IMRI_EVENTS_FILENAME",
     "IMRI_GW_ECCENTRICITY",
     "IMRI_HUBBLE_CONSTANT_PER_MYR",
@@ -96,6 +105,8 @@ __all__ = [
     "IMRISingleWorkflow",
     "IntermediatePopulation",
     "METADATA_FILENAME",
+    "LinearRedshiftEvolution",
+    "RedshiftEvolutionState",
     "SECONDS_PER_MINUTE",
     "StellarPopulation",
     "YEARS_PER_MYR",

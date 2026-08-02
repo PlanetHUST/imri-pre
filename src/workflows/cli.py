@@ -13,6 +13,9 @@ from .config import (
     IMRI_HUBBLE_CONSTANT_PER_MYR,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
+    IMRI_COSMIC_MERGE_RADIUS_FACTOR,
+    IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
+    IMRI_COSMIC_MERGE_TIME_MYR,
     IMRIDynConfig,
     SECONDS_PER_MINUTE,
 )
@@ -151,6 +154,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="single-frequency proxy threshold for detectable IMRI sources",
     )
     parser.add_argument(
+        "--cosmic-merge-time-myr",
+        type=float,
+        default=IMRI_COSMIC_MERGE_TIME_MYR,
+        help="source-frame time for one simplified central-SMBH merger",
+    )
+    parser.add_argument(
+        "--cosmic-merge-smbh-mass-factor",
+        type=float,
+        default=IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
+        help="central-SMBH mass multiplier applied by the simplified merger",
+    )
+    parser.add_argument(
+        "--cosmic-merge-radius-factor",
+        type=float,
+        default=IMRI_COSMIC_MERGE_RADIUS_FACTOR,
+        help="orbital-radius multiplier applied by the simplified merger",
+    )
+    parser.add_argument(
         "--checkpoint-interval",
         type=int,
         default=DEFAULT_CHECKPOINT_GRID_INTERVAL,
@@ -184,6 +205,9 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         redshift=arguments.redshift,
         hubble_constant_per_myr=arguments.hubble_constant_per_myr,
         snr_threshold=arguments.snr_threshold,
+        cosmic_merge_time_myr=arguments.cosmic_merge_time_myr,
+        cosmic_merge_smbh_mass_factor=arguments.cosmic_merge_smbh_mass_factor,
+        cosmic_merge_radius_factor=arguments.cosmic_merge_radius_factor,
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,

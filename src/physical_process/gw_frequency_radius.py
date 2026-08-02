@@ -232,6 +232,64 @@ def peters_time_to_lisa_band_myr(
     return float(max(0.0, start_time_myr - entry_time_myr))
 
 
+def peters_radius_after_time_cm(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    initial_radius_cm: float,
+    elapsed_time_myr: float,
+    eccentricity: float,
+    minimum_radius_cm: float,
+) -> float:
+    """Return the orbital radius after a fixed Peters-only evolution time.
+
+    The solver keeps eccentricity fixed in the same simplified sense used by
+    the rest of this module. ``minimum_radius_cm`` is a floor, typically the
+    current LISA entry radius, so callers can stop exactly at the detection
+    boundary.
+    """
+    if elapsed_time_myr < 0.0:
+        raise ValueError("elapsed time must be nonnegative")
+    if initial_radius_cm <= 0.0 or minimum_radius_cm <= 0.0:
+        raise ValueError("radii must be positive")
+    if initial_radius_cm <= minimum_radius_cm or elapsed_time_myr == 0.0:
+        return float(initial_radius_cm)
+
+    initial_merger_time_myr = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        initial_radius_cm,
+        eccentricity,
+    )
+    minimum_merger_time_myr = peters_merger_time_myr(
+        primary_mass_msun,
+        secondary_mass_msun,
+        minimum_radius_cm,
+        eccentricity,
+    )
+    target_merger_time_myr = max(
+        minimum_merger_time_myr,
+        initial_merger_time_myr - elapsed_time_myr,
+    )
+    if target_merger_time_myr <= minimum_merger_time_myr:
+        return float(minimum_radius_cm)
+
+    low_cm = float(minimum_radius_cm)
+    high_cm = float(initial_radius_cm)
+    for _ in range(96):
+        mid_cm = 0.5 * (low_cm + high_cm)
+        mid_time_myr = peters_merger_time_myr(
+            primary_mass_msun,
+            secondary_mass_msun,
+            mid_cm,
+            eccentricity,
+        )
+        if mid_time_myr < target_merger_time_myr:
+            low_cm = mid_cm
+        else:
+            high_cm = mid_cm
+    return float(0.5 * (low_cm + high_cm))
+
+
 def imri_lisa_time_buget_radius_cm(
     primary_mass_msun: float,
     secondary_mass_msun: float,

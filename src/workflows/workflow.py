@@ -62,11 +62,6 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         config.redshift,
         config.hubble_constant_per_myr,
     )
-    source_gw_time_budget_myr = gw_helpers.redshift_source_time_budget_myr(
-        config.redshift,
-        config.hubble_constant_per_myr,
-        config.max_gw_time_myr,
-    )
     print(
         "Observed LISA GW band: "
         f"{config.lisa_min_gw_frequency_hz:.3e} to "
@@ -82,8 +77,8 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         f"{redshift_transport_time_myr:.3e} Myr"
     )
     print(
-        "Source-frame GW time budget: "
-        f"{source_gw_time_budget_myr:.3e} Myr"
+        "Cosmic merge time: "
+        f"{config.cosmic_merge_time_myr:.3e} Myr"
     )
     print(f"Output directory: {config.output_dir}")
     print(

@@ -27,6 +27,7 @@ from .models import (
     IntermediatePopulation,
     StellarPopulation,
 )
+from .redshift_evolve import LinearRedshiftEvolution
 from .runtime import vprint
 from .workers import get_hpc_cpu_count, run_damping_tasks_parallel
 
@@ -386,88 +387,91 @@ class IMRISingleWorkflow:
         rg_cm: float,
     ) -> IMRIEventRecord:
         compact_mass_msun = damping_result["mass_msun"]
-        start_radius_cm = damping_result["final_semi_major_axis_cm"]
+        r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + compact_mass_msun
         redshift = self.config.redshift
         formation_time_myr = damping_result["formation_time_myr"]
         damping_time_myr = damping_result["damping_time_myr"]
-        redshift_transport_time_myr = gw_helpers.redshift_transport_time_myr(
-            redshift,
-            self.config.hubble_constant_per_myr,
-        )
-        gw_time_budget_source_myr = gw_helpers.redshift_source_time_budget_myr(
-            redshift,
-            self.config.hubble_constant_per_myr,
-            self.config.max_gw_time_myr,
-        )
         r_entry_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        r_imri_cm = gw_helpers.imri_lisa_time_buget_radius_cm(
-            result.m_smbh_msun,
-            compact_mass_msun,
-            gw_time_budget_source_myr,
-            self.config.lisa_min_gw_frequency_hz,
-            self.config.gw_eccentricity,
-            redshift,
-        )
-        gw_time_from_r_imri_to_entry_myr = (
-            gw_helpers.peters_time_to_lisa_band_myr(
+
+        def migration_time_myr(start_radius_cm: float, target_radius_cm: float) -> float:
+            return self.torque_migration_time_to_radius_myr(
+                agn_properties,
+                disk_data,
+                damping_result["mass_g"],
+                start_radius_cm,
+                target_radius_cm,
+            )
+
+        def gw_time_to_entry_myr(radius_cm: float) -> float:
+            return gw_helpers.peters_time_to_lisa_band_myr(
                 result.m_smbh_msun,
                 compact_mass_msun,
-                r_imri_cm,
+                radius_cm,
                 self.config.lisa_min_gw_frequency_hz,
                 self.config.gw_eccentricity,
                 redshift,
             )
-            if np.isfinite(r_imri_cm)
-            else np.inf
-        )
-        gw_time_from_r_imri_to_entry_observed_myr = gw_helpers.observed_frame_time_myr(
-            gw_time_from_r_imri_to_entry_myr,
-            redshift,
-        )
-        migration_time_myr = self.torque_migration_time_to_radius_myr(
-            agn_properties,
-            disk_data,
-            damping_result["mass_g"],
-            start_radius_cm,
-            r_imri_cm,
-        )
+
         event_decision = classify_event_rate(
             object_type=damping_result["obj_type"],
             formation_time_myr=formation_time_myr,
             damping_time_myr=damping_time_myr,
             final_time_myr=damping_result["final_time_myr"],
+            r_ini_cm=r_ini_cm,
+            r_entry_cm=r_entry_cm,
             migration_time_myr=migration_time_myr,
+            gw_time_to_entry_myr=gw_time_to_entry_myr,
             duty_cycle_myr=self.config.duty_cycle_myr,
         )
 
-        f_start_source_hz = _safe_gw_frequency_hz(total_mass_msun, start_radius_cm)
-        f_imri_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_imri_cm)
+        redshift_at_gas_fin = LinearRedshiftEvolution(
+            self.config.hubble_constant_per_myr
+        ).redshift_after_time(redshift, event_decision.gas_final_time_myr)
+        f_ini_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_ini_cm)
+        f_gas_fin_source_hz = _safe_gw_frequency_hz(
+            total_mass_msun,
+            event_decision.r_gas_fin_cm,
+        )
         f_entry_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_entry_cm)
-        f_start_observed_hz = _safe_observed_gw_frequency_hz(
-            f_start_source_hz,
+        f_ini_observed_hz = _safe_observed_gw_frequency_hz(
+            f_ini_source_hz,
             redshift,
         )
-        f_imri_observed_hz = _safe_observed_gw_frequency_hz(
-            f_imri_source_hz,
-            redshift,
-        )
-        f_entry_observed_hz = _safe_observed_gw_frequency_hz(
-            f_entry_source_hz,
-            redshift,
+        f_gas_fin_observed_hz = _safe_observed_gw_frequency_hz(
+            f_gas_fin_source_hz,
+            redshift_at_gas_fin,
         )
         detect_decision = classify_detectability(
             is_imri_candidate=event_decision.is_imri_candidate,
-            source_frequency_hz=f_entry_source_hz,
-            redshift=redshift,
+            primary_mass_msun=result.m_smbh_msun,
+            secondary_mass_msun=compact_mass_msun,
+            r_gas_fin_cm=event_decision.r_gas_fin_cm,
+            gas_final_time_myr=event_decision.gas_final_time_myr,
+            initial_redshift=redshift,
+            hubble_constant_per_myr=self.config.hubble_constant_per_myr,
             min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
             max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
+            eccentricity=self.config.gw_eccentricity,
+            cosmic_merge_time_myr=self.config.cosmic_merge_time_myr,
+            cosmic_merge_smbh_mass_factor=self.config.cosmic_merge_smbh_mass_factor,
+            cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
             snr_threshold=self.config.snr_threshold,
+        )
+        f_entry_output_source_hz = (
+            detect_decision.source_frequency_hz
+            if np.isfinite(detect_decision.source_frequency_hz)
+            else f_entry_source_hz
+        )
+        f_entry_output_observed_hz = (
+            detect_decision.observed_frequency_hz
+            if np.isfinite(detect_decision.observed_frequency_hz)
+            else _safe_observed_gw_frequency_hz(f_entry_source_hz, redshift)
         )
 
         return {
@@ -475,6 +479,7 @@ class IMRISingleWorkflow:
             "m_nsc_msun": result.m_nsc_msun,
             "repeat": result.repeat_idx,
             "redshift": redshift,
+            "detection_redshift": detect_decision.detection_redshift,
             "object_index": damping_result["idx"],
             "mass_msun": compact_mass_msun,
             "bh_origin": event_decision.bh_origin,
@@ -483,44 +488,48 @@ class IMRISingleWorkflow:
             "formation_time_myr": formation_time_myr,
             "damping_time_myr": damping_time_myr,
             "bh_embedding_time_myr": event_decision.bh_embedding_time_myr,
-            "start_radius_cm": start_radius_cm,
-            "start_radius_rg": start_radius_cm / rg_cm,
-            "r_imri_cm": r_imri_cm,
-            "r_imri_rg": r_imri_cm / rg_cm,
+            "r_ini_cm": r_ini_cm,
+            "r_ini_rg": r_ini_cm / rg_cm,
+            "r_gas_fin_cm": event_decision.r_gas_fin_cm,
+            "r_gas_fin_rg": event_decision.r_gas_fin_cm / rg_cm,
             "r_entry_cm": r_entry_cm,
             "r_entry_rg": r_entry_cm / rg_cm,
-            "f_start_src_microhz": _scaled_frequency(
-                f_start_source_hz,
+            "r_det_entry_cm": detect_decision.final_entry_radius_cm,
+            "r_det_entry_rg": detect_decision.final_entry_radius_cm / rg_cm,
+            "f_ini_src_microhz": _scaled_frequency(
+                f_ini_source_hz,
                 MICROHERTZ_IN_HZ,
             ),
-            "f_start_obs_microhz": _scaled_frequency(
-                f_start_observed_hz,
+            "f_ini_obs_microhz": _scaled_frequency(
+                f_ini_observed_hz,
                 MICROHERTZ_IN_HZ,
             ),
-            "f_imri_src_microhz": _scaled_frequency(
-                f_imri_source_hz,
+            "f_gas_fin_src_microhz": _scaled_frequency(
+                f_gas_fin_source_hz,
                 MICROHERTZ_IN_HZ,
             ),
-            "f_imri_obs_microhz": _scaled_frequency(
-                f_imri_observed_hz,
+            "f_gas_fin_obs_microhz": _scaled_frequency(
+                f_gas_fin_observed_hz,
                 MICROHERTZ_IN_HZ,
             ),
             "f_entry_src_mhz": _scaled_frequency(
-                f_entry_source_hz,
+                f_entry_output_source_hz,
                 MILLIHERTZ_IN_HZ,
             ),
             "f_entry_obs_mhz": _scaled_frequency(
-                f_entry_observed_hz,
+                f_entry_output_observed_hz,
                 MILLIHERTZ_IN_HZ,
             ),
-            "redshift_transport_time_myr": redshift_transport_time_myr,
-            "gw_time_budget_source_myr": gw_time_budget_source_myr,
-            "gw_time_from_r_imri_to_entry_myr": gw_time_from_r_imri_to_entry_myr,
-            "gw_time_from_r_imri_to_entry_observed_myr": (
-                gw_time_from_r_imri_to_entry_observed_myr
+            "gas_elapsed_time_myr": event_decision.gas_elapsed_time_myr,
+            "gas_final_time_myr": event_decision.gas_final_time_myr,
+            "migration_time_to_entry_myr": (
+                event_decision.migration_time_to_entry_myr
             ),
-            "migration_time_myr": migration_time_myr,
-            "arrival_time_myr": event_decision.arrival_time_myr,
+            "gw_time_to_entry_myr": event_decision.gw_time_to_entry_myr,
+            "gw_time_after_gas_myr": detect_decision.gw_time_after_gas_myr,
+            "detection_time_myr": detect_decision.detection_time_myr,
+            "final_smbh_mass_msun": detect_decision.final_smbh_mass_msun,
+            "cosmic_merge_applied": detect_decision.cosmic_merge_applied,
             "bh_candidate": event_decision.bh_candidate,
             "is_imri_candidate": event_decision.is_imri_candidate,
             "is_lisa_detectable": detect_decision.is_lisa_detectable,

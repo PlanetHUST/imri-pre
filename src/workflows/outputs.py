@@ -24,7 +24,7 @@ IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
     ("m_nsc_msun", "m_nsc_msun"),
     ("num_repeats", "n_repeat"),
-    # ("gravitational_radius_cm", "rg_cm"),
+    ("gravitational_radius_cm", "rg_cm"),
     ("disk_outer_radius_mpc", "r_disk_out_mpc"),
     ("disk_outer_radius_rg", "r_disk_out_rg"),
     ("f_geo_mean", "f_geo"),
@@ -55,17 +55,16 @@ IMRI_RESULT_COLUMNS = [
 
 IMRI_EVENT_COLUMNS = list(IMRIEventRecord.__annotations__)
 EVENT_HIDDEN_COLUMNS = {
-    "start_radius_cm",
-    "r_imri_cm",
+    "r_ini_cm",
+    "r_gas_fin_cm",
     "r_entry_cm",
-    "redshift_transport_time_myr",
-    "gw_time_budget_source_myr",
+    "r_det_entry_cm",
 }
 EVENT_FREQUENCY_COLUMNS = {
-    "f_start_src_microhz": ("f_start_src", 1.0e-6),
-    "f_start_obs_microhz": ("f_start_obs", 1.0e-6),
-    "f_imri_src_microhz": ("f_imri_src", 1.0e-6),
-    "f_imri_obs_microhz": ("f_imri_obs", 1.0e-6),
+    "f_ini_src_microhz": ("f_ini_src", 1.0e-6),
+    "f_ini_obs_microhz": ("f_ini_obs", 1.0e-6),
+    "f_gas_fin_src_microhz": ("f_gas_fin_src", 1.0e-6),
+    "f_gas_fin_obs_microhz": ("f_gas_fin_obs", 1.0e-6),
     "f_entry_src_mhz": ("f_entry_src", 1.0e-3),
     "f_entry_obs_mhz": ("f_entry_obs", 1.0e-3),
 }
@@ -90,12 +89,14 @@ def _mean_disk_outer_radius_rg_pc(
     for result in averaged_result.results:
         if result.disk_outer_radius_cm is None:
             continue
-        rg_cm = _gravitational_radius_cm(result.m_smbh_msun)
-        if rg_cm > 0.0 and np.isfinite(result.disk_outer_radius_cm):
-            radii_rg.append(float(result.disk_outer_radius_cm / rg_cm))
+        result_rg_cm = _gravitational_radius_cm(result.m_smbh_msun)
+        if result_rg_cm > 0.0 and np.isfinite(result.disk_outer_radius_cm):
+            radii_rg.append(float(result.disk_outer_radius_cm / result_rg_cm))
     if not radii_rg:
-        return np.nan
-    return float(np.mean(radii_rg)), float(np.mean(radii_rg) * rg_cm)
+        return np.nan, np.nan
+    mean_radius_rg = float(np.mean(radii_rg))
+    rg_cm = _gravitational_radius_cm(averaged_result.m_smbh_msun)
+    return mean_radius_rg, float(mean_radius_rg * rg_cm)
 
 
 def _result_output_record(
@@ -240,6 +241,11 @@ def save_metadata(
                 config.redshift,
             ),
             "snr_threshold": config.snr_threshold,
+            "cosmic_merge_time_myr": config.cosmic_merge_time_myr,
+            "cosmic_merge_smbh_mass_factor": (
+                config.cosmic_merge_smbh_mass_factor
+            ),
+            "cosmic_merge_radius_factor": config.cosmic_merge_radius_factor,
             "max_gw_time_myr": config.max_gw_time_myr,
             "gw_eccentricity": config.gw_eccentricity,
             "damping_cpu_count": config.damping_cpu_count,

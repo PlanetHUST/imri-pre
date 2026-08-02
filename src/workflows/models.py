@@ -83,6 +83,7 @@ class IMRIEventRecord(TypedDict):
     m_nsc_msun: float
     repeat: int
     redshift: float
+    detection_redshift: float
     object_index: int
     mass_msun: float
     bh_origin: str
@@ -91,24 +92,28 @@ class IMRIEventRecord(TypedDict):
     formation_time_myr: float
     damping_time_myr: float
     bh_embedding_time_myr: float
-    start_radius_cm: float
-    start_radius_rg: float
-    r_imri_cm: float
-    r_imri_rg: float
+    r_ini_cm: float
+    r_ini_rg: float
+    r_gas_fin_cm: float
+    r_gas_fin_rg: float
     r_entry_cm: float
     r_entry_rg: float
-    f_start_src_microhz: float
-    f_start_obs_microhz: float
-    f_imri_src_microhz: float
-    f_imri_obs_microhz: float
+    r_det_entry_cm: float
+    r_det_entry_rg: float
+    f_ini_src_microhz: float
+    f_ini_obs_microhz: float
+    f_gas_fin_src_microhz: float
+    f_gas_fin_obs_microhz: float
     f_entry_src_mhz: float
     f_entry_obs_mhz: float
-    redshift_transport_time_myr: float
-    gw_time_budget_source_myr: float
-    gw_time_from_r_imri_to_entry_myr: float
-    gw_time_from_r_imri_to_entry_observed_myr: float
-    migration_time_myr: float
-    arrival_time_myr: float
+    gas_elapsed_time_myr: float
+    gas_final_time_myr: float
+    migration_time_to_entry_myr: float
+    gw_time_to_entry_myr: float
+    gw_time_after_gas_myr: float
+    detection_time_myr: float
+    final_smbh_mass_msun: float
+    cosmic_merge_applied: bool
     bh_candidate: bool
     is_imri_candidate: bool
     is_lisa_detectable: bool
