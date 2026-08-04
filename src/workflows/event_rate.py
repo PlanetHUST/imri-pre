@@ -123,8 +123,10 @@ def solve_gas_final_radius_cm(
             "entry_reached",
         )
 
-    sample_count = max(3, int(num_radius_samples))
+    sample_count = int(num_radius_samples)
     radius_samples_cm = np.geomspace(r_ini_cm, r_entry_cm, sample_count)
+
+    # initilization parameters
     r_gas_fin_cm = r_ini_cm
     gas_elapsed_time_myr = 0.0
     stop_reason = "duty_cycle_limited"
