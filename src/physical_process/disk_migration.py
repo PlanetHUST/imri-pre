@@ -92,7 +92,7 @@ def type_ii_threshold_mass_msun(
     )
 
 
-def t_migration(
+def semi_analytical_migration_timescale(
     agn_properties: AGN_properties,
     object_mass_g: float,
     orbital_radius_cm: float,

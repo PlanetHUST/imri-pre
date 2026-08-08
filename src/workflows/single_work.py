@@ -409,24 +409,25 @@ class IMRISingleWorkflow:
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
+        print(f"r_ini is {r_ini_cm:.3e} cm, r_entry is {r_entry_cm:.3e} cm")
 
         def migration_time_myr_call(
             start_radius_cm: float, target_radius_cm: float
         ) -> float:
-            # return self.torque_migration_time_to_radius_myr(
-            #     agn_properties,
-            #     disk_data,
-            #     damping_result["mass_g"],
-            #     start_radius_cm,
-            #     target_radius_cm,
-            # )
-            return self.semi_analytic_migration_time_to_radius_myr(
+            return self.torque_migration_time_to_radius_myr(
                 agn_properties,
                 disk_data,
-                migrator_mass_msun * const.msun,
+                damping_result["mass_g"],
                 start_radius_cm,
                 target_radius_cm,
             )
+            # return self.semi_analytic_migration_time_to_radius_myr(
+            #     agn_properties,
+            #     disk_data,
+            #     migrator_mass_msun * const.msun,
+            #     start_radius_cm,
+            #     target_radius_cm,
+            # )
 
         def gw_time_to_entry_myr_call(radius_cm: float) -> float:
             return gw_helpers.peters_time_to_lisa_band_myr(
@@ -613,7 +614,7 @@ class IMRISingleWorkflow:
             return np.inf
         if start_radius_cm <= target_radius_cm:
             return 0.0
-        local_time_myr = disk_migration.t_migration(
+        local_time_myr = disk_migration.semi_analytical_migration_timescale(
             agn_properties,
             mass_g,
             start_radius_cm,
