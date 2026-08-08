@@ -5,11 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from types import SimpleNamespace
-from typing import Optional, Tuple
+from typing import Optional
 
 import numpy as np
 
 METER_TO_CM = 100.0
+DEFAULT_MIN_TRAP_SEPARATION_CELLS = 1.0
+STABLE_TRAP_KIND = 1
+ANTI_TRAP_KIND = -1
 
 
 @dataclass(frozen=True)
@@ -45,6 +48,14 @@ class TorqueProfile:
     tau_mig: np.ndarray
     tau_e: np.ndarray
     tau_i: np.ndarray
+
+
+@dataclass(frozen=True)
+class TorqueTrapRadii:
+    """Torque zero radii separated by stable and anti-trap behavior."""
+
+    stable_radius_cm: np.ndarray
+    anti_trap_radius_cm: np.ndarray
 
 
 def _require_pagn_bits():
@@ -299,111 +310,150 @@ def compute_torque_profile(
     )
 
 
-def find_torque_zero_crossings(radius: np.ndarray, gamma_tot: np.ndarray) -> np.ndarray:
+def _resolved_crossing_mask(
+    root_radius: np.ndarray,
+    crossing_kind: np.ndarray,
+    local_width: np.ndarray,
+    min_separation_cells: float,
+) -> np.ndarray:
+    keep = np.ones(root_radius.size, dtype=bool)
+    if min_separation_cells <= 0.0 or root_radius.size < 2:
+        return keep
+
+    group = [0]
+
+    def flush_group() -> None:
+        if len(group) < 2:
+            return
+        group_kind = crossing_kind[np.asarray(group, dtype=int)]
+        if np.unique(group_kind).size < 2:
+            return
+        for group_index in group:
+            keep[group_index] = False
+
+    for crossing_index in range(1, root_radius.size):
+        previous_index = group[-1]
+        separation = root_radius[crossing_index] - root_radius[previous_index]
+        local_resolution = min(
+            local_width[crossing_index],
+            local_width[previous_index],
+        )
+        if separation < min_separation_cells * local_resolution:
+            group.append(crossing_index)
+            continue
+        flush_group()
+        group = [crossing_index]
+    flush_group()
+    return keep
+
+
+def classify_torque_traps(
+    radius: np.ndarray,
+    gamma_tot: np.ndarray,
+    *,
+    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
+) -> TorqueTrapRadii:
+    """Return stable and anti-trap torque zero radii [cm].
+
+    Radius is sorted outward. A stable trap has positive torque just inside the
+    zero and negative torque just outside it, so objects are pushed toward the
+    zero from both sides. An anti-trap has the opposite sign ordering. Adjacent
+    opposite-type roots closer than ``min_separation_cells`` local grid
+    intervals are treated as unresolved numerical sign wiggles and discarded.
+    """
     radius = np.asarray(radius, dtype=float)
     values = np.asarray(gamma_tot, dtype=float)
+    min_separation_cells = float(min_separation_cells)
 
-    finite = np.isfinite(radius) & np.isfinite(values)
+    finite = np.isfinite(radius) & np.isfinite(values) & (values != 0.0)
     radius = radius[finite]
     values = values[finite]
-
-    nonzero = values != 0.0
-    radius = radius[nonzero]
-    values = values[nonzero]
-
     if values.size < 2:
-        return np.array([], dtype=float)
+        empty = np.array([], dtype=float)
+        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
 
     order = np.argsort(radius)
     radius = radius[order]
     values = values[order]
 
-    sign_changes = np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]
-    roots = []
-    for index in sign_changes:
-        r0, r1 = radius[index], radius[index + 1]
-        y0, y1 = values[index], values[index + 1]
-        roots.append(r0 - y0 * (r1 - r0) / (y1 - y0))
-    return np.asarray(roots, dtype=float)
+    root_radius = []
+    crossing_kind = []
+    local_width = []
+    for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
+        inner_radius, outer_radius = radius[index], radius[index + 1]
+        inner_torque, outer_torque = values[index], values[index + 1]
+        root = inner_radius - inner_torque * (
+            outer_radius - inner_radius
+        ) / (outer_torque - inner_torque)
+        if inner_torque > 0.0 and outer_torque < 0.0:
+            kind = STABLE_TRAP_KIND
+        elif inner_torque < 0.0 and outer_torque > 0.0:
+            kind = ANTI_TRAP_KIND
+        else:
+            continue
+        root_radius.append(root)
+        crossing_kind.append(kind)
+        local_width.append(outer_radius - inner_radius)
+
+    if not root_radius:
+        empty = np.array([], dtype=float)
+        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
+
+    root_radius_array = np.asarray(root_radius, dtype=float)
+    crossing_kind_array = np.asarray(crossing_kind, dtype=int)
+    local_width_array = np.asarray(local_width, dtype=float)
+    keep = _resolved_crossing_mask(
+        root_radius_array,
+        crossing_kind_array,
+        local_width_array,
+        min_separation_cells,
+    )
+
+    return TorqueTrapRadii(
+        stable_radius_cm=root_radius_array[
+            keep & (crossing_kind_array == STABLE_TRAP_KIND)
+        ],
+        anti_trap_radius_cm=root_radius_array[
+            keep & (crossing_kind_array == ANTI_TRAP_KIND)
+        ],
+    )
 
 
 def find_stable_traps(
     torque_profile: TorqueProfile,
     *,
-    require_negative_to_positive: bool = False,
+    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
 ) -> np.ndarray:
-    r = np.asarray(torque_profile.radius_cm, dtype=float)
-    g = np.asarray(torque_profile.gamma_tot, dtype=float)
-
-    finite = np.isfinite(r) & np.isfinite(g) & (g != 0.0)
-    r = r[finite]
-    g = g[finite]
-    if g.size < 2:
-        return np.array([], dtype=float)
-
-    order = np.argsort(r)
-    r = r[order]
-    g = g[order]
-
-    stable_roots = []
-    for i in np.where(np.sign(g[1:]) != np.sign(g[:-1]))[0]:
-        g_left = g[i]
-        g_right = g[i + 1]
-        if require_negative_to_positive:
-            stable = g_left < 0.0 and g_right > 0.0
-        else:
-            stable = g_left > 0.0 and g_right < 0.0
-        if stable:
-            r0, r1 = r[i], r[i + 1]
-            root = r0 - g_left * (r1 - r0) / (g_right - g_left)
-            stable_roots.append(root)
-
-    return np.asarray(stable_roots, dtype=float)
-
-
-def choose_outermost_stable_trap(
-    trap_radii_cm: np.ndarray,
-    *,
-    fallback_radius_cm: float,
-) -> float:
-    trap_radii_cm = np.asarray(trap_radii_cm, dtype=float)
-    trap_radii_cm = trap_radii_cm[np.isfinite(trap_radii_cm) & (trap_radii_cm > 0.0)]
-    if trap_radii_cm.size == 0:
-        return float(fallback_radius_cm)
-    return float(np.max(trap_radii_cm))
-
-
-def find_outermost_stable_trap(
-    disk,
-    *,
-    migrator_mass_msun: float = 10.0,
-    smoothing: float = 0.005,
-    params: Optional[MigrationParameters] = None,
-    fallback_radius_cm: Optional[float] = None,
-) -> Tuple[float, np.ndarray, TorqueProfile]:
-    torque_profile = compute_torque_profile(
-        disk,
-        migrator_mass_msun=migrator_mass_msun,
-        smoothing=smoothing,
-        params=params,
+    """Return stable trap radii [cm], where migration flows toward the zero."""
+    trap_radii = classify_torque_traps(
+        torque_profile.radius_cm,
+        torque_profile.gamma_tot,
+        min_separation_cells=min_separation_cells,
     )
-    trap_radii = find_stable_traps(torque_profile)
+    return trap_radii.stable_radius_cm
 
-    finite_radius = torque_profile.radius_cm[
-        np.isfinite(torque_profile.radius_cm) & (torque_profile.radius_cm > 0.0)
-    ]
-    if finite_radius.size == 0:
-        raise ValueError("torque profile has no positive finite radii")
 
-    if fallback_radius_cm is None:
-        fallback = float(np.median(finite_radius))
-    else:
-        fallback = float(fallback_radius_cm)
-        if fallback < np.nanmin(finite_radius) or fallback > np.nanmax(finite_radius):
-            fallback = float(np.median(finite_radius))
+def find_anti_traps(
+    torque_profile: TorqueProfile,
+    *,
+    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
+) -> np.ndarray:
+    """Return anti-trap radii [cm], where migration flows away from the zero."""
+    return classify_torque_traps(
+        torque_profile.radius_cm,
+        torque_profile.gamma_tot,
+        min_separation_cells=min_separation_cells,
+    ).anti_trap_radius_cm
 
-    rtrap = choose_outermost_stable_trap(
-        trap_radii,
-        fallback_radius_cm=fallback,
+
+def classify_torque_profile_traps(
+    torque_profile: TorqueProfile,
+    *,
+    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
+) -> TorqueTrapRadii:
+    """Return stable and anti-trap radii [cm] for a torque profile."""
+    return classify_torque_traps(
+        torque_profile.radius_cm,
+        torque_profile.gamma_tot,
+        min_separation_cells=min_separation_cells,
     )
-    return rtrap, trap_radii, torque_profile

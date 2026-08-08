@@ -609,20 +609,23 @@ class IMRISingleWorkflow:
         start_radius_cm: float,
         target_radius_cm: float,
     ) -> float:
-        """Approximate migration time [Myr] using the local semi-analytic time."""
+        """Approximate migration time [Myr] using the semi-analytic radial integral."""
         if not np.isfinite(target_radius_cm) or start_radius_cm <= 0.0:
             return np.inf
         if start_radius_cm <= target_radius_cm:
             return 0.0
-        local_time_myr = disk_migration.semi_analytical_migration_timescale(
-            agn_properties,
-            mass_g,
-            start_radius_cm,
-            aspect_ratio=disk_data["aspect_ratio"],
-            surface_density_g_cm2=disk_data["surface_density_g_cm2"],
-            radius_grid_cm=disk_data["radius_cm"],
-            consider_type_ii=self.config.consider_type_ii_migration,
+        migration_time_myr = (
+            disk_migration.integrated_semi_analytical_migration_timescale(
+                agn_properties,
+                mass_g,
+                start_radius_cm,
+                target_radius_cm,
+                aspect_ratio=disk_data["aspect_ratio"],
+                surface_density_g_cm2=disk_data["surface_density_g_cm2"],
+                radius_grid_cm=disk_data["radius_cm"],
+                consider_type_ii=self.config.consider_type_ii_migration,
+            )
         )
-        if not np.isfinite(local_time_myr) or local_time_myr <= 0.0:
+        if not np.isfinite(migration_time_myr) or migration_time_myr <= 0.0:
             return np.inf
-        return float(local_time_myr * abs(np.log(start_radius_cm / target_radius_cm)))
+        return float(migration_time_myr)

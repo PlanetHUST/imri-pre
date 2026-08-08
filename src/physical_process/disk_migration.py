@@ -137,6 +137,126 @@ def semi_analytical_migration_timescale(
     return float(migration_time_s / const.Myr)
 
 
+def integrated_semi_analytical_migration_timescale(
+    agn_properties: AGN_properties,
+    object_mass_g: float,
+    r_ini_cm: float,
+    r_fin_cm: float,
+    aspect_ratio: FloatArray,
+    surface_density_g_cm2: FloatArray,
+    radius_grid_cm: FloatArray,
+    consider_type_ii: bool = True,
+) -> float:
+    """Return radius-integrated semi-analytic migration time [Myr].
+
+    ``semi_analytical_migration_timescale()`` is a local e-folding time,
+    approximately ``R / |dR/dt|``. For a finite radius interval the matching
+    estimate is therefore ``integral(t_local d ln R)`` over the path.
+    """
+    if object_mass_g <= 0.0:
+        raise ValueError("object mass must be positive")
+    if r_ini_cm <= 0.0 or r_fin_cm <= 0.0:
+        raise ValueError("radii must be positive")
+    if r_ini_cm == r_fin_cm:
+        return 0.0
+
+    radius_grid = np.asarray(radius_grid_cm, dtype=float)
+    aspect = np.asarray(aspect_ratio, dtype=float)
+    sigma = np.asarray(surface_density_g_cm2, dtype=float)
+    if radius_grid.shape != aspect.shape or radius_grid.shape != sigma.shape:
+        raise ValueError("radius, aspect-ratio, and surface-density grids must match")
+
+    finite = (
+        np.isfinite(radius_grid)
+        & np.isfinite(aspect)
+        & np.isfinite(sigma)
+        & (radius_grid > 0.0)
+        & (aspect > 0.0)
+        & (sigma > 0.0)
+    )
+    radius_grid = radius_grid[finite]
+    aspect = aspect[finite]
+    sigma = sigma[finite]
+    if radius_grid.size < 2:
+        return np.inf
+
+    order = np.argsort(radius_grid)
+    radius_grid = radius_grid[order]
+    aspect = aspect[order]
+    sigma = sigma[order]
+    unique_radius_cm, unique_indices = np.unique(radius_grid, return_index=True)
+    radius_grid = unique_radius_cm
+    aspect = aspect[unique_indices]
+    sigma = sigma[unique_indices]
+    if radius_grid.size < 2:
+        return np.inf
+
+    min_radius_cm = min(r_ini_cm, r_fin_cm)
+    max_radius_cm = max(r_ini_cm, r_fin_cm)
+    lower_tolerance_cm = max(np.spacing(radius_grid[0]), radius_grid[0] * 1.0e-12)
+    upper_tolerance_cm = max(np.spacing(radius_grid[-1]), radius_grid[-1] * 1.0e-12)
+    if (
+        min_radius_cm < radius_grid[0] - lower_tolerance_cm
+        or max_radius_cm > radius_grid[-1] + upper_tolerance_cm
+    ):
+        return np.inf
+    min_radius_cm = max(min_radius_cm, float(radius_grid[0]))
+    max_radius_cm = min(max_radius_cm, float(radius_grid[-1]))
+
+    mask = (radius_grid >= min_radius_cm) & (radius_grid <= max_radius_cm)
+    segment_radius_cm = np.concatenate(
+        (
+            [min_radius_cm],
+            radius_grid[
+                mask & (radius_grid > min_radius_cm) & (radius_grid < max_radius_cm)
+            ],
+            [max_radius_cm],
+        )
+    )
+    segment_aspect = np.interp(segment_radius_cm, radius_grid, aspect)
+    segment_sigma = np.interp(segment_radius_cm, radius_grid, sigma)
+
+    smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / segment_radius_cm**3)
+    gap_parameter = object_mass_g**2 / (
+        DISK_VISCOSITY_ALPHA * segment_aspect**2 * smbh_mass_g**2
+    )
+
+    type_i_time_s = (
+        smbh_mass_g**2
+        * segment_aspect**2
+        / object_mass_g
+        / segment_sigma
+        / segment_radius_cm**2
+        / orbital_frequency_rad_s
+    )
+    type_ii_time_s = 1.0 / (
+        DISK_VISCOSITY_ALPHA * segment_aspect**2 * orbital_frequency_rad_s
+    )
+    local_time_s = np.where(
+        consider_type_ii & (gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD),
+        type_ii_time_s,
+        type_i_time_s,
+    )
+
+    if not np.all(np.isfinite(local_time_s) & (local_time_s > 0.0)):
+        return np.inf
+
+    if r_ini_cm > r_fin_cm:
+        integration_radius_cm = segment_radius_cm[::-1]
+        integrand_s = local_time_s[::-1]
+    else:
+        integration_radius_cm = segment_radius_cm
+        integrand_s = local_time_s
+
+    migration_time_s = abs(
+        float(np.trapezoid(integrand_s, np.log(integration_radius_cm)))
+    )
+    if not np.isfinite(migration_time_s):
+        return np.inf
+    return float(migration_time_s / const.Myr)
+
+
 def t_migration_from_torque(
     radius_grid_cm: FloatArray,
     gamma_tot_cgs: FloatArray,
@@ -162,13 +282,16 @@ def t_migration_from_torque(
 
     Returns:
         Migration timescale [Myr]. Returns ``np.inf`` if the integrand
-        is not finite over the integration range, or if a torque zero-crossing
-        (migration trap) lies between ``r_ini_cm`` and ``r_fin_cm``.
+        is not finite over the integration range, if the torque points away
+        from the target, or if a torque zero-crossing (stable trap or anti-trap)
+        lies between ``r_ini_cm`` and ``r_fin_cm``.
     """
     if migrator_mass_g <= 0.0:
         raise ValueError("migrator mass must be positive")
     if r_ini_cm <= 0.0 or r_fin_cm <= 0.0:
         raise ValueError("radii must be positive")
+    if r_ini_cm == r_fin_cm:
+        return 0.0
 
     smbh_mass_g = smbh_mass_msun * const.msun
 
@@ -194,8 +317,15 @@ def t_migration_from_torque(
 
     min_radius_cm = min(r_ini_cm, r_fin_cm)
     max_radius_cm = max(r_ini_cm, r_fin_cm)
-    if min_radius_cm < radius_grid[0] or max_radius_cm > radius_grid[-1]:
+    lower_tolerance_cm = max(np.spacing(radius_grid[0]), radius_grid[0] * 1.0e-12)
+    upper_tolerance_cm = max(np.spacing(radius_grid[-1]), radius_grid[-1] * 1.0e-12)
+    if (
+        min_radius_cm < radius_grid[0] - lower_tolerance_cm
+        or max_radius_cm > radius_grid[-1] + upper_tolerance_cm
+    ):
         return np.inf
+    min_radius_cm = max(min_radius_cm, float(radius_grid[0]))
+    max_radius_cm = min(max_radius_cm, float(radius_grid[-1]))
 
     mask = (radius_grid >= min_radius_cm) & (radius_grid <= max_radius_cm)
     segment_radius_cm = np.concatenate(
@@ -214,6 +344,7 @@ def t_migration_from_torque(
 
     if np.any(segment_torque_cgs == 0.0):
         return np.inf
+    # A finite path cannot cross either a stable trap or an anti-trap.
     sign_changes = np.where(
         np.sign(segment_torque_cgs[1:]) != np.sign(segment_torque_cgs[:-1])
     )[0]
