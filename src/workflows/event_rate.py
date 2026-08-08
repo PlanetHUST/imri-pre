@@ -68,12 +68,10 @@ def solve_gas_final_radius_cm(
 ) -> tuple[float, float, float, float, str]:
     """Return the final gas-delivered radius before GW or duty-cycle stopping.
 
-    The gas stage moves inward from ``r_ini_cm`` until one of three conditions
-    is reached:
+    The gas stage moves inward from ``r_ini_cm`` until one of three conditions is reached:
     1. LISA-band entry;
     2. exhaustion of the AGN duty-cycle time;
-    3. available after damping, or the point where GW-only evolution to entry is
-    faster than continued gas migration.
+    3. available after damping, or the point where GW-only evolution to entry is faster than continued gas migration.
     """
     if (
         not np.isfinite(r_ini_cm)
@@ -88,7 +86,11 @@ def solve_gas_final_radius_cm(
         r_ini_cm,
         r_entry_cm,
     )
+    print(f"total_migration_time is {total_migration_time_myr:.3e} myr")
+
     total_gw_time_myr = _safe_gw_time_myr(gw_time_to_entry_myr, r_ini_cm)
+
+    print(f"total_gw_time is {total_gw_time_myr:.3e} myr")
 
     if r_ini_cm <= r_entry_cm:
         return r_ini_cm, 0.0, 0.0, 0.0, "already_inside_lisa_entry"
@@ -111,6 +113,7 @@ def solve_gas_final_radius_cm(
             "migration_unavailable",
         )
 
+    # gw dominates at start
     if total_migration_time_myr >= total_gw_time_myr:
         return (
             r_ini_cm,
@@ -120,6 +123,7 @@ def solve_gas_final_radius_cm(
             "gw_dominates_at_start",
         )
 
+    # migration towards the r_entry
     if total_migration_time_myr <= available_gas_time_myr:
         return (
             r_entry_cm,
@@ -129,7 +133,8 @@ def solve_gas_final_radius_cm(
             "entry_reached",
         )
 
-    # total_migration_time_myr between available_gas_time_myr and total_gw_time_myr
+    # total_migration_time_myr between available_gas_time_myr and total_gw_time_myr, the most common case
+    # calculate details
     sample_count = int(num_radius_samples)
     radius_samples_cm = np.geomspace(r_ini_cm, r_entry_cm, sample_count)
 
@@ -138,30 +143,37 @@ def solve_gas_final_radius_cm(
     gas_elapsed_time_myr = 0.0
     stop_reason = "duty_cycle_limited"
 
-    for radius_cm in radius_samples_cm[1:]:
-        elapsed_myr = _safe_migration_time_myr(
+    for radius_sample_cm in radius_samples_cm[1:]:
+        evloved_embed_myr = _safe_migration_time_myr(
             migration_time_myr_call,
             r_ini_cm,
-            float(radius_cm),
+            float(radius_sample_cm),
         )
         remaining_migration_myr = _safe_migration_time_myr(
             migration_time_myr_call,
-            float(radius_cm),
+            float(radius_sample_cm),
             r_entry_cm,
         )
-        remaining_gw_myr = _safe_gw_time_myr(gw_time_to_entry_myr, float(radius_cm))
-        if not np.isfinite(elapsed_myr):
+        remaining_gw_myr = _safe_gw_time_myr(
+            gw_time_to_entry_myr, float(radius_sample_cm)
+        )
+
+        if not np.isfinite(evloved_embed_myr):
             stop_reason = "migration_unavailable"
             break
-        if elapsed_myr > available_gas_time_myr:
+
+        if evloved_embed_myr > available_gas_time_myr:
             stop_reason = "duty_cycle_limited"
             break
-        r_gas_fin_cm = float(radius_cm)
-        gas_elapsed_time_myr = elapsed_myr
+
+        r_gas_fin_cm = float(radius_sample_cm)
+        gas_elapsed_time_myr = evloved_embed_myr
+
         if remaining_migration_myr >= remaining_gw_myr:
             stop_reason = "gw_dominates_after_gas"
             break
-        if radius_cm <= r_entry_cm:
+
+        if radius_sample_cm <= r_entry_cm:
             stop_reason = "entry_reached"
             break
 
@@ -205,6 +217,8 @@ def classify_event_rate(
         gw_time_to_entry_myr=gw_time_to_entry_myr_call,
         num_radius_samples=num_radius_samples,
     )
+
+    print(f"stop reason is {gas_stop_reason}, r_gas_fin is {r_gas_fin_cm:.3e} cm")
 
     gas_final_time_myr = embed_time_myr + gas_elapsed_time_myr
     embedded_bh = object_type == 1

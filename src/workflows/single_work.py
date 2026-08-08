@@ -27,7 +27,7 @@ from .models import (
     IntermediatePopulation,
     StellarPopulation,
 )
-from .redshift_evolve import LinearRedshiftEvolution
+from .redshift_evolve import RedshiftEvolution
 from .runtime import vprint
 from .workers import get_hpc_cpu_count, run_damping_tasks_parallel
 
@@ -396,16 +396,16 @@ class IMRISingleWorkflow:
 
         redshift = self.config.redshift
 
-        compact_mass_msun = damping_result["mass_msun"]
+        migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
-        total_mass_msun = result.m_smbh_msun + compact_mass_msun
+        total_mass_msun = result.m_smbh_msun + migrator_mass_msun
 
         formation_time_myr = damping_result["formation_time_myr"]
         damping_time_myr = damping_result["damping_time_myr"]
 
         r_entry_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
-            compact_mass_msun,
+            migrator_mass_msun,
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
@@ -413,10 +413,17 @@ class IMRISingleWorkflow:
         def migration_time_myr_call(
             start_radius_cm: float, target_radius_cm: float
         ) -> float:
-            return self.torque_migration_time_to_radius_myr(
+            # return self.torque_migration_time_to_radius_myr(
+            #     agn_properties,
+            #     disk_data,
+            #     damping_result["mass_g"],
+            #     start_radius_cm,
+            #     target_radius_cm,
+            # )
+            return self.semi_analytic_migration_time_to_radius_myr(
                 agn_properties,
                 disk_data,
-                damping_result["mass_g"],
+                migrator_mass_msun * const.msun,
                 start_radius_cm,
                 target_radius_cm,
             )
@@ -424,7 +431,7 @@ class IMRISingleWorkflow:
         def gw_time_to_entry_myr_call(radius_cm: float) -> float:
             return gw_helpers.peters_time_to_lisa_band_myr(
                 result.m_smbh_msun,
-                compact_mass_msun,
+                migrator_mass_msun,
                 radius_cm,
                 self.config.lisa_min_gw_frequency_hz,
                 self.config.gw_eccentricity,
@@ -443,15 +450,17 @@ class IMRISingleWorkflow:
             duty_cycle_myr=self.config.duty_cycle_myr,
         )
 
-        redshift_at_gas_fin = LinearRedshiftEvolution(
+        redshift_at_gas_fin = RedshiftEvolution(
             self.config.hubble_constant_per_myr
         ).redshift_after_time(redshift, event_decision.gas_final_time_myr)
+
         f_ini_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_ini_cm)
         f_gas_fin_source_hz = _safe_gw_frequency_hz(
             total_mass_msun,
             event_decision.r_gas_fin_cm,
         )
         f_entry_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_entry_cm)
+
         f_ini_observed_hz = _safe_observed_gw_frequency_hz(
             f_ini_source_hz,
             redshift,
@@ -460,10 +469,11 @@ class IMRISingleWorkflow:
             f_gas_fin_source_hz,
             redshift_at_gas_fin,
         )
+
         detect_decision = classify_detectability(
             is_imri_candidate=event_decision.is_imri_candidate,
             primary_mass_msun=result.m_smbh_msun,
-            secondary_mass_msun=compact_mass_msun,
+            secondary_mass_msun=migrator_mass_msun,
             r_gas_fin_cm=event_decision.r_gas_fin_cm,
             gas_final_time_myr=event_decision.gas_final_time_myr,
             initial_redshift=redshift,
@@ -476,6 +486,7 @@ class IMRISingleWorkflow:
             cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
             snr_threshold=self.config.snr_threshold,
         )
+
         f_entry_output_source_hz = (
             detect_decision.source_frequency_hz
             if np.isfinite(detect_decision.source_frequency_hz)
@@ -494,7 +505,7 @@ class IMRISingleWorkflow:
             "redshift": redshift,
             "detection_redshift": detect_decision.detection_redshift,
             "object_index": damping_result["idx"],
-            "mass_msun": compact_mass_msun,
+            "mass_msun": migrator_mass_msun,
             "bh_origin": event_decision.bh_origin,
             "event_rate_class": event_decision.event_rate_class,
             "detect_rate_class": detect_decision.detect_rate_class,
@@ -569,6 +580,7 @@ class IMRISingleWorkflow:
             agn_properties.smbh_mass_msun,
             migrator_mass_msun,
         )
+
         if torque_profile is None:
             return self.semi_analytic_migration_time_to_radius_myr(
                 agn_properties,

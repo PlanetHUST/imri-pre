@@ -40,7 +40,7 @@ from .event_rate import (
     EventRateDecision,
     classify_event_rate,
 )
-from .redshift_evolve import LinearRedshiftEvolution, RedshiftEvolutionState
+from .redshift_evolve import RedshiftEvolution, RedshiftEvolutionState
 from .models import (
     BoolArray,
     DampingResult,
@@ -105,7 +105,7 @@ __all__ = [
     "IMRISingleWorkflow",
     "IntermediatePopulation",
     "METADATA_FILENAME",
-    "LinearRedshiftEvolution",
+    "RedshiftEvolution",
     "RedshiftEvolutionState",
     "SECONDS_PER_MINUTE",
     "StellarPopulation",

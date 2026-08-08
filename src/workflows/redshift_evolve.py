@@ -14,7 +14,7 @@ class RedshiftEvolutionState:
 
 
 @dataclass(frozen=True)
-class LinearRedshiftEvolution:
+class RedshiftEvolution:
     """using the z vs t relationship to be (1+z)=(H_0 * t)**(-2/3)"""
 
     hubble_constant_per_myr: float

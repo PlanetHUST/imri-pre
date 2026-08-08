@@ -7,7 +7,7 @@ import numpy as np
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .cosmic_merge import CosmicMergeModel
-from .redshift_evolve import LinearRedshiftEvolution
+from .redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
 DETECTION_CLASS_NOT_DETECTABLE = "non-detectable"
@@ -102,7 +102,7 @@ def classify_detectability(
             detect_rate_reason="invalid_gas_final_radius",
         )
 
-    redshift_model = LinearRedshiftEvolution(hubble_constant_per_myr)
+    redshift_model = RedshiftEvolution(hubble_constant_per_myr)
     merge_model = CosmicMergeModel(
         merge_time_myr=cosmic_merge_time_myr,
         smbh_mass_growth_factor=cosmic_merge_smbh_mass_factor,
@@ -212,8 +212,8 @@ def classify_detectability(
             eccentricity,
             current_redshift,
         )
-        remaining_cosmic_time_myr = (
-            redshift_model.remaining_time_to_zero_redshift_myr(current_redshift)
+        remaining_cosmic_time_myr = redshift_model.remaining_time_to_zero_redshift_myr(
+            current_redshift
         )
 
     if gw_time_after_gas_myr > remaining_cosmic_time_myr:
