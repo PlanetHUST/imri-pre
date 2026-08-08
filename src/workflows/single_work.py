@@ -338,10 +338,13 @@ class IMRISingleWorkflow:
         """Classify embedded BHs and delayed-BH embedded stars as IMRI candidates."""
         rg_cm = disk_data["gravitational_radius_cm"]
         for damping_result in damping_results:
+
             if damping_result["obj_type"] == 0:
                 result.embedded_star_count += 1
+
             elif damping_result["obj_type"] == 1:
                 result.embedded_bh_count += 1
+
             else:
                 result.outside_or_failed_count += 1
                 continue
@@ -353,11 +356,14 @@ class IMRISingleWorkflow:
                 damping_result,
                 rg_cm,
             )
+
             result.imri_events.append(event)
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
+
             if event["bh_origin"] == BH_ORIGIN_MIGRATION_FORMED:
                 result.migration_formed_bh_count += 1
+
             if event["is_imri_candidate"]:
                 result.imri_count += 1
                 result.imri_mass_msun += event["mass_msun"]
@@ -366,6 +372,7 @@ class IMRISingleWorkflow:
                     result.detectable_imri_mass_msun += event["mass_msun"]
                 else:
                     result.no_detectable_imri_count += 1
+
             else:
                 result.no_imri_count += 1
 
@@ -386,12 +393,16 @@ class IMRISingleWorkflow:
         damping_result: DampingResult,
         rg_cm: float,
     ) -> IMRIEventRecord:
+
+        redshift = self.config.redshift
+
         compact_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + compact_mass_msun
-        redshift = self.config.redshift
+
         formation_time_myr = damping_result["formation_time_myr"]
         damping_time_myr = damping_result["damping_time_myr"]
+
         r_entry_cm = gw_helpers.lisa_entry_radius_cm(
             result.m_smbh_msun,
             compact_mass_msun,
@@ -399,7 +410,9 @@ class IMRISingleWorkflow:
             redshift,
         )
 
-        def migration_time_myr(start_radius_cm: float, target_radius_cm: float) -> float:
+        def migration_time_myr_call(
+            start_radius_cm: float, target_radius_cm: float
+        ) -> float:
             return self.torque_migration_time_to_radius_myr(
                 agn_properties,
                 disk_data,
@@ -408,7 +421,7 @@ class IMRISingleWorkflow:
                 target_radius_cm,
             )
 
-        def gw_time_to_entry_myr(radius_cm: float) -> float:
+        def gw_time_to_entry_myr_call(radius_cm: float) -> float:
             return gw_helpers.peters_time_to_lisa_band_myr(
                 result.m_smbh_msun,
                 compact_mass_msun,
@@ -422,11 +435,11 @@ class IMRISingleWorkflow:
             object_type=damping_result["obj_type"],
             formation_time_myr=formation_time_myr,
             damping_time_myr=damping_time_myr,
-            final_time_myr=damping_result["final_time_myr"],
+            embed_time_myr=damping_result["final_time_myr"],
             r_ini_cm=r_ini_cm,
             r_entry_cm=r_entry_cm,
-            migration_time_myr=migration_time_myr,
-            gw_time_to_entry_myr=gw_time_to_entry_myr,
+            migration_time_myr_call=migration_time_myr_call,
+            gw_time_to_entry_myr_call=gw_time_to_entry_myr_call,
             duty_cycle_myr=self.config.duty_cycle_myr,
         )
 
@@ -522,9 +535,7 @@ class IMRISingleWorkflow:
             ),
             "gas_elapsed_time_myr": event_decision.gas_elapsed_time_myr,
             "gas_final_time_myr": event_decision.gas_final_time_myr,
-            "migration_time_to_entry_myr": (
-                event_decision.migration_time_to_entry_myr
-            ),
+            "migration_time_to_entry_myr": (event_decision.migration_time_to_entry_myr),
             "gw_time_to_entry_myr": event_decision.gw_time_to_entry_myr,
             "gw_time_after_gas_myr": detect_decision.gw_time_after_gas_myr,
             "detection_time_myr": detect_decision.detection_time_myr,

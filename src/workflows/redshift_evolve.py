@@ -15,7 +15,7 @@ class RedshiftEvolutionState:
 
 @dataclass(frozen=True)
 class LinearRedshiftEvolution:
-    """Evolve redshift with the prompt's linear ``z = H0 * (t0 - t)`` model."""
+    """using the z vs t relationship to be (1+z)=(H_0 * t)**(-2/3)"""
 
     hubble_constant_per_myr: float
 
@@ -25,6 +25,14 @@ class LinearRedshiftEvolution:
             or self.hubble_constant_per_myr <= 0.0
         ):
             raise ValueError("Hubble constant must be positive")
+
+    def redshift_to_cosmic_time(self, redshift: float) -> float:
+        cosmic_time_myr = (1 + redshift) ** (-3 / 2) / self.hubble_constant_per_myr
+        return cosmic_time_myr
+
+    def cosmic_time_to_redshift(self, cosmic_time_myr: float) -> float:
+        redshift = (self.hubble_constant_per_myr * cosmic_time_myr) ** (-2 / 3) - 1
+        return redshift
 
     def redshift_after_time(
         self,
@@ -36,7 +44,11 @@ class LinearRedshiftEvolution:
             raise ValueError("initial redshift must be nonnegative")
         if not np.isfinite(elapsed_time_myr) or elapsed_time_myr < 0.0:
             raise ValueError("elapsed time must be nonnegative")
-        redshift = initial_redshift - self.hubble_constant_per_myr * elapsed_time_myr
+
+        time_initial_myr = self.redshift_to_cosmic_time(initial_redshift)
+        time_final_myr = time_initial_myr + elapsed_time_myr
+        redshift = self.cosmic_time_to_redshift(time_final_myr)
+
         return float(max(0.0, redshift))
 
     def state_after_time(
@@ -54,4 +66,7 @@ class LinearRedshiftEvolution:
         """Return source-frame time [Myr] until this model reaches z=0."""
         if not np.isfinite(redshift) or redshift < 0.0:
             raise ValueError("redshift must be nonnegative")
-        return float(redshift / self.hubble_constant_per_myr)
+
+        time_myr = self.redshift_to_cosmic_time(redshift)
+
+        return 1 / self.hubble_constant_per_myr - time_myr

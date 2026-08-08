@@ -62,15 +62,17 @@ def solve_gas_final_radius_cm(
     r_ini_cm: float,
     r_entry_cm: float,
     available_gas_time_myr: float,
-    migration_time_myr: MigrationTimeFunction,
+    migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr: GwTimeFunction,
     num_radius_samples: int = 96,
 ) -> tuple[float, float, float, float, str]:
     """Return the final gas-delivered radius before GW or duty-cycle stopping.
 
     The gas stage moves inward from ``r_ini_cm`` until one of three conditions
-    is reached: LISA-band entry, exhaustion of the AGN duty-cycle time
-    available after damping, or the point where GW-only evolution to entry is
+    is reached:
+    1. LISA-band entry;
+    2. exhaustion of the AGN duty-cycle time;
+    3. available after damping, or the point where GW-only evolution to entry is
     faster than continued gas migration.
     """
     if (
@@ -82,7 +84,7 @@ def solve_gas_final_radius_cm(
         return np.nan, np.inf, np.inf, np.inf, "invalid_radius"
 
     total_migration_time_myr = _safe_migration_time_myr(
-        migration_time_myr,
+        migration_time_myr_call,
         r_ini_cm,
         r_entry_cm,
     )
@@ -90,6 +92,7 @@ def solve_gas_final_radius_cm(
 
     if r_ini_cm <= r_entry_cm:
         return r_ini_cm, 0.0, 0.0, 0.0, "already_inside_lisa_entry"
+
     if not np.isfinite(available_gas_time_myr) or available_gas_time_myr <= 0.0:
         return (
             r_ini_cm,
@@ -98,6 +101,7 @@ def solve_gas_final_radius_cm(
             total_gw_time_myr,
             "damping_misses_duty_cycle",
         )
+
     if not np.isfinite(total_migration_time_myr):
         return (
             r_ini_cm,
@@ -106,6 +110,7 @@ def solve_gas_final_radius_cm(
             total_gw_time_myr,
             "migration_unavailable",
         )
+
     if total_migration_time_myr >= total_gw_time_myr:
         return (
             r_ini_cm,
@@ -114,6 +119,7 @@ def solve_gas_final_radius_cm(
             total_gw_time_myr,
             "gw_dominates_at_start",
         )
+
     if total_migration_time_myr <= available_gas_time_myr:
         return (
             r_entry_cm,
@@ -123,6 +129,7 @@ def solve_gas_final_radius_cm(
             "entry_reached",
         )
 
+    # total_migration_time_myr between available_gas_time_myr and total_gw_time_myr
     sample_count = int(num_radius_samples)
     radius_samples_cm = np.geomspace(r_ini_cm, r_entry_cm, sample_count)
 
@@ -133,12 +140,12 @@ def solve_gas_final_radius_cm(
 
     for radius_cm in radius_samples_cm[1:]:
         elapsed_myr = _safe_migration_time_myr(
-            migration_time_myr,
+            migration_time_myr_call,
             r_ini_cm,
             float(radius_cm),
         )
         remaining_migration_myr = _safe_migration_time_myr(
-            migration_time_myr,
+            migration_time_myr_call,
             float(radius_cm),
             r_entry_cm,
         )
@@ -172,16 +179,18 @@ def classify_event_rate(
     object_type: int,
     formation_time_myr: float,
     damping_time_myr: float,
-    final_time_myr: float,
+    embed_time_myr: float,
     r_ini_cm: float,
     r_entry_cm: float,
-    migration_time_myr: MigrationTimeFunction,
-    gw_time_to_entry_myr: GwTimeFunction,
+    migration_time_myr_call: MigrationTimeFunction,
+    gw_time_to_entry_myr_call: GwTimeFunction,
     duty_cycle_myr: float,
     num_radius_samples: int = 96,
 ) -> EventRateDecision:
     """Classify whether gas migration produces an IMRI event candidate."""
-    available_gas_time_myr = duty_cycle_myr - final_time_myr
+
+    available_gas_time_myr = duty_cycle_myr - embed_time_myr
+
     (
         r_gas_fin_cm,
         gas_elapsed_time_myr,
@@ -192,23 +201,26 @@ def classify_event_rate(
         r_ini_cm=r_ini_cm,
         r_entry_cm=r_entry_cm,
         available_gas_time_myr=available_gas_time_myr,
-        migration_time_myr=migration_time_myr,
-        gw_time_to_entry_myr=gw_time_to_entry_myr,
+        migration_time_myr_call=migration_time_myr_call,
+        gw_time_to_entry_myr=gw_time_to_entry_myr_call,
         num_radius_samples=num_radius_samples,
     )
-    gas_final_time_myr = final_time_myr + gas_elapsed_time_myr
+
+    gas_final_time_myr = embed_time_myr + gas_elapsed_time_myr
     embedded_bh = object_type == 1
+
     migration_formed_bh = bool(
         object_type == 0
         and np.isfinite(formation_time_myr)
         and np.isfinite(damping_time_myr)
         and formation_time_myr < damping_time_myr + gas_elapsed_time_myr
     )
+
     bh_candidate = bool(embedded_bh or migration_formed_bh)
 
     if embedded_bh:
         bh_origin = BH_ORIGIN_EMBEDDED
-        bh_embedding_time_myr = final_time_myr
+        bh_embedding_time_myr = embed_time_myr
     elif migration_formed_bh:
         bh_origin = BH_ORIGIN_MIGRATION_FORMED
         bh_embedding_time_myr = formation_time_myr
