@@ -39,15 +39,15 @@ class TorqueProfile:
     corotation_coeff: np.ndarray
     lindblad_coeff: np.ndarray
     thermal_coeff: np.ndarray
-    gap_parameter: np.ndarray
+    # gap_parameter: np.ndarray
     gamma_0: np.ndarray
     gamma_i: np.ndarray
     gamma_th: np.ndarray
     gamma_type_ii: np.ndarray
     gamma_tot: np.ndarray
-    tau_mig: np.ndarray
-    tau_e: np.ndarray
-    tau_i: np.ndarray
+    # tau_mig: np.ndarray
+    # tau_e: np.ndarray
+    # tau_i: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -158,8 +158,8 @@ def comp_lind(dsigma_dlogr, dtemp_dlogr, disk, gamma_adiabat):
     return (-2.34 - 0.1 * dsigma_dlogr + 1.5 * dtemp_dlogr) * f_gamma
 
 
-def comp_kappa(q, h_over_r, alpha):
-    return q**2 / (h_over_r**5 * alpha)
+# def comp_kappa(q, h_over_r, alpha):
+#     return q**2 / (h_over_r**5 * alpha)
 
 
 def comp_gamma_0(q, radius, scale_height, omega, rho):
@@ -194,6 +194,7 @@ def comp_gamma_th(dpressure_dlogr, disk, migrator_mass, params):
     )  # typical length scale for thermal diffusion in the corotation region
 
     bondi_radius = ct.G * migrator_mass / disk.cs**2
+
     mu_th = chi / (disk.cs * np.minimum(disk.h, bondi_radius))
 
     unsaturated = safe_divide(l_edd, l_crit) * (4.0 * mu_th / (1.0 + 4.0 * mu_th)) - (
@@ -209,14 +210,8 @@ def comp_gamma_th(dpressure_dlogr, disk, migrator_mass, params):
 
 
 def comp_gamma_type_ii(alpha, migrator_mass, h_over_r, radius, omega):
-    """Return inward Type-II (viscous-limited) migration torque [J].
-
+    """
     Gamma_type,ii = alpha * m * h^2 * R^2 * Omega^2
-
-    pAGN stores mass in kg, radius in metres, and Omega in s^-1, so the
-    returned torque uses the same SI units as the other torque terms. The
-    migration integrator treats negative torque as inward angular-momentum
-    loss, so this returns the signed inward torque.
     """
     return -alpha * migrator_mass * h_over_r**2 * radius**2 * omega**2
 
@@ -225,7 +220,6 @@ def compute_torque_profile(
     disk,
     *,
     migrator_mass_msun: float = 10.0,
-    z: float = 0.0,
     smoothing: float = 0.005,
     params: Optional[MigrationParameters] = None,
 ) -> TorqueProfile:
@@ -246,40 +240,27 @@ def compute_torque_profile(
     q = migrator_mass / disk_view.Mbh  # mass ratio of migrator to central black hole
     h_over_r = disk_view.h / disk_view.R  # aspect ratio of the disk at each radius
 
-    dep_factor = np.exp(
-        -0.5 * (float(z) / disk_view.h) ** 2
-    )  # vertical dependence factor for the torque, assuming a Gaussian vertical density profile
-
     # compute coefficients for torques
     corot = comp_corot(dsigma_dlogr, dtemp_dlogr, params.gamma_adiabat)
+
     lind = comp_lind(dsigma_dlogr, dtemp_dlogr, disk_view, params.gamma_adiabat)
-    kappa_gap = comp_kappa(q, h_over_r, params.alpha)
+
     gamma_0 = comp_gamma_0(q, disk_view.R, disk_view.h, disk_view.Omega, disk_view.rho)
+
     gamma_th_coeff = comp_gamma_th(dpressure_dlogr, disk_view, migrator_mass, params)
 
-    gap_exp = np.exp(-kappa_gap / params.kappa_t)
-    gamma_i = (
-        (corot * gap_exp + lind) / (1.0 + kappa_gap / params.kappa_norm) * gamma_0
-    )  # Lindblad torque
+    gamma_i = (corot + lind) * gamma_0
+
     gamma_th = gamma_0 * gamma_th_coeff  # thermal torque
+
     if params.include_type_ii:
         gamma_type_ii = comp_gamma_type_ii(
             params.alpha, migrator_mass, h_over_r, disk_view.R, disk_view.Omega
         )
     else:
         gamma_type_ii = np.zeros_like(gamma_i, dtype=float)
-    gamma_tot = gamma_i + gap_exp * gamma_th + gamma_type_ii
 
-    orbital_angular_momentum = migrator_mass * disk_view.Omega * disk_view.R**2
-
-    tau_mig = np.full_like(gamma_tot, np.inf, dtype=float)
-    finite_mask = (gamma_tot != 0.0) & np.isfinite(gamma_tot) & (dep_factor > 0.0)
-    tau_mig[finite_mask] = orbital_angular_momentum[finite_mask] / (
-        2.0 * gamma_tot[finite_mask] * dep_factor[finite_mask]
-    )  # differential migration timescale, accounting for vertical dependence
-
-    tau_e = np.abs(tau_mig) * h_over_r**2 / 0.780
-    tau_i = np.abs(tau_mig) * h_over_r**2 / 0.544
+    gamma_tot = gamma_i + gamma_th + gamma_type_ii
 
     radius_cm = disk_view.R * METER_TO_CM
     radius_rs = disk_view.R / disk_view.Rs
@@ -298,76 +279,29 @@ def compute_torque_profile(
         corotation_coeff=corot,
         lindblad_coeff=lind,
         thermal_coeff=gamma_th_coeff,
-        gap_parameter=kappa_gap,
         gamma_0=gamma_0,
         gamma_i=gamma_i,
         gamma_th=gamma_th,
         gamma_type_ii=gamma_type_ii,
         gamma_tot=gamma_tot,
-        tau_mig=tau_mig,
-        tau_e=tau_e,
-        tau_i=tau_i,
     )
 
 
-def _resolved_crossing_mask(
-    root_radius: np.ndarray,
-    crossing_kind: np.ndarray,
-    local_width: np.ndarray,
-    min_separation_cells: float,
-) -> np.ndarray:
-    keep = np.ones(root_radius.size, dtype=bool)
-    if min_separation_cells <= 0.0 or root_radius.size < 2:
-        return keep
-
-    group = [0]
-
-    def flush_group() -> None:
-        if len(group) < 2:
-            return
-        group_kind = crossing_kind[np.asarray(group, dtype=int)]
-        if np.unique(group_kind).size < 2:
-            return
-        for group_index in group:
-            keep[group_index] = False
-
-    for crossing_index in range(1, root_radius.size):
-        previous_index = group[-1]
-        separation = root_radius[crossing_index] - root_radius[previous_index]
-        local_resolution = min(
-            local_width[crossing_index],
-            local_width[previous_index],
-        )
-        if separation < min_separation_cells * local_resolution:
-            group.append(crossing_index)
-            continue
-        flush_group()
-        group = [crossing_index]
-    flush_group()
-    return keep
+#############################################
 
 
 def classify_torque_traps(
     radius: np.ndarray,
     gamma_tot: np.ndarray,
-    *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
 ) -> TorqueTrapRadii:
-    """Return stable and anti-trap torque zero radii [cm].
-
-    Radius is sorted outward. A stable trap has positive torque just inside the
-    zero and negative torque just outside it, so objects are pushed toward the
-    zero from both sides. An anti-trap has the opposite sign ordering. Adjacent
-    opposite-type roots closer than ``min_separation_cells`` local grid
-    intervals are treated as unresolved numerical sign wiggles and discarded.
-    """
+    """Return trap and anti-trap radii [cm]."""
     radius = np.asarray(radius, dtype=float)
     values = np.asarray(gamma_tot, dtype=float)
-    min_separation_cells = float(min_separation_cells)
 
     finite = np.isfinite(radius) & np.isfinite(values) & (values != 0.0)
     radius = radius[finite]
     values = values[finite]
+
     if values.size < 2:
         empty = np.array([], dtype=float)
         return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
@@ -378,22 +312,25 @@ def classify_torque_traps(
 
     root_radius = []
     crossing_kind = []
-    local_width = []
+
+    # check in sign change
     for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
         inner_radius, outer_radius = radius[index], radius[index + 1]
-        inner_torque, outer_torque = values[index], values[index + 1]
-        root = inner_radius - inner_torque * (
-            outer_radius - inner_radius
-        ) / (outer_torque - inner_torque)
-        if inner_torque > 0.0 and outer_torque < 0.0:
+        inner_torque_value, outer_torque_value = values[index], values[index + 1]
+
+        root = inner_radius - inner_torque_value * (outer_radius - inner_radius) / (
+            outer_torque_value - inner_torque_value
+        )
+
+        if inner_torque_value > 0.0 and outer_torque_value < 0.0:
             kind = STABLE_TRAP_KIND
-        elif inner_torque < 0.0 and outer_torque > 0.0:
+        elif inner_torque_value < 0.0 and outer_torque_value > 0.0:
             kind = ANTI_TRAP_KIND
         else:
             continue
+
         root_radius.append(root)
         crossing_kind.append(kind)
-        local_width.append(outer_radius - inner_radius)
 
     if not root_radius:
         empty = np.array([], dtype=float)
@@ -401,59 +338,19 @@ def classify_torque_traps(
 
     root_radius_array = np.asarray(root_radius, dtype=float)
     crossing_kind_array = np.asarray(crossing_kind, dtype=int)
-    local_width_array = np.asarray(local_width, dtype=float)
-    keep = _resolved_crossing_mask(
-        root_radius_array,
-        crossing_kind_array,
-        local_width_array,
-        min_separation_cells,
-    )
 
     return TorqueTrapRadii(
-        stable_radius_cm=root_radius_array[
-            keep & (crossing_kind_array == STABLE_TRAP_KIND)
-        ],
-        anti_trap_radius_cm=root_radius_array[
-            keep & (crossing_kind_array == ANTI_TRAP_KIND)
-        ],
+        stable_radius_cm=root_radius_array[(crossing_kind_array == STABLE_TRAP_KIND)],
+        anti_trap_radius_cm=root_radius_array[(crossing_kind_array == ANTI_TRAP_KIND)],
     )
 
 
-def find_stable_traps(
+def find_traps_locations(
     torque_profile: TorqueProfile,
-    *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
-) -> np.ndarray:
-    """Return stable trap radii [cm], where migration flows toward the zero."""
+) -> tuple[np.ndarray, np.ndarray]:
+
     trap_radii = classify_torque_traps(
         torque_profile.radius_cm,
         torque_profile.gamma_tot,
-        min_separation_cells=min_separation_cells,
     )
-    return trap_radii.stable_radius_cm
-
-
-def find_anti_traps(
-    torque_profile: TorqueProfile,
-    *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
-) -> np.ndarray:
-    """Return anti-trap radii [cm], where migration flows away from the zero."""
-    return classify_torque_traps(
-        torque_profile.radius_cm,
-        torque_profile.gamma_tot,
-        min_separation_cells=min_separation_cells,
-    ).anti_trap_radius_cm
-
-
-def classify_torque_profile_traps(
-    torque_profile: TorqueProfile,
-    *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
-) -> TorqueTrapRadii:
-    """Return stable and anti-trap radii [cm] for a torque profile."""
-    return classify_torque_traps(
-        torque_profile.radius_cm,
-        torque_profile.gamma_tot,
-        min_separation_cells=min_separation_cells,
-    )
+    return trap_radii.stable_radius_cm, trap_radii.anti_trap_radius_cm

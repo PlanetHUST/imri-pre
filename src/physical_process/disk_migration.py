@@ -257,7 +257,7 @@ def integrated_semi_analytical_migration_timescale(
     return float(migration_time_s / const.Myr)
 
 
-def t_migration_from_torque(
+def migration_time_from_torque(
     radius_grid_cm: FloatArray,
     gamma_tot_cgs: FloatArray,
     migrator_mass_g: float,

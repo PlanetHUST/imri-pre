@@ -27,13 +27,13 @@ import numpy as np
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
     compute_torque_profile,
-    find_stable_traps,
+    find_traps_locations,
 )
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
     integrated_semi_analytical_migration_timescale,
-    t_migration_from_torque,
+    migration_time_from_torque,
 )
 from src.physical_process.general_class import AGN_properties
 from src.workflows.config import DISK_ACCRETION_RATE_G_S_PER_MSUN, PAGN_ALPHA
@@ -124,22 +124,21 @@ def main() -> None:
     disk_profile = build_pagn_disk_profile(
         args.smbh_mass_msun,
         n_resolution=args.n_resolution,
-        accretion_rate_g_s=(
-            DISK_ACCRETION_RATE_G_S_PER_MSUN * args.smbh_mass_msun
-        ),
+        accretion_rate_g_s=(DISK_ACCRETION_RATE_G_S_PER_MSUN * args.smbh_mass_msun),
         alpha=PAGN_ALPHA,
         eddington_ratio=0.1,
     )
 
-    start_radii_rg = np.logspace(
+    sample_radii_rg = np.logspace(
         np.log10(args.target_radius_rg),
         np.log10(args.start_radius_rg),
         120,
     )
-    start_radii_cm = start_radii_rg * rg_cm
+    sample_radii_cm = sample_radii_rg * rg_cm
 
     fig, ax = plt.subplots(figsize=(11, 7))
     colors = ["#1f77b4", "#BE9A62", "#2A7F62", "#8A5CA8", "#D55E00"]
+
     terminal_rows = []
     has_visible_trap = False
 
@@ -147,12 +146,14 @@ def main() -> None:
         color = colors[index % len(colors)]
         migrator_mass_g = float(migrator_mass_msun) * const.msun
         params = MigrationParameters(alpha=PAGN_ALPHA, include_type_ii=True)
+
         torque_profile = compute_torque_profile(
             disk_profile.disk,
             migrator_mass_msun=float(migrator_mass_msun),
             params=params,
         )
-        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float) * 1.0e7
+
+        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float)
 
         semi_times_myr = np.asarray(
             [
@@ -166,13 +167,14 @@ def main() -> None:
                     radius_grid_cm=disk_profile.radius_cm,
                     consider_type_ii=True,
                 )
-                for start_radius_cm in start_radii_cm
+                for start_radius_cm in sample_radii_cm
             ],
             dtype=float,
         )
+
         torque_times_myr = np.asarray(
             [
-                t_migration_from_torque(
+                migration_time_from_torque(
                     np.asarray(torque_profile.radius_cm, dtype=float),
                     torque_cgs,
                     migrator_mass_g,
@@ -180,7 +182,7 @@ def main() -> None:
                     target_radius_cm,
                     args.smbh_mass_msun,
                 )
-                for start_radius_cm in start_radii_cm
+                for start_radius_cm in sample_radii_cm
             ],
             dtype=float,
         )
@@ -188,7 +190,7 @@ def main() -> None:
         semi_mask = _positive_finite(semi_times_myr)
         torque_mask = _positive_finite(torque_times_myr)
         ax.plot(
-            start_radii_rg[semi_mask],
+            sample_radii_rg[semi_mask],
             semi_times_myr[semi_mask],
             color=color,
             lw=2.8,
@@ -196,7 +198,7 @@ def main() -> None:
             alpha=0.9,
         )
         ax.plot(
-            start_radii_rg[torque_mask],
+            sample_radii_rg[torque_mask],
             torque_times_myr[torque_mask],
             color=color,
             lw=2.8,
@@ -204,7 +206,10 @@ def main() -> None:
             alpha=0.9,
         )
 
-        trap_radii_rg = find_stable_traps(torque_profile) / rg_cm
+        trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
+
+        trap_radii_rg = trap_radii_cm / rg_cm
+
         trap_radii_rg = trap_radii_rg[
             np.isfinite(trap_radii_rg)
             & (trap_radii_rg >= args.target_radius_rg)
@@ -271,10 +276,7 @@ def main() -> None:
         f"{disk_profile.inner_radius_cm / rg_cm:.6e} to "
         f"{disk_profile.outer_radius_cm / rg_cm:.6e}"
     )
-    print(
-        "  path_rg: "
-        f"{args.start_radius_rg:.6e} -> {args.target_radius_rg:.6e}"
-    )
+    print("  path_rg: " f"{args.start_radius_rg:.6e} -> {args.target_radius_rg:.6e}")
     print("  terminal_times_myr:")
     print("    mass_msun  semi_analytic  torque  nonfinite_torque_points")
     for mass_msun, semi_time_myr, torque_time_myr, nonfinite_count in terminal_rows:

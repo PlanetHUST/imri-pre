@@ -26,7 +26,7 @@ import numpy as np
 from src.disk_quantity.migration_torque import (
     DEFAULT_MIN_TRAP_SEPARATION_CELLS,
     MigrationParameters,
-    classify_torque_profile_traps,
+    find_traps_locations,
     compute_torque_profile,
 )
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
@@ -41,10 +41,10 @@ from src.workflows.config import (
 
 DEFAULT_SMBH_MIN_MSUN = 1.0e3
 DEFAULT_SMBH_MAX_MSUN = 1.0e7
-DEFAULT_SMBH_COUNT = 16
-DEFAULT_MIGRATOR_MASSES_MSUN = (1.0, 2.0, 4.0, 10.0, 15.0, 22.0, 26.0, 30.0)
-DEFAULT_CENTER_MIGRATOR_MASS_MSUN = 10.0
-DEFAULT_N_RESOLUTION = 900
+DEFAULT_SMBH_COUNT = 50
+DEFAULT_MIGRATOR_MASSES_MSUN = (1.0, 5.0, 10.0, 15.0, 20.0)
+DEFAULT_CENTER_MIGRATOR_MASS_MSUN = 15.0
+DEFAULT_N_RESOLUTION = 2000
 DEFAULT_OUTPUT_DIR = Path("figs")
 OUTPUT_STEM = "trap_radius_2d"
 
@@ -69,7 +69,6 @@ def _parse_args() -> argparse.Namespace:
         description=(
             "Plot pAGN stable traps, anti-traps, and LISA entry radii versus "
             "SMBH mass, using migrator mass samples for trap families and a "
-            "shaded uncertainty band for LISA entry."
         )
     )
     parser.add_argument("--smbh-min-msun", type=float, default=DEFAULT_SMBH_MIN_MSUN)
@@ -108,7 +107,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--smoothing",
         type=float,
-        default=0.005,
+        default=0.02,
         help="log-slope smoothing passed to the pAGN torque profile",
     )
     parser.add_argument(
@@ -193,46 +192,48 @@ def _finite_band(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return lower, upper
 
 
-def _nearest_cross_family_separation(
-    stable_grid: list[list[np.ndarray]],
-    anti_grid: list[list[np.ndarray]],
-    smbh_masses_msun: np.ndarray,
-    migrator_masses_msun: np.ndarray,
-) -> tuple[float, float, float, float, float, float] | None:
-    best: tuple[float, float, float, float, float, float] | None = None
-    for migrator_index, migrator_mass_msun in enumerate(migrator_masses_msun):
-        for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
-            stable_values = _positive_sorted(stable_grid[migrator_index][smbh_index])
-            anti_values = _positive_sorted(anti_grid[migrator_index][smbh_index])
-            if stable_values.size == 0 or anti_values.size == 0:
-                continue
-            separation = np.abs(stable_values[:, None] - anti_values[None, :])
-            stable_index, anti_index = np.unravel_index(
-                int(np.argmin(separation)),
-                separation.shape,
-            )
-            separation_rg = float(separation[stable_index, anti_index])
-            stable_radius_rg = float(stable_values[stable_index])
-            anti_radius_rg = float(anti_values[anti_index])
-            fractional_separation = separation_rg / min(
-                stable_radius_rg,
-                anti_radius_rg,
-            )
-            candidate = (
-                separation_rg,
-                fractional_separation,
-                float(smbh_mass_msun),
-                float(migrator_mass_msun),
-                stable_radius_rg,
-                anti_radius_rg,
-            )
-            if best is None or candidate[0] < best[0]:
-                best = candidate
-    return best
+# def _nearest_cross_family_separation(
+#     stable_grid: list[list[np.ndarray]],
+#     anti_grid: list[list[np.ndarray]],
+#     smbh_masses_msun: np.ndarray,
+#     migrator_masses_msun: np.ndarray,
+# ) -> tuple[float, float, float, float, float, float] | None:
+#     best: tuple[float, float, float, float, float, float] | None = None
+#     for migrator_index, migrator_mass_msun in enumerate(migrator_masses_msun):
+#         for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
+#             stable_values = _positive_sorted(stable_grid[migrator_index][smbh_index])
+#             anti_values = _positive_sorted(anti_grid[migrator_index][smbh_index])
+#             if stable_values.size == 0 or anti_values.size == 0:
+#                 continue
+#             separation = np.abs(stable_values[:, None] - anti_values[None, :])
+#             stable_index, anti_index = np.unravel_index(
+#                 int(np.argmin(separation)),
+#                 separation.shape,
+#             )
+#             separation_rg = float(separation[stable_index, anti_index])
+#             stable_radius_rg = float(stable_values[stable_index])
+#             anti_radius_rg = float(anti_values[anti_index])
+#             fractional_separation = separation_rg / min(
+#                 stable_radius_rg,
+#                 anti_radius_rg,
+#             )
+#             candidate = (
+#                 separation_rg,
+#                 fractional_separation,
+#                 float(smbh_mass_msun),
+#                 float(migrator_mass_msun),
+#                 stable_radius_rg,
+#                 anti_radius_rg,
+#             )
+#             if best is None or candidate[0] < best[0]:
+#                 best = candidate
+#     return best
 
 
 def _positive_limits(*arrays: np.ndarray) -> tuple[float, float]:
-    values = np.concatenate([np.asarray(array, dtype=float).ravel() for array in arrays])
+    values = np.concatenate(
+        [np.asarray(array, dtype=float).ravel() for array in arrays]
+    )
     values = values[np.isfinite(values) & (values > 0.0)]
     if values.size == 0:
         raise RuntimeError("no positive finite radii were computed")
@@ -273,6 +274,7 @@ def _plot_lisa_entry(
 ) -> None:
     color = "#D55E00"
     _plot_band(ax, x_values, lower, upper, color=color, alpha=0.16)
+    # print(f"lower is {lower}, upper is {upper}")
     center_mask = np.isfinite(center) & (center > 0.0)
     if np.any(center_mask):
         ax.plot(
@@ -379,7 +381,7 @@ def main() -> None:
     )
     center_mass_msun = float(migrator_masses_msun[center_index])
 
-    stable_trap_radius_rg = _empty_trap_grid(
+    trap_radius_rg = _empty_trap_grid(
         migrator_masses_msun.size,
         smbh_masses_msun.size,
     )
@@ -387,6 +389,7 @@ def main() -> None:
         migrator_masses_msun.size,
         smbh_masses_msun.size,
     )
+
     lisa_entry_radius_rg = np.full(
         (migrator_masses_msun.size, smbh_masses_msun.size),
         np.nan,
@@ -395,6 +398,7 @@ def main() -> None:
     failed_torque_cells = 0
 
     params = MigrationParameters(alpha=PAGN_ALPHA, include_type_ii=True)
+
     for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
         rg_cm = const.G * smbh_mass_msun * const.msun / const.c**2
         disk_profile = build_pagn_disk_profile(
@@ -414,6 +418,7 @@ def main() -> None:
                 args.lisa_min_gw_frequency_hz,
                 args.redshift,
             )
+
             if np.isfinite(entry_radius_cm) and entry_radius_cm > 0.0:
                 lisa_entry_radius_rg[migrator_index, smbh_index] = (
                     entry_radius_cm / rg_cm
@@ -430,22 +435,23 @@ def main() -> None:
                 failed_torque_cells += 1
                 continue
 
-            trap_radii = classify_torque_profile_traps(
+            trap_radius_cm, anti_trap_radius_cm = find_traps_locations(
                 torque_profile,
-                min_separation_cells=args.min_trap_separation_cells,
             )
-            stable_trap_radius_rg[migrator_index][smbh_index] = _positive_sorted(
-                trap_radii.stable_radius_cm / rg_cm
+
+            trap_radius_rg[migrator_index][smbh_index] = _positive_sorted(
+                trap_radius_cm / rg_cm
             )
+
             anti_trap_radius_rg[migrator_index][smbh_index] = _positive_sorted(
-                trap_radii.anti_trap_radius_cm / rg_cm
+                anti_trap_radius_cm / rg_cm
             )
 
     lisa_lower, lisa_upper = _finite_band(lisa_entry_radius_rg)
     lisa_center = lisa_entry_radius_rg[center_index]
 
     y_min, y_max = _positive_limits(
-        _flatten_trap_grid(stable_trap_radius_rg),
+        _flatten_trap_grid(trap_radius_rg),
         _flatten_trap_grid(anti_trap_radius_rg),
         lisa_lower,
         lisa_upper,
@@ -456,7 +462,7 @@ def main() -> None:
     stable_sample_points = _plot_trap_mass_samples(
         ax,
         smbh_masses_msun,
-        stable_trap_radius_rg,
+        trap_radius_rg,
         center_index,
         color="#1f77b4",
         label=r"Stable trap samples, $m=1$-$30\,M_\odot$",
@@ -471,16 +477,18 @@ def main() -> None:
         label=r"Anti-trap samples, $m=1$-$30\,M_\odot$",
         marker="x",
     )
+
     stable_center_points = _plot_trap_family(
         ax,
         smbh_masses_msun,
-        stable_trap_radius_rg,
+        trap_radius_rg,
         center_index,
         color="#1f77b4",
         label=rf"Stable trap, $m={center_mass_msun:g}\,M_\odot$",
         marker="o",
         linestyle="-",
     )
+
     anti_center_points = _plot_trap_family(
         ax,
         smbh_masses_msun,
@@ -491,6 +499,10 @@ def main() -> None:
         marker="x",
         linestyle="-.",
     )
+
+    print(f"trap radius is {trap_radius_rg[10]}")
+    print(f"anti-trap radius is {anti_trap_radius_rg[10]}")
+
     _plot_lisa_entry(
         ax,
         smbh_masses_msun,
@@ -507,9 +519,7 @@ def main() -> None:
     ax.set_ylim(y_min / 1.6, y_max * 1.6)
     ax.grid(True, which="both", alpha=0.25, linestyle="--")
     ax.legend(loc="best", framealpha=0.88)
-    ax.set_title(
-        rf"Migration traps and LISA entry radii, $z={args.redshift:g}$"
-    )
+    ax.set_title(rf"Migration traps and LISA entry radii, $z={args.redshift:g}$")
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     figure_path = args.output_dir / f"{OUTPUT_STEM}.png"
@@ -518,20 +528,10 @@ def main() -> None:
     plt.close(fig)
 
     stable_point_count = sum(
-        trap_values.size
-        for by_mass in stable_trap_radius_rg
-        for trap_values in by_mass
+        trap_values.size for by_mass in trap_radius_rg for trap_values in by_mass
     )
     anti_point_count = sum(
-        trap_values.size
-        for by_mass in anti_trap_radius_rg
-        for trap_values in by_mass
-    )
-    nearest_separation = _nearest_cross_family_separation(
-        stable_trap_radius_rg,
-        anti_trap_radius_rg,
-        smbh_masses_msun,
-        migrator_masses_msun,
+        trap_values.size for by_mass in anti_trap_radius_rg for trap_values in by_mass
     )
     total_cells = int(migrator_masses_msun.size * smbh_masses_msun.size)
     print("Trap radius 2D diagnostic")
@@ -552,26 +552,6 @@ def main() -> None:
     print(f"  anti_sample_points: {anti_sample_points}")
     print(f"  stable_center_points: {stable_center_points}")
     print(f"  anti_center_points: {anti_center_points}")
-    if nearest_separation is not None:
-        (
-            separation_rg,
-            fractional_separation,
-            separation_smbh_msun,
-            separation_migrator_msun,
-            stable_radius_rg,
-            anti_radius_rg,
-        ) = nearest_separation
-        print(
-            "  nearest_stable_anti_separation: "
-            f"{separation_rg:.6e} rg "
-            f"(fraction {fractional_separation:.6e})"
-        )
-        print(
-            "  nearest_stable_anti_cell: "
-            f"M_bullet={separation_smbh_msun:.6e} Msun, "
-            f"m={separation_migrator_msun:.6g} Msun, "
-            f"stable={stable_radius_rg:.6e} rg, anti={anti_radius_rg:.6e} rg"
-        )
     print(f"  failed_torque_cells: {failed_torque_cells}/{total_cells}")
     print(f"  figure: {figure_path}")
 

@@ -8,7 +8,7 @@ try:
         integrated_semi_analytical_migration_timescale,
         sigma_gas,
         semi_analytical_migration_timescale,
-        t_migration_from_torque,
+        migration_time_from_torque,
         type_ii_gap_parameter,
         type_ii_threshold_mass_msun,
     )
@@ -57,7 +57,7 @@ except ImportError:
         integrated_semi_analytical_migration_timescale,
         sigma_gas,
         semi_analytical_migration_timescale,
-        t_migration_from_torque,
+        migration_time_from_torque,
         type_ii_gap_parameter,
         type_ii_threshold_mass_msun,
     )
@@ -137,7 +137,7 @@ __all__ = [
     "sigma_gas",
     "source_frame_gw_frequency_hz",
     "semi_analytical_migration_timescale",
-    "t_migration_from_torque",
+    "migration_time_from_torque",
     "t_relax",
     "type_ii_gap_parameter",
     "type_ii_threshold_mass_msun",

@@ -13,7 +13,7 @@ import src.physical_process.constants as const
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
     compute_torque_profile,
-    find_stable_traps,
+    find_traps_locations,
 )
 from src.disk_quantity.disk_solve import radial_structure
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
@@ -25,13 +25,14 @@ LEGACY_DISK_MDOT_PER_SOLAR_MASS = 1.44e18
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
 
+SMBH_MASSES = (1e3, 1e4, 1e5)
+
 
 def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
     """Save each figure in both PNG and PDF form for quick view and publication."""
     outdir = Path(outdir)
     outdir.mkdir(exist_ok=True)
     fig.savefig(outdir / f"{stem}.png", dpi=dpi, bbox_inches="tight")
-    # fig.savefig(outdir / f"{stem}.pdf", bbox_inches="tight")
 
 
 def _disk_profile_payload(
@@ -39,11 +40,12 @@ def _disk_profile_payload(
     mdot_per_solar_mass: float | None = None,
     *,
     disk_model: str = "sirko",
-    eddington_ratio: float = 0.1,
-    alpha: float = 0.01,
+    eddington_ratio: float,
+    alpha: float,
     n_resolution: int | None = None,
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute pAGN disk profiles for one SMBH mass using the main model path."""
+
     if n_resolution is None:
         n_resolution = int(os.getenv("PAGN_DISK_N_RESOLUTION", "10000"))
 
@@ -62,11 +64,12 @@ def _disk_profile_payload(
     )
 
     r_over_rg = (
-        np.asarray(profile.radius_cm, dtype=float)
-        / profile.gravitational_radius_cm
+        np.asarray(profile.radius_cm, dtype=float) / profile.gravitational_radius_cm
     )
+
     q_values = np.asarray(profile.toomre_q, dtype=float)
-    r_out_over_rg = _q1_radius_over_rg(
+
+    r_out_over_rg = Toomre_param_outer_radius(
         r_over_rg,
         q_values,
         fallback=float(profile.outer_radius_cm / profile.gravitational_radius_cm),
@@ -87,7 +90,7 @@ def _disk_profile_payload(
     }
 
 
-def _solved_disk_profile_payload(
+def _disk_solver_profile_payload(
     smbh_mass: float,
     mdot_per_solar_mass: float | None = None,
 ) -> Dict[str, np.ndarray | float | str]:
@@ -159,13 +162,14 @@ def _disk_torque_payload(
         smoothing=smoothing,
         params=params,
     )
-    trap_radii_cm = find_stable_traps(torque_profile)
+    trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
+
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
     q_radius_over_rg = (
         np.asarray(disk_profile.radius_cm, dtype=float)
         / disk_profile.gravitational_radius_cm
     )
-    r_out_over_rg = _q1_radius_over_rg(
+    r_out_over_rg = Toomre_param_outer_radius(
         q_radius_over_rg,
         np.asarray(disk_profile.toomre_q, dtype=float),
         fallback=float(
@@ -178,9 +182,9 @@ def _disk_torque_payload(
         "disk_model": disk_profile.model_name,
         "r_over_rg": torque_radius_over_rg,
         "r_out_over_rg": r_out_over_rg,
-        "gamma_tot_cgs": np.asarray(torque_profile.gamma_tot, dtype=float) * 1.0e7,
-        "gamma_i_cgs": np.asarray(torque_profile.gamma_i, dtype=float) * 1.0e7,
-        "gamma_th_cgs": np.asarray(torque_profile.gamma_th, dtype=float) * 1.0e7,
+        "gamma_tot_cgs": np.asarray(torque_profile.gamma_tot, dtype=float),
+        "gamma_i_cgs": np.asarray(torque_profile.gamma_i, dtype=float),
+        "gamma_th_cgs": np.asarray(torque_profile.gamma_th, dtype=float),
         "trap_radii_over_rg": (
             np.asarray(trap_radii_cm, dtype=float)
             / disk_profile.gravitational_radius_cm
@@ -188,7 +192,7 @@ def _disk_torque_payload(
     }
 
 
-def _q1_radius_over_rg(
+def Toomre_param_outer_radius(
     radius_over_rg: np.ndarray,
     q_values: np.ndarray,
     *,
@@ -278,7 +282,7 @@ def _disk_radius_bounds(
 
 def plot_agn_disk_parameter_profiles(
     output_dir: str = "figs",
-    smbh_masses: Sequence[float] = (1e3, 1e5, 1e7),
+    smbh_masses: Sequence[float] = SMBH_MASSES,
     mdot_per_solar_mass: float | None = None,
     *,
     disk_model: str = "sirko",
@@ -350,23 +354,9 @@ def plot_agn_disk_parameter_profiles(
         ax.set_ylabel(ylabel, fontsize=RADIAL_AXIS_LABELSIZE)
         ax.grid(True, alpha=0.25, linestyle="--", which="both")
 
-    # for ax in axes[len(parameters) :]:
-    #     ax.set_visible(False)
-
-    # for ax in axes[4:]:
-    #     if ax.get_visible():
-    #         ax.set_xlabel(r"$R/r_g$")
     for ax in axes:
         ax.set_xlabel(r"$R/r_g$", fontsize=RADIAL_AXIS_LABELSIZE)
 
-    # handles, labels = axes[0].get_legend_handles_labels()
-    # if handles:
-    #     fig.legend(
-    #         handles,
-    #         labels,
-    #         loc="best",
-    #         frameon=False,
-    #     )
     axes[0].legend(loc="best", framealpha=0.8, fontsize=LEGEND_FONTSIZE)
 
     fig.tight_layout(rect=(0, 0, 1, 0.95))
@@ -376,7 +366,7 @@ def plot_agn_disk_parameter_profiles(
 
 def plot_agn_disk_method_comparison(
     output_dir: str = "figs",
-    smbh_masses: Sequence[float] = (1e3, 1e5, 1e7),
+    smbh_masses: Sequence[float] = SMBH_MASSES,
     mdot_per_solar_mass: float | None = LEGACY_DISK_MDOT_PER_SOLAR_MASS,
     *,
     disk_model: str = "sirko",
@@ -397,7 +387,7 @@ def plot_agn_disk_method_comparison(
         for mass in smbh_masses
     ]
     solved_profiles = [
-        _solved_disk_profile_payload(float(mass), mdot_per_solar_mass)
+        _disk_solver_profile_payload(float(mass), mdot_per_solar_mass)
         for mass in smbh_masses
     ]
 
@@ -500,7 +490,7 @@ def plot_agn_disk_method_comparison(
 
 def plot_agn_disk_torque_profiles(
     output_dir: str = "figs",
-    smbh_masses: Sequence[float] = (1e3, 1e5, 1e7),
+    smbh_masses: Sequence[float] = SMBH_MASSES,
     mdot_per_solar_mass: float | None = None,
     *,
     disk_model: str = "sirko",
@@ -573,15 +563,17 @@ def plot_agn_disk_torque_profiles(
         r_out = float(profile["r_out_over_rg"])
         trap_radii = np.asarray(profile["trap_radii_over_rg"], dtype=float)
         trap_mask = np.isfinite(trap_radii) & (trap_radii > 0)
+
         if np.isfinite(r_out) and r_out > 0:
             trap_mask &= trap_radii <= r_out
         trap_radii = trap_radii[trap_mask]
-        if trap_radii.size:
-            for trap_radius in trap_radii:
-                ax.axvline(trap_radius, color=color, lw=2.3, ls="--", alpha=0.6)
+
+        # if trap_radii.size:
+        #     for trap_radius in trap_radii:
+        #         ax.axvline(trap_radius, color=color, lw=3.5, ls="--", alpha=0.8)
 
         if np.isfinite(r_out) and r_out > 0:
-            ax.axvline(r_out, color=color, lw=2.3, ls=":", alpha=0.65)
+            ax.axvline(r_out, color=color, lw=3.5, ls=":", alpha=0.65)
 
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -595,10 +587,9 @@ def plot_agn_disk_torque_profiles(
     ax.grid(True, alpha=0.25, linestyle="--", which="both")
 
     direction_handles = [
-        Line2D([0], [0], color="0.2", lw=3.2, ls="-", label="Outward migration"),
-        Line2D([0], [0], color="0.2", lw=3.2, ls="-.", label="Inward migration"),
-        Line2D([0], [0], color="0.2", lw=1.4, ls="--", label="Stable trap"),
-        # Line2D([0], [0], color="0.35", lw=1.4, ls=":", label=r"$Q=1$"),
+        Line2D([0], [0], color="0.2", lw=3.2, ls="-", label="Inward migration"),
+        Line2D([0], [0], color="0.2", lw=3.2, ls="-.", label="Outward migration"),
+        # Line2D([0], [0], color="0.2", lw=1.4, ls="--", label="Stable trap"),
     ]
     ax.legend(
         handles=mass_handles + direction_handles,

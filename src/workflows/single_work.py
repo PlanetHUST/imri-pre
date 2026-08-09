@@ -591,8 +591,9 @@ class IMRISingleWorkflow:
                 target_radius_cm,
             )
 
-        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float) * 1.0e7
-        return disk_migration.t_migration_from_torque(
+        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float)
+
+        return disk_migration.migration_time_from_torque(
             np.asarray(torque_profile.radius_cm, dtype=float),
             torque_cgs,
             mass_g,
