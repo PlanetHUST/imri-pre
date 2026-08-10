@@ -24,13 +24,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from src.disk_quantity.migration_torque import (
-    DEFAULT_MIN_TRAP_SEPARATION_CELLS,
     MigrationParameters,
-    find_traps_locations,
+    classify_torque_traps,
     compute_torque_profile,
 )
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
+from src.physical_process.disk_migration import (
+    DISK_VISCOSITY_ALPHA,
+    TYPE_II_GAP_PARAMETER_THRESHOLD,
+)
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
 from src.workflows.config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
@@ -66,10 +69,7 @@ def _parse_mass_vector(value: str) -> list[float]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Plot pAGN stable traps, anti-traps, and LISA entry radii versus "
-            "SMBH mass, using migrator mass samples for trap families and a "
-        )
+        description="Plot pAGN stable traps, anti-traps, and LISA entry radii."
     )
     parser.add_argument("--smbh-min-msun", type=float, default=DEFAULT_SMBH_MIN_MSUN)
     parser.add_argument("--smbh-max-msun", type=float, default=DEFAULT_SMBH_MAX_MSUN)
@@ -78,13 +78,13 @@ def _parse_args() -> argparse.Namespace:
         "--migrator-masses-msun",
         type=_parse_mass_vector,
         default=list(DEFAULT_MIGRATOR_MASSES_MSUN),
-        help="comma-separated migrator masses used for the shaded bands",
+        help="comma-separated migrator masses used for non-central samples",
     )
     parser.add_argument(
         "--center-migrator-mass-msun",
         type=float,
         default=DEFAULT_CENTER_MIGRATOR_MASS_MSUN,
-        help="migrator mass used for the central trap markers and LISA curve",
+        help="migrator mass used for central trap and LISA curves",
     )
     parser.add_argument(
         "--n-resolution",
@@ -111,15 +111,6 @@ def _parse_args() -> argparse.Namespace:
         help="log-slope smoothing passed to the pAGN torque profile",
     )
     parser.add_argument(
-        "--min-trap-separation-cells",
-        type=float,
-        default=DEFAULT_MIN_TRAP_SEPARATION_CELLS,
-        help=(
-            "discard adjacent stable/anti zero crossings closer than this many "
-            "local radial grid intervals"
-        ),
-    )
-    parser.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
@@ -128,297 +119,84 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _log_grid(min_value: float, max_value: float, count: int) -> np.ndarray:
-    if min_value <= 0.0 or max_value <= 0.0:
-        raise ValueError("SMBH mass grid bounds must be positive")
-    if max_value <= min_value:
-        raise ValueError("SMBH mass grid maximum must exceed minimum")
-    if count < 2:
-        raise ValueError("SMBH mass grid count must be at least 2")
-    return np.logspace(np.log10(min_value), np.log10(max_value), int(count))
-
-
-def _mass_samples_with_center(
-    masses_msun: list[float],
-    center_mass_msun: float,
-) -> np.ndarray:
-    if center_mass_msun <= 0.0:
-        raise ValueError("center migrator mass must be positive")
-    values = np.asarray([*masses_msun, center_mass_msun], dtype=float)
-    return np.unique(values)
-
-
-def _center_index(masses_msun: np.ndarray, center_mass_msun: float) -> int:
-    return int(np.argmin(np.abs(masses_msun - center_mass_msun)))
-
-
-def _empty_trap_grid(
-    migrator_count: int,
-    smbh_count: int,
-) -> list[list[np.ndarray]]:
-    return [
-        [np.array([], dtype=float) for _ in range(smbh_count)]
-        for _ in range(migrator_count)
-    ]
-
-
-def _positive_sorted(values: np.ndarray) -> np.ndarray:
-    values = np.asarray(values, dtype=float)
-    values = values[np.isfinite(values) & (values > 0.0)]
-    return np.sort(values)
-
-
-def _flatten_trap_grid(trap_grid: list[list[np.ndarray]]) -> np.ndarray:
-    values = [
-        trap_values
-        for by_mass in trap_grid
-        for trap_values in by_mass
-        if trap_values.size > 0
-    ]
-    if not values:
-        return np.array([], dtype=float)
-    return _positive_sorted(np.concatenate(values))
-
-
-def _finite_band(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    lower = np.full(values.shape[1], np.nan, dtype=float)
-    upper = np.full(values.shape[1], np.nan, dtype=float)
-    for index in range(values.shape[1]):
-        finite = _positive_sorted(values[:, index])
-        if finite.size == 0:
-            continue
-        lower[index] = float(finite[0])
-        upper[index] = float(finite[-1])
-    return lower, upper
-
-
-# def _nearest_cross_family_separation(
-#     stable_grid: list[list[np.ndarray]],
-#     anti_grid: list[list[np.ndarray]],
-#     smbh_masses_msun: np.ndarray,
-#     migrator_masses_msun: np.ndarray,
-# ) -> tuple[float, float, float, float, float, float] | None:
-#     best: tuple[float, float, float, float, float, float] | None = None
-#     for migrator_index, migrator_mass_msun in enumerate(migrator_masses_msun):
-#         for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
-#             stable_values = _positive_sorted(stable_grid[migrator_index][smbh_index])
-#             anti_values = _positive_sorted(anti_grid[migrator_index][smbh_index])
-#             if stable_values.size == 0 or anti_values.size == 0:
-#                 continue
-#             separation = np.abs(stable_values[:, None] - anti_values[None, :])
-#             stable_index, anti_index = np.unravel_index(
-#                 int(np.argmin(separation)),
-#                 separation.shape,
-#             )
-#             separation_rg = float(separation[stable_index, anti_index])
-#             stable_radius_rg = float(stable_values[stable_index])
-#             anti_radius_rg = float(anti_values[anti_index])
-#             fractional_separation = separation_rg / min(
-#                 stable_radius_rg,
-#                 anti_radius_rg,
-#             )
-#             candidate = (
-#                 separation_rg,
-#                 fractional_separation,
-#                 float(smbh_mass_msun),
-#                 float(migrator_mass_msun),
-#                 stable_radius_rg,
-#                 anti_radius_rg,
-#             )
-#             if best is None or candidate[0] < best[0]:
-#                 best = candidate
-#     return best
-
-
-def _positive_limits(*arrays: np.ndarray) -> tuple[float, float]:
-    values = np.concatenate(
-        [np.asarray(array, dtype=float).ravel() for array in arrays]
-    )
-    values = values[np.isfinite(values) & (values > 0.0)]
-    if values.size == 0:
-        raise RuntimeError("no positive finite radii were computed")
-    return float(np.min(values)), float(np.max(values))
-
-
-def _plot_band(
-    ax,
-    x_values: np.ndarray,
-    lower: np.ndarray,
-    upper: np.ndarray,
-    *,
-    color: str,
-    alpha: float,
-) -> None:
-    band_mask = np.isfinite(lower) & np.isfinite(upper) & (lower > 0.0) & (upper > 0.0)
-    if not np.any(band_mask):
-        return
-    ax.fill_between(
-        x_values,
-        lower,
-        upper,
-        where=band_mask,
-        color=color,
-        alpha=alpha,
-        linewidth=0.0,
-    )
-
-
-def _plot_lisa_entry(
-    ax,
-    x_values: np.ndarray,
-    center: np.ndarray,
-    lower: np.ndarray,
-    upper: np.ndarray,
-    *,
-    center_mass_msun: float,
-) -> None:
-    color = "#D55E00"
-    _plot_band(ax, x_values, lower, upper, color=color, alpha=0.16)
-    # print(f"lower is {lower}, upper is {upper}")
-    center_mask = np.isfinite(center) & (center > 0.0)
-    if np.any(center_mask):
-        ax.plot(
-            x_values[center_mask],
-            center[center_mask],
-            color=color,
-            lw=2.8,
-            ls="--",
-            label=rf"LISA entry, $m={center_mass_msun:g}\,M_\odot$",
-        )
-
-
-def _plot_trap_family(
-    ax,
-    x_values: np.ndarray,
-    trap_grid: list[list[np.ndarray]],
-    center_index: int,
-    *,
-    color: str,
-    label: str,
-    marker: str,
-    linestyle: str,
-) -> int:
-    center_traps = trap_grid[center_index]
-    max_count = max((trap_values.size for trap_values in center_traps), default=0)
-    plotted_points = 0
-    label_used = False
-    for trap_rank in range(max_count):
-        y_values = np.full_like(x_values, np.nan, dtype=float)
-        for smbh_index, trap_values in enumerate(center_traps):
-            sorted_values = _positive_sorted(trap_values)
-            if trap_rank < sorted_values.size:
-                y_values[smbh_index] = sorted_values[trap_rank]
-        mask = np.isfinite(y_values) & (y_values > 0.0)
-        if not np.any(mask):
-            continue
-        plotted_points += int(np.count_nonzero(mask))
-        ax.plot(
-            x_values,
-            y_values,
-            color=color,
-            lw=1.8,
-            ls=linestyle,
-            marker=marker,
-            ms=5.0,
-            label=label if not label_used else None,
-        )
-        label_used = True
-    return plotted_points
-
-
-def _plot_trap_mass_samples(
-    ax,
-    x_values: np.ndarray,
-    trap_grid: list[list[np.ndarray]],
-    center_index: int,
-    *,
-    color: str,
-    label: str,
-    marker: str,
-) -> int:
-    x_points = []
-    y_points = []
-    for migrator_index, by_smbh in enumerate(trap_grid):
-        if migrator_index == center_index:
-            continue
-        for smbh_index, trap_values in enumerate(by_smbh):
-            sorted_values = _positive_sorted(trap_values)
-            if sorted_values.size == 0:
-                continue
-            x_points.extend([x_values[smbh_index]] * int(sorted_values.size))
-            y_points.extend(sorted_values.tolist())
-
-    if not x_points:
-        return 0
-
-    ax.scatter(
-        np.asarray(x_points, dtype=float),
-        np.asarray(y_points, dtype=float),
-        color=color,
-        alpha=0.20,
-        s=18.0,
-        marker=marker,
-        linewidths=0.8,
-        label=label,
-    )
-    return len(x_points)
+def _positive_sorted(values: object) -> np.ndarray:
+    array = np.asarray(values, dtype=float)
+    array = array[np.isfinite(array) & (array > 0.0)]
+    return np.sort(array)
 
 
 def main() -> None:
     args = _parse_args()
-    smbh_masses_msun = _log_grid(
-        args.smbh_min_msun,
-        args.smbh_max_msun,
-        args.smbh_count,
+    if args.smbh_min_msun <= 0.0 or args.smbh_max_msun <= 0.0:
+        raise ValueError("SMBH mass grid bounds must be positive")
+    if args.smbh_max_msun <= args.smbh_min_msun:
+        raise ValueError("SMBH mass grid maximum must exceed minimum")
+    if args.smbh_count < 2:
+        raise ValueError("SMBH mass grid count must be at least 2")
+    if args.center_migrator_mass_msun <= 0.0:
+        raise ValueError("center migrator mass must be positive")
+
+    smbh_masses_msun = np.logspace(
+        np.log10(args.smbh_min_msun),
+        np.log10(args.smbh_max_msun),
+        int(args.smbh_count),
     )
-    migrator_masses_msun = _mass_samples_with_center(
-        list(args.migrator_masses_msun),
-        float(args.center_migrator_mass_msun),
+    migrator_masses_msun = np.unique(
+        np.asarray(
+            [*args.migrator_masses_msun, args.center_migrator_mass_msun],
+            dtype=float,
+        )
     )
-    center_index = _center_index(
-        migrator_masses_msun,
-        float(args.center_migrator_mass_msun),
+    center_index = int(
+        np.argmin(np.abs(migrator_masses_msun - args.center_migrator_mass_msun))
     )
     center_mass_msun = float(migrator_masses_msun[center_index])
 
-    trap_radius_rg = _empty_trap_grid(
-        migrator_masses_msun.size,
-        smbh_masses_msun.size,
-    )
-    anti_trap_radius_rg = _empty_trap_grid(
-        migrator_masses_msun.size,
-        smbh_masses_msun.size,
-    )
-
+    trap_radius_rg = [
+        [np.array([], dtype=float) for _ in smbh_masses_msun]
+        for _ in migrator_masses_msun
+    ]
+    anti_trap_radius_rg = [
+        [np.array([], dtype=float) for _ in smbh_masses_msun]
+        for _ in migrator_masses_msun
+    ]
     lisa_entry_radius_rg = np.full(
         (migrator_masses_msun.size, smbh_masses_msun.size),
         np.nan,
         dtype=float,
     )
+
+    params = MigrationParameters(alpha=PAGN_ALPHA)
     failed_torque_cells = 0
 
-    params = MigrationParameters(alpha=PAGN_ALPHA, include_type_ii=True)
-
     for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
-        rg_cm = const.G * smbh_mass_msun * const.msun / const.c**2
+        smbh_mass_msun = float(smbh_mass_msun)
+        smbh_mass_g = smbh_mass_msun * const.msun
+        rg_cm = const.G * smbh_mass_g / const.c**2
         disk_profile = build_pagn_disk_profile(
-            float(smbh_mass_msun),
+            smbh_mass_msun,
             n_resolution=args.n_resolution,
-            accretion_rate_g_s=(
-                DISK_ACCRETION_RATE_G_S_PER_MSUN * float(smbh_mass_msun)
-            ),
+            accretion_rate_g_s=DISK_ACCRETION_RATE_G_S_PER_MSUN * smbh_mass_msun,
             alpha=PAGN_ALPHA,
             eddington_ratio=0.1,
         )
 
+        disk_radius_cm = np.asarray(disk_profile.radius_cm, dtype=float)
+        disk_aspect_ratio = np.asarray(disk_profile.aspect_ratio, dtype=float)
+        disk_order = np.argsort(disk_radius_cm)
+        disk_radius_cm = disk_radius_cm[disk_order]
+        disk_aspect_ratio = disk_aspect_ratio[disk_order]
+
         for migrator_index, migrator_mass_msun in enumerate(migrator_masses_msun):
+            migrator_mass_msun = float(migrator_mass_msun)
+            migrator_mass_g = migrator_mass_msun * const.msun
+
             entry_radius_cm = lisa_entry_radius_cm(
-                float(smbh_mass_msun),
-                float(migrator_mass_msun),
+                smbh_mass_msun,
+                migrator_mass_msun,
                 args.lisa_min_gw_frequency_hz,
                 args.redshift,
             )
-
             if np.isfinite(entry_radius_cm) and entry_radius_cm > 0.0:
                 lisa_entry_radius_rg[migrator_index, smbh_index] = (
                     entry_radius_cm / rg_cm
@@ -427,7 +205,7 @@ def main() -> None:
             try:
                 torque_profile = compute_torque_profile(
                     disk_profile.disk,
-                    migrator_mass_msun=float(migrator_mass_msun),
+                    migrator_mass_msun=migrator_mass_msun,
                     smoothing=args.smoothing,
                     params=params,
                 )
@@ -435,88 +213,186 @@ def main() -> None:
                 failed_torque_cells += 1
                 continue
 
-            trap_radius_cm, anti_trap_radius_cm = find_traps_locations(
-                torque_profile,
+            torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+            torque_si = np.asarray(
+                torque_profile.gamma_i_si
+                + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+                dtype=float,
+            )
+            local_aspect_ratio = np.interp(
+                torque_radius_cm,
+                disk_radius_cm,
+                disk_aspect_ratio,
+            )
+            type_ii_gap_parameter_dimensionless = migrator_mass_g**2 / (
+                DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+            )
+            type_ii_mask = (
+                np.isfinite(type_ii_gap_parameter_dimensionless)
+                & (
+                    type_ii_gap_parameter_dimensionless
+                    > TYPE_II_GAP_PARAMETER_THRESHOLD
+                )
+            )
+            torque_si = torque_si + np.where(
+                type_ii_mask,
+                np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+                0.0,
             )
 
+            trap_radii = classify_torque_traps(torque_radius_cm, torque_si)
             trap_radius_rg[migrator_index][smbh_index] = _positive_sorted(
-                trap_radius_cm / rg_cm
+                trap_radii.stable_radius_cm / rg_cm
             )
-
             anti_trap_radius_rg[migrator_index][smbh_index] = _positive_sorted(
-                anti_trap_radius_cm / rg_cm
+                trap_radii.anti_trap_radius_cm / rg_cm
             )
 
-    lisa_lower, lisa_upper = _finite_band(lisa_entry_radius_rg)
+    lisa_lower = np.full(smbh_masses_msun.size, np.nan, dtype=float)
+    lisa_upper = np.full(smbh_masses_msun.size, np.nan, dtype=float)
+    for smbh_index in range(smbh_masses_msun.size):
+        finite_lisa = _positive_sorted(lisa_entry_radius_rg[:, smbh_index])
+        if finite_lisa.size:
+            lisa_lower[smbh_index] = float(finite_lisa[0])
+            lisa_upper[smbh_index] = float(finite_lisa[-1])
     lisa_center = lisa_entry_radius_rg[center_index]
 
-    y_min, y_max = _positive_limits(
-        _flatten_trap_grid(trap_radius_rg),
-        _flatten_trap_grid(anti_trap_radius_rg),
-        lisa_lower,
-        lisa_upper,
-        lisa_center,
-    )
+    radius_values = [
+        values
+        for grid in (trap_radius_rg, anti_trap_radius_rg)
+        for by_mass in grid
+        for values in by_mass
+        if values.size
+    ]
+    radius_values.extend([lisa_lower, lisa_upper, lisa_center])
+    positive_radii = _positive_sorted(np.concatenate(radius_values))
+    if positive_radii.size == 0:
+        raise RuntimeError("no positive finite radii were computed")
 
     fig, ax = plt.subplots(figsize=(10, 7))
-    stable_sample_points = _plot_trap_mass_samples(
-        ax,
-        smbh_masses_msun,
-        trap_radius_rg,
-        center_index,
-        color="#1f77b4",
-        label=r"Stable trap samples, $m=1$-$30\,M_\odot$",
-        marker="o",
-    )
-    anti_sample_points = _plot_trap_mass_samples(
-        ax,
-        smbh_masses_msun,
-        anti_trap_radius_rg,
-        center_index,
-        color="#7A3DB8",
-        label=r"Anti-trap samples, $m=1$-$30\,M_\odot$",
-        marker="x",
-    )
 
-    stable_center_points = _plot_trap_family(
-        ax,
-        smbh_masses_msun,
-        trap_radius_rg,
-        center_index,
-        color="#1f77b4",
-        label=rf"Stable trap, $m={center_mass_msun:g}\,M_\odot$",
-        marker="o",
-        linestyle="-",
-    )
+    stable_sample_points = 0
+    anti_sample_points = 0
+    for grid, color, marker, label in (
+        (
+            trap_radius_rg,
+            "#1f77b4",
+            "o",
+            r"Stable trap samples, non-central $m$",
+        ),
+        (
+            anti_trap_radius_rg,
+            "#7A3DB8",
+            "x",
+            r"Anti-trap samples, non-central $m$",
+        ),
+    ):
+        x_points = []
+        y_points = []
+        for migrator_index, by_smbh in enumerate(grid):
+            if migrator_index == center_index:
+                continue
+            for smbh_index, radii_rg in enumerate(by_smbh):
+                radii_rg = _positive_sorted(radii_rg)
+                x_points.extend([smbh_masses_msun[smbh_index]] * radii_rg.size)
+                y_points.extend(radii_rg.tolist())
+        if x_points:
+            ax.scatter(
+                np.asarray(x_points, dtype=float),
+                np.asarray(y_points, dtype=float),
+                color=color,
+                alpha=0.20,
+                s=18.0,
+                marker=marker,
+                linewidths=0.8,
+                label=label,
+            )
+        if grid is trap_radius_rg:
+            stable_sample_points = len(x_points)
+        else:
+            anti_sample_points = len(x_points)
 
-    anti_center_points = _plot_trap_family(
-        ax,
-        smbh_masses_msun,
-        anti_trap_radius_rg,
-        center_index,
-        color="#7A3DB8",
-        label=rf"Anti-trap, $m={center_mass_msun:g}\,M_\odot$",
-        marker="x",
-        linestyle="-.",
-    )
+    stable_center_points = 0
+    anti_center_points = 0
+    for grid, color, marker, linestyle, label in (
+        (
+            trap_radius_rg,
+            "#1f77b4",
+            "o",
+            "-",
+            rf"Stable trap, $m={center_mass_msun:g}\,M_\odot$",
+        ),
+        (
+            anti_trap_radius_rg,
+            "#7A3DB8",
+            "x",
+            "-.",
+            rf"Anti-trap, $m={center_mass_msun:g}\,M_\odot$",
+        ),
+    ):
+        center_radii = grid[center_index]
+        max_branch_count = max((radii_rg.size for radii_rg in center_radii), default=0)
+        plotted_points = 0
+        label_used = False
+        for branch_index in range(max_branch_count):
+            y_values = np.full_like(smbh_masses_msun, np.nan, dtype=float)
+            for smbh_index, radii_rg in enumerate(center_radii):
+                radii_rg = _positive_sorted(radii_rg)
+                if branch_index < radii_rg.size:
+                    y_values[smbh_index] = radii_rg[branch_index]
+            mask = np.isfinite(y_values) & (y_values > 0.0)
+            if not np.any(mask):
+                continue
+            plotted_points += int(np.count_nonzero(mask))
+            ax.plot(
+                smbh_masses_msun[mask],
+                y_values[mask],
+                color=color,
+                lw=1.8,
+                ls=linestyle,
+                marker=marker,
+                ms=5.0,
+                label=label if not label_used else None,
+            )
+            label_used = True
+        if grid is trap_radius_rg:
+            stable_center_points = plotted_points
+        else:
+            anti_center_points = plotted_points
 
-    print(f"trap radius is {trap_radius_rg[10]}")
-    print(f"anti-trap radius is {anti_trap_radius_rg[10]}")
-
-    _plot_lisa_entry(
-        ax,
-        smbh_masses_msun,
-        lisa_center,
-        lisa_lower,
-        lisa_upper,
-        center_mass_msun=center_mass_msun,
+    lisa_color = "#D55E00"
+    lisa_band = (
+        np.isfinite(lisa_lower)
+        & np.isfinite(lisa_upper)
+        & (lisa_lower > 0.0)
+        & (lisa_upper > 0.0)
     )
+    if np.any(lisa_band):
+        ax.fill_between(
+            smbh_masses_msun,
+            lisa_lower,
+            lisa_upper,
+            where=lisa_band.tolist(),
+            color=lisa_color,
+            alpha=0.16,
+            linewidth=0.0,
+        )
+    lisa_mask = np.isfinite(lisa_center) & (lisa_center > 0.0)
+    if np.any(lisa_mask):
+        ax.plot(
+            smbh_masses_msun[lisa_mask],
+            lisa_center[lisa_mask],
+            color=lisa_color,
+            lw=2.8,
+            ls="--",
+            label=rf"LISA entry, $m={center_mass_msun:g}\,M_\odot$",
+        )
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlabel(r"$M_\bullet\;(M_\odot)$")
     ax.set_ylabel(r"Radius $R/r_g$")
-    ax.set_ylim(y_min / 1.6, y_max * 1.6)
+    ax.set_ylim(float(positive_radii[0]) / 1.6, float(positive_radii[-1]) * 1.6)
     ax.grid(True, which="both", alpha=0.25, linestyle="--")
     ax.legend(loc="best", framealpha=0.88)
     ax.set_title(rf"Migration traps and LISA entry radii, $z={args.redshift:g}$")
@@ -528,10 +404,10 @@ def main() -> None:
     plt.close(fig)
 
     stable_point_count = sum(
-        trap_values.size for by_mass in trap_radius_rg for trap_values in by_mass
+        radii_rg.size for by_mass in trap_radius_rg for radii_rg in by_mass
     )
     anti_point_count = sum(
-        trap_values.size for by_mass in anti_trap_radius_rg for trap_values in by_mass
+        radii_rg.size for by_mass in anti_trap_radius_rg for radii_rg in by_mass
     )
     total_cells = int(migrator_masses_msun.size * smbh_masses_msun.size)
     print("Trap radius 2D diagnostic")
@@ -545,7 +421,6 @@ def main() -> None:
         + ", ".join(f"{mass:.6g}" for mass in migrator_masses_msun)
     )
     print(f"  center_migrator_mass_msun: {center_mass_msun:.6g}")
-    print(f"  min_trap_separation_cells: {args.min_trap_separation_cells:.6g}")
     print(f"  stable_trap_points: {stable_point_count}")
     print(f"  anti_trap_points: {anti_point_count}")
     print(f"  stable_sample_points: {stable_sample_points}")

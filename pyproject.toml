@@ -1,3 +1,0 @@
-[tool.pyright]
-typeCheckingMode = "basic"  # 类型检查模式: "off", "basic", "standard", "strict"
-pythonVersion = "3.12"      # 指定项目使用的Python版本

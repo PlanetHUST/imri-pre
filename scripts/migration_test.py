@@ -26,12 +26,15 @@ import numpy as np
 
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
+    classify_torque_traps,
     compute_torque_profile,
-    find_traps_locations,
+    torque_si_to_cgs,
 )
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
+    DISK_VISCOSITY_ALPHA,
+    TYPE_II_GAP_PARAMETER_THRESHOLD,
     integrated_semi_analytical_migration_timescale,
     migration_time_from_torque,
 )
@@ -94,11 +97,6 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _positive_finite(values: object) -> np.ndarray:
-    array = np.asarray(values, dtype=float)
-    return np.isfinite(array) & (array > 0.0)
-
-
 def _format_time(value_myr: float) -> str:
     if np.isfinite(value_myr):
         return f"{value_myr:.6e}"
@@ -128,6 +126,11 @@ def main() -> None:
         alpha=PAGN_ALPHA,
         eddington_ratio=0.1,
     )
+    disk_radius_cm = np.asarray(disk_profile.radius_cm, dtype=float)
+    disk_aspect_ratio = np.asarray(disk_profile.aspect_ratio, dtype=float)
+    disk_order = np.argsort(disk_radius_cm)
+    disk_radius_cm = disk_radius_cm[disk_order]
+    disk_aspect_ratio = disk_aspect_ratio[disk_order]
 
     sample_radii_rg = np.logspace(
         np.log10(args.target_radius_rg),
@@ -141,11 +144,11 @@ def main() -> None:
 
     terminal_rows = []
     has_visible_trap = False
+    params = MigrationParameters(alpha=PAGN_ALPHA)
 
     for index, migrator_mass_msun in enumerate(args.migrator_masses_msun):
         color = colors[index % len(colors)]
         migrator_mass_g = float(migrator_mass_msun) * const.msun
-        params = MigrationParameters(alpha=PAGN_ALPHA, include_type_ii=True)
 
         torque_profile = compute_torque_profile(
             disk_profile.disk,
@@ -153,7 +156,35 @@ def main() -> None:
             params=params,
         )
 
-        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float)
+        torque_si = np.asarray(
+            torque_profile.gamma_i_si
+            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            dtype=float,
+        )
+        torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+        local_aspect_ratio = np.interp(
+            torque_radius_cm,
+            disk_radius_cm,
+            disk_aspect_ratio,
+        )
+        type_ii_gap_parameter_dimensionless = migrator_mass_g**2 / (
+            DISK_VISCOSITY_ALPHA
+            * local_aspect_ratio**2
+            * (args.smbh_mass_msun * const.msun) ** 2
+        )
+        type_ii_mask = (
+            np.isfinite(type_ii_gap_parameter_dimensionless)
+            & (
+                type_ii_gap_parameter_dimensionless
+                > TYPE_II_GAP_PARAMETER_THRESHOLD
+            )
+        )
+        torque_si = torque_si + np.where(
+            type_ii_mask,
+            np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+            0.0,
+        )
+        torque_cgs = torque_si_to_cgs(torque_si)
 
         semi_times_myr = np.asarray(
             [
@@ -175,7 +206,7 @@ def main() -> None:
         torque_times_myr = np.asarray(
             [
                 migration_time_from_torque(
-                    np.asarray(torque_profile.radius_cm, dtype=float),
+                    torque_radius_cm,
                     torque_cgs,
                     migrator_mass_g,
                     float(start_radius_cm),
@@ -187,8 +218,9 @@ def main() -> None:
             dtype=float,
         )
 
-        semi_mask = _positive_finite(semi_times_myr)
-        torque_mask = _positive_finite(torque_times_myr)
+        semi_mask = np.isfinite(semi_times_myr) & (semi_times_myr > 0.0)
+        torque_mask = np.isfinite(torque_times_myr) & (torque_times_myr > 0.0)
+
         ax.plot(
             sample_radii_rg[semi_mask],
             semi_times_myr[semi_mask],
@@ -206,7 +238,8 @@ def main() -> None:
             alpha=0.9,
         )
 
-        trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
+        torque_traps = classify_torque_traps(torque_radius_cm, torque_si)
+        trap_radii_cm = torque_traps.stable_radius_cm
 
         trap_radii_rg = trap_radii_cm / rg_cm
 

@@ -28,9 +28,7 @@ class IMRIDynEngine:
         self.config = config
         self.duty_cycle_myr = config.duty_cycle_myr
         self.disk_cache: dict[float, DiskProfiles] = {}
-        self.torque_profile_cache: dict[
-            tuple[float, float, bool, float], TorqueProfile
-        ] = {}
+        self.torque_profile_cache: dict[tuple[float, float, float], TorqueProfile] = {}
 
     def estimate_nsc_radius_cm(self, m_nsc_msun: float) -> float:
         """Estimate NSC radius [cm] from NSC mass [Msun]."""
@@ -121,14 +119,10 @@ class IMRIDynEngine:
         cache_key = (
             float(smbh_mass_msun),
             float(migrator_mass_msun),
-            self.config.consider_type_ii_migration,
             torque_alpha,
         )
         if cache_key not in self.torque_profile_cache:
-            params = MigrationParameters(
-                alpha=torque_alpha,
-                include_type_ii=self.config.consider_type_ii_migration,
-            )
+            params = MigrationParameters(alpha=torque_alpha)
             try:
                 self.torque_profile_cache[cache_key] = compute_torque_profile(
                     disk_data["torque_disk"],

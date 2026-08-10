@@ -10,9 +10,15 @@ from typing import Optional
 import numpy as np
 
 METER_TO_CM = 100.0
+SI_TORQUE_TO_CGS = 1.0e7
 DEFAULT_MIN_TRAP_SEPARATION_CELLS = 1.0
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
+
+
+def torque_si_to_cgs(torque_si: np.ndarray) -> np.ndarray:
+    """Convert torque from pAGN SI units [kg m^2 s^-2] to CGS."""
+    return np.asarray(torque_si, dtype=float) * SI_TORQUE_TO_CGS
 
 
 @dataclass(frozen=True)
@@ -22,32 +28,38 @@ class MigrationParameters:
     hydrogen_fraction: float = 0.7
     kappa_t: float = 20.0
     kappa_norm: float = 25.0
-    include_type_ii: bool = True
 
 
 @dataclass
 class TorqueProfile:
-    radius: np.ndarray
+    """Torque profile arrays.
+
+    pAGN solves in SI. Fields ending in ``_si`` are torques [kg m^2 s^-2].
+    Radius aliases ending in ``_cm``, ``_rg``, and ``_rs`` are for downstream
+    CGS migration code and plotting. ``gamma_th_si`` is the raw thermal torque
+    component; multiply it by ``gap_attenuation_factor`` when composing the
+    pAGN Type-I plus thermal torque.
+    """
+
+    radius_m: np.ndarray
     radius_cm: np.ndarray
     radius_rg: np.ndarray
     radius_rs: np.ndarray
-    surface_density: np.ndarray
-    pressure: np.ndarray
-    dsigma_dlogr: np.ndarray
-    dtemp_dlogr: np.ndarray
-    dpressure_dlogr: np.ndarray
+    surface_density_kg_m2: np.ndarray
+    pressure_pa: np.ndarray
+    dlog_surface_density_dlog_radius: np.ndarray
+    dlog_temperature_dlog_radius: np.ndarray
+    dlog_pressure_dlog_radius: np.ndarray
     corotation_coeff: np.ndarray
     lindblad_coeff: np.ndarray
     thermal_coeff: np.ndarray
-    # gap_parameter: np.ndarray
-    gamma_0: np.ndarray
-    gamma_i: np.ndarray
-    gamma_th: np.ndarray
-    gamma_type_ii: np.ndarray
-    gamma_tot: np.ndarray
-    # tau_mig: np.ndarray
-    # tau_e: np.ndarray
-    # tau_i: np.ndarray
+    gap_parameter_dimensionless: np.ndarray
+    gap_attenuation_factor: np.ndarray
+    type_i_gap_denominator: np.ndarray
+    gamma_0_si: np.ndarray
+    gamma_i_si: np.ndarray
+    gamma_th_si: np.ndarray
+    gamma_type_ii_si: np.ndarray
 
 
 @dataclass(frozen=True)
@@ -78,12 +90,12 @@ def _constant(ct, *names: str) -> float:
 
 
 def _sorted_disk_view(disk) -> SimpleNamespace:
-    radius = np.asarray(disk.R, dtype=float)
-    order = np.argsort(radius)
+    radius_m = np.asarray(disk.R, dtype=float)
+    order = np.argsort(radius_m)
     data = {"Mbh": disk.Mbh, "Rs": disk.Rs}
     for name in ["R", "rho", "T", "h", "cs", "Omega", "tauV", "kappa", "Teff4"]:
         arr = np.asarray(getattr(disk, name), dtype=float)
-        if arr.shape == radius.shape:
+        if arr.shape == radius_m.shape:
             arr = arr[order]
         data[name] = arr
     return SimpleNamespace(**data)
@@ -97,13 +109,13 @@ def safe_divide(numerator, denominator):
     return np.divide(num, den, out=out, where=den != 0.0)
 
 
-def radial_log_slope(radius, values, *, smoothing: float = 0.005, k: int = 3):
-    radius = np.asarray(radius, dtype=float)
+def radial_log_slope(radius_m, values, *, smoothing: float = 0.005, k: int = 3):
+    radius_m = np.asarray(radius_m, dtype=float)
     values = np.asarray(values, dtype=float)
-    if np.any(radius <= 0.0) or np.any(values <= 0.0):
+    if np.any(radius_m <= 0.0) or np.any(values <= 0.0):
         raise ValueError("radius and values must be positive for log-slope")
 
-    radius_log = np.log10(radius)
+    radius_log = np.log10(radius_m)
     values_log = np.log10(values)
 
     try:
@@ -121,99 +133,198 @@ def radial_log_slope(radius, values, *, smoothing: float = 0.005, k: int = 3):
     return np.asarray(spline.derivative()(radius_log), dtype=float)
 
 
-def total_pressure(disk):
+def total_pressure_pa(disk):
     ct, _ = _require_pagn_bits()
     k_boltzmann = _constant(ct, "Kb", "kB", "k")
     mass_u = _constant(ct, "massU", "mU", "mp")
-    gas_pressure = disk.rho * disk.T * k_boltzmann / mass_u
-    radiation_pressure = disk.tauV * ct.sigmaSB * disk.Teff4 / (2.0 * ct.c)
-    return gas_pressure + radiation_pressure
+    density_kg_m3 = disk.rho
+    temperature_k = disk.T
+    optical_depth = disk.tauV
+    effective_temperature_fourth_k4 = disk.Teff4
+    gas_pressure_pa = density_kg_m3 * temperature_k * k_boltzmann / mass_u
+    radiation_pressure_pa = (
+        optical_depth * ct.sigmaSB * effective_temperature_fourth_k4 / (2.0 * ct.c)
+    )
+    return gas_pressure_pa + radiation_pressure_pa
 
 
-def surface_density(disk):
-    return 2.0 * disk.rho * disk.h
+def surface_density_kg_m2(disk):
+    density_kg_m3 = disk.rho
+    scale_height_m = disk.h
+    return 2.0 * density_kg_m3 * scale_height_m
 
 
-def comp_corot(dsigma_dlogr, dtemp_dlogr, gamma_adiabat):
-    return (0.46 + 0.96 * dsigma_dlogr - 1.8 * dtemp_dlogr) / gamma_adiabat
+def comp_corot(
+    dlog_surface_density_dlog_radius,
+    dlog_temperature_dlog_radius,
+    gamma_adiabat,
+):
+    return (
+        0.46
+        + 0.96 * dlog_surface_density_dlog_radius
+        - 1.8 * dlog_temperature_dlog_radius
+    ) / gamma_adiabat
 
 
-def thermal_diffusivity(disk, gamma_adiabat):
+def thermal_diffusivity_m2_s(disk, gamma_adiabat):
     ct, _ = _require_pagn_bits()
+    temperature_k = disk.T
+    opacity_m2_kg = disk.kappa
+    density_kg_m3 = disk.rho
+    scale_height_m = disk.h
+    orbital_frequency_rad_s = disk.Omega
     return (
         16.0
         * gamma_adiabat
         * (gamma_adiabat - 1.0)
         * ct.sigmaSB
-        * disk.T**4
-        / (3.0 * disk.kappa * disk.rho**2 * disk.h**2 * disk.Omega**2)
+        * temperature_k**4
+        / (
+            3.0
+            * opacity_m2_kg
+            * density_kg_m3**2
+            * scale_height_m**2
+            * orbital_frequency_rad_s**2
+        )
     )
 
 
-def comp_lind(dsigma_dlogr, dtemp_dlogr, disk, gamma_adiabat):
-    chi = thermal_diffusivity(disk, gamma_adiabat)
-    chi_c = disk.h**2 * disk.Omega
-    x_sq = np.sqrt(safe_divide(chi, 2.0 * chi_c))
+def comp_lind(
+    dlog_surface_density_dlog_radius,
+    dlog_temperature_dlog_radius,
+    disk,
+    gamma_adiabat,
+):
+    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(disk, gamma_adiabat)
+    scale_height_m = disk.h
+    orbital_frequency_rad_s = disk.Omega
+    critical_diffusivity_m2_s = scale_height_m**2 * orbital_frequency_rad_s
+    x_sq = np.sqrt(
+        safe_divide(thermal_diffusivity_values_m2_s, 2.0 * critical_diffusivity_m2_s)
+    )
     f_gamma = (x_sq + 1.0 / gamma_adiabat) / (x_sq + 1.0)
-    return (-2.34 - 0.1 * dsigma_dlogr + 1.5 * dtemp_dlogr) * f_gamma
+    return (
+        -2.34
+        - 0.1 * dlog_surface_density_dlog_radius
+        + 1.5 * dlog_temperature_dlog_radius
+    ) * f_gamma
 
 
-# def comp_kappa(q, h_over_r, alpha):
-#     return q**2 / (h_over_r**5 * alpha)
-
-
-def comp_gamma_0(q, radius, scale_height, omega, rho):
-    # return normalization torque Gamma_0 = (q/h)^2 * Sigma * r^4 * Omega^2
-    sigma = 2.0 * rho * scale_height
-    h_over_r = scale_height / radius
-    return q**2 * radius**4 * omega**2 * sigma / (h_over_r**2)
-
-
-def comp_gamma_th(dpressure_dlogr, disk, migrator_mass, params):
-    # return the thermal torque coefficient
-    ct, electron_scattering_opacity = _require_pagn_bits()
-    gamma = params.gamma_adiabat  # adibatic index
-
-    chi = thermal_diffusivity(disk, gamma)
-
-    x_c = (
-        np.abs(dpressure_dlogr) * disk.cs**2 / (3.0 * gamma * disk.R * disk.Omega**2)
-    )  # corotational radius of the embedded object
-
-    k_es = electron_scattering_opacity(X=params.hydrogen_fraction)
-
-    l_edd = (
-        4.0 * np.pi * ct.G * ct.c * migrator_mass / k_es
-    )  # Eddington luminosity of the migrator
-    l_crit = (
-        4.0 * np.pi * ct.G * migrator_mass * disk.rho * chi / gamma
-    )  # critical luminosity for saturation of the thermal torque
-
-    lambda_c = np.sqrt(
-        2.0 * chi / (3.0 * gamma * disk.Omega)
-    )  # typical length scale for thermal diffusion in the corotation region
-
-    bondi_radius = ct.G * migrator_mass / disk.cs**2
-
-    mu_th = chi / (disk.cs * np.minimum(disk.h, bondi_radius))
-
-    unsaturated = safe_divide(l_edd, l_crit) * (4.0 * mu_th / (1.0 + 4.0 * mu_th)) - (
-        2.0 * mu_th / (1.0 + 2.0 * mu_th)
+def comp_gamma_0_si(
+    mass_ratio,
+    radius_m,
+    scale_height_m,
+    orbital_frequency_rad_s,
+    density_kg_m3,
+):
+    """Return Gamma_0 in SI torque units [kg m^2 s^-2]."""
+    surface_density_kg_m2_values = 2.0 * density_kg_m3 * scale_height_m
+    aspect_ratio = scale_height_m / radius_m
+    return (
+        mass_ratio**2
+        * radius_m**4
+        * orbital_frequency_rad_s**2
+        * surface_density_kg_m2_values
+        / aspect_ratio**2
     )
-    saturated = safe_divide(l_edd, l_crit) - 1.0
+
+
+def comp_gap_parameter_dimensionless(mass_ratio, aspect_ratio, alpha):
+    """Return the pAGN gap-opening parameter K = q^2 / ((h/R)^5 alpha)."""
+    return mass_ratio**2 / (aspect_ratio**5 * alpha)
+
+
+def comp_gamma_th_coeff(
+    dlog_pressure_dlog_radius,
+    disk,
+    migrator_mass_kg,
+    params,
+):
+    """Return the dimensionless thermal torque coefficient."""
+    ct, electron_scattering_opacity = _require_pagn_bits()
+    gamma_adiabat = params.gamma_adiabat
+
+    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(disk, gamma_adiabat)
+    sound_speed_m_s = disk.cs
+    radius_m = disk.R
+    scale_height_m = disk.h
+    orbital_frequency_rad_s = disk.Omega
+    density_kg_m3 = disk.rho
+
+    corotation_radius_m = np.abs(dlog_pressure_dlog_radius) * sound_speed_m_s**2 / (
+        3.0 * gamma_adiabat * radius_m * orbital_frequency_rad_s**2
+    )
+
+    electron_scattering_opacity_m2_kg = electron_scattering_opacity(
+        X=params.hydrogen_fraction
+    )
+
+    eddington_luminosity_w = (
+        4.0 * np.pi * ct.G * ct.c * migrator_mass_kg
+        / electron_scattering_opacity_m2_kg
+    )
+    critical_luminosity_w = (
+        4.0
+        * np.pi
+        * ct.G
+        * migrator_mass_kg
+        * density_kg_m3
+        * thermal_diffusivity_values_m2_s
+        / gamma_adiabat
+    )
+
+    thermal_length_m = np.sqrt(
+        2.0
+        * thermal_diffusivity_values_m2_s
+        / (3.0 * gamma_adiabat * orbital_frequency_rad_s)
+    )
+
+    bondi_radius_m = ct.G * migrator_mass_kg / sound_speed_m_s**2
+
+    thermal_saturation_parameter = thermal_diffusivity_values_m2_s / (
+        sound_speed_m_s * np.minimum(scale_height_m, bondi_radius_m)
+    )
+
+    unsaturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) * (
+        4.0
+        * thermal_saturation_parameter
+        / (1.0 + 4.0 * thermal_saturation_parameter)
+    ) - (
+        2.0
+        * thermal_saturation_parameter
+        / (1.0 + 2.0 * thermal_saturation_parameter)
+    )
+    saturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) - 1.0
 
     prefactor = (
-        1.61 * (gamma - 1.0) * safe_divide(x_c, gamma * lambda_c) * (disk.R / disk.h)
+        1.61
+        * (gamma_adiabat - 1.0)
+        * safe_divide(corotation_radius_m, gamma_adiabat * thermal_length_m)
+        * (radius_m / scale_height_m)
     )
 
-    return np.where(mu_th < 1.0, prefactor * unsaturated, prefactor * saturated)
+    return np.where(
+        thermal_saturation_parameter < 1.0,
+        prefactor * unsaturated,
+        prefactor * saturated,
+    )
 
 
-def comp_gamma_type_ii(alpha, migrator_mass, h_over_r, radius, omega):
-    """
-    Gamma_type,ii = alpha * m * h^2 * R^2 * Omega^2
-    """
-    return -alpha * migrator_mass * h_over_r**2 * radius**2 * omega**2
+def comp_gamma_type_ii_si(
+    alpha,
+    migrator_mass_kg,
+    aspect_ratio,
+    radius_m,
+    orbital_frequency_rad_s,
+):
+    """Return Type-II migration torque in SI units [kg m^2 s^-2]."""
+    return (
+        -alpha
+        * migrator_mass_kg
+        * aspect_ratio**2
+        * radius_m**2
+        * orbital_frequency_rad_s**2
+    )
 
 
 def compute_torque_profile(
@@ -228,62 +339,110 @@ def compute_torque_profile(
 
     ct, _ = _require_pagn_bits()
     disk_view = _sorted_disk_view(disk)
-    migrator_mass = float(migrator_mass_msun) * ct.MSun
+    migrator_mass_kg = float(migrator_mass_msun) * ct.MSun
+    radius_m = disk_view.R
+    scale_height_m = disk_view.h
+    density_kg_m3 = disk_view.rho
+    temperature_k = disk_view.T
+    orbital_frequency_rad_s = disk_view.Omega
 
-    sigma = surface_density(disk_view)
-    pressure = total_pressure(disk_view)
+    surface_density_values_kg_m2 = surface_density_kg_m2(disk_view)
+    pressure_values_pa = total_pressure_pa(disk_view)
 
-    dsigma_dlogr = radial_log_slope(disk_view.R, sigma, smoothing=smoothing)
-    dtemp_dlogr = radial_log_slope(disk_view.R, disk_view.T, smoothing=smoothing)
-    dpressure_dlogr = radial_log_slope(disk_view.R, pressure, smoothing=smoothing)
+    dlog_surface_density_dlog_radius = radial_log_slope(
+        radius_m,
+        surface_density_values_kg_m2,
+        smoothing=smoothing,
+    )
+    dlog_temperature_dlog_radius = radial_log_slope(
+        radius_m,
+        temperature_k,
+        smoothing=smoothing,
+    )
+    dlog_pressure_dlog_radius = radial_log_slope(
+        radius_m,
+        pressure_values_pa,
+        smoothing=smoothing,
+    )
 
-    q = migrator_mass / disk_view.Mbh  # mass ratio of migrator to central black hole
-    h_over_r = disk_view.h / disk_view.R  # aspect ratio of the disk at each radius
+    mass_ratio = migrator_mass_kg / disk_view.Mbh
+    aspect_ratio = scale_height_m / radius_m
+    gap_parameter_dimensionless = comp_gap_parameter_dimensionless(
+        mass_ratio,
+        aspect_ratio,
+        params.alpha,
+    )
+    gap_attenuation_factor = np.exp(-gap_parameter_dimensionless / params.kappa_t)
+    type_i_gap_denominator = 1.0 + gap_parameter_dimensionless / params.kappa_norm
 
-    # compute coefficients for torques
-    corot = comp_corot(dsigma_dlogr, dtemp_dlogr, params.gamma_adiabat)
+    corot = comp_corot(
+        dlog_surface_density_dlog_radius,
+        dlog_temperature_dlog_radius,
+        params.gamma_adiabat,
+    )
 
-    lind = comp_lind(dsigma_dlogr, dtemp_dlogr, disk_view, params.gamma_adiabat)
+    lind = comp_lind(
+        dlog_surface_density_dlog_radius,
+        dlog_temperature_dlog_radius,
+        disk_view,
+        params.gamma_adiabat,
+    )
 
-    gamma_0 = comp_gamma_0(q, disk_view.R, disk_view.h, disk_view.Omega, disk_view.rho)
+    gamma_0_si = comp_gamma_0_si(
+        mass_ratio,
+        radius_m,
+        scale_height_m,
+        orbital_frequency_rad_s,
+        density_kg_m3,
+    )
 
-    gamma_th_coeff = comp_gamma_th(dpressure_dlogr, disk_view, migrator_mass, params)
+    gamma_th_coeff = comp_gamma_th_coeff(
+        dlog_pressure_dlog_radius,
+        disk_view,
+        migrator_mass_kg,
+        params,
+    )
 
-    gamma_i = (corot + lind) * gamma_0
+    gamma_i_si = (
+        (corot * gap_attenuation_factor + lind)
+        / type_i_gap_denominator
+        * gamma_0_si
+    )
 
-    gamma_th = gamma_0 * gamma_th_coeff  # thermal torque
+    gamma_th_si = gamma_0_si * gamma_th_coeff
 
-    if params.include_type_ii:
-        gamma_type_ii = comp_gamma_type_ii(
-            params.alpha, migrator_mass, h_over_r, disk_view.R, disk_view.Omega
-        )
-    else:
-        gamma_type_ii = np.zeros_like(gamma_i, dtype=float)
+    gamma_type_ii_si = comp_gamma_type_ii_si(
+        params.alpha,
+        migrator_mass_kg,
+        aspect_ratio,
+        radius_m,
+        orbital_frequency_rad_s,
+    )
 
-    gamma_tot = gamma_i + gamma_th + gamma_type_ii
-
-    radius_cm = disk_view.R * METER_TO_CM
-    radius_rs = disk_view.R / disk_view.Rs
+    radius_cm = radius_m * METER_TO_CM
+    radius_rs = radius_m / disk_view.Rs
     radius_rg = radius_rs * 2.0
 
     return TorqueProfile(
-        radius=disk_view.R,
+        radius_m=radius_m,
         radius_cm=radius_cm,
         radius_rg=radius_rg,
         radius_rs=radius_rs,
-        surface_density=sigma,
-        pressure=pressure,
-        dsigma_dlogr=dsigma_dlogr,
-        dtemp_dlogr=dtemp_dlogr,
-        dpressure_dlogr=dpressure_dlogr,
+        surface_density_kg_m2=surface_density_values_kg_m2,
+        pressure_pa=pressure_values_pa,
+        dlog_surface_density_dlog_radius=dlog_surface_density_dlog_radius,
+        dlog_temperature_dlog_radius=dlog_temperature_dlog_radius,
+        dlog_pressure_dlog_radius=dlog_pressure_dlog_radius,
         corotation_coeff=corot,
         lindblad_coeff=lind,
         thermal_coeff=gamma_th_coeff,
-        gamma_0=gamma_0,
-        gamma_i=gamma_i,
-        gamma_th=gamma_th,
-        gamma_type_ii=gamma_type_ii,
-        gamma_tot=gamma_tot,
+        gap_parameter_dimensionless=gap_parameter_dimensionless,
+        gap_attenuation_factor=gap_attenuation_factor,
+        type_i_gap_denominator=type_i_gap_denominator,
+        gamma_0_si=gamma_0_si,
+        gamma_i_si=gamma_i_si,
+        gamma_th_si=gamma_th_si,
+        gamma_type_ii_si=gamma_type_ii_si,
     )
 
 
@@ -291,36 +450,36 @@ def compute_torque_profile(
 
 
 def classify_torque_traps(
-    radius: np.ndarray,
-    gamma_tot: np.ndarray,
+    radius_cm: np.ndarray,
+    torque_values: np.ndarray,
 ) -> TorqueTrapRadii:
     """Return trap and anti-trap radii [cm]."""
-    radius = np.asarray(radius, dtype=float)
-    values = np.asarray(gamma_tot, dtype=float)
+    radius_cm = np.asarray(radius_cm, dtype=float)
+    values = np.asarray(torque_values, dtype=float)
 
-    finite = np.isfinite(radius) & np.isfinite(values) & (values != 0.0)
-    radius = radius[finite]
+    finite = np.isfinite(radius_cm) & np.isfinite(values) & (values != 0.0)
+    radius_cm = radius_cm[finite]
     values = values[finite]
 
     if values.size < 2:
         empty = np.array([], dtype=float)
         return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
 
-    order = np.argsort(radius)
-    radius = radius[order]
+    order = np.argsort(radius_cm)
+    radius_cm = radius_cm[order]
     values = values[order]
 
-    root_radius = []
+    root_radius_cm = []
     crossing_kind = []
 
     # check in sign change
     for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
-        inner_radius, outer_radius = radius[index], radius[index + 1]
+        inner_radius_cm, outer_radius_cm = radius_cm[index], radius_cm[index + 1]
         inner_torque_value, outer_torque_value = values[index], values[index + 1]
 
-        root = inner_radius - inner_torque_value * (outer_radius - inner_radius) / (
-            outer_torque_value - inner_torque_value
-        )
+        root_cm = inner_radius_cm - inner_torque_value * (
+            outer_radius_cm - inner_radius_cm
+        ) / (outer_torque_value - inner_torque_value)
 
         if inner_torque_value > 0.0 and outer_torque_value < 0.0:
             kind = STABLE_TRAP_KIND
@@ -329,19 +488,23 @@ def classify_torque_traps(
         else:
             continue
 
-        root_radius.append(root)
+        root_radius_cm.append(root_cm)
         crossing_kind.append(kind)
 
-    if not root_radius:
+    if not root_radius_cm:
         empty = np.array([], dtype=float)
         return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
 
-    root_radius_array = np.asarray(root_radius, dtype=float)
+    root_radius_cm_array = np.asarray(root_radius_cm, dtype=float)
     crossing_kind_array = np.asarray(crossing_kind, dtype=int)
 
     return TorqueTrapRadii(
-        stable_radius_cm=root_radius_array[(crossing_kind_array == STABLE_TRAP_KIND)],
-        anti_trap_radius_cm=root_radius_array[(crossing_kind_array == ANTI_TRAP_KIND)],
+        stable_radius_cm=root_radius_cm_array[
+            (crossing_kind_array == STABLE_TRAP_KIND)
+        ],
+        anti_trap_radius_cm=root_radius_cm_array[
+            (crossing_kind_array == ANTI_TRAP_KIND)
+        ],
     )
 
 
@@ -351,6 +514,7 @@ def find_traps_locations(
 
     trap_radii = classify_torque_traps(
         torque_profile.radius_cm,
-        torque_profile.gamma_tot,
+        torque_profile.gamma_i_si
+        + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
     )
     return trap_radii.stable_radius_cm, trap_radii.anti_trap_radius_cm

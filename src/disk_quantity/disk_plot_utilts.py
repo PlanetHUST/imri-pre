@@ -25,7 +25,7 @@ LEGACY_DISK_MDOT_PER_SOLAR_MASS = 1.44e18
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
 
-SMBH_MASSES = (1e3, 1e4, 1e5)
+SMBH_MASSES = (1e5, 1e6, 1e7)
 
 
 def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
@@ -132,7 +132,7 @@ def _disk_torque_payload(
     mdot_per_solar_mass: float | None = None,
     *,
     disk_model: str = "sirko",
-    eddington_ratio: float = 0.1,
+    eddington_ratio: float = 0.5,
     alpha: float = 0.01,
     n_resolution: int | None = None,
     migrator_mass_msun: float = 10.0,
@@ -156,6 +156,7 @@ def _disk_torque_payload(
         accretion_rate_g_s=accretion_rate_g_s,
     )
     params = MigrationParameters(alpha=alpha)
+
     torque_profile = compute_torque_profile(
         disk_profile.disk,
         migrator_mass_msun=migrator_mass_msun,
@@ -165,12 +166,14 @@ def _disk_torque_payload(
     trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
 
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
-    q_radius_over_rg = (
+
+    radius_over_rg = (
         np.asarray(disk_profile.radius_cm, dtype=float)
         / disk_profile.gravitational_radius_cm
     )
+
     r_out_over_rg = Toomre_param_outer_radius(
-        q_radius_over_rg,
+        radius_over_rg,
         np.asarray(disk_profile.toomre_q, dtype=float),
         fallback=float(
             disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
@@ -182,11 +185,20 @@ def _disk_torque_payload(
         "disk_model": disk_profile.model_name,
         "r_over_rg": torque_radius_over_rg,
         "r_out_over_rg": r_out_over_rg,
-        "gamma_tot_cgs": np.asarray(torque_profile.gamma_tot, dtype=float),
-        "gamma_i_cgs": np.asarray(torque_profile.gamma_i, dtype=float),
-        "gamma_th_cgs": np.asarray(torque_profile.gamma_th, dtype=float),
+        "gamma_i_si": np.asarray(torque_profile.gamma_i_si, dtype=float),
+        "gamma_th_si": np.asarray(torque_profile.gamma_th_si, dtype=float),
+        "gamma_i_th_si": np.asarray(
+            torque_profile.gamma_i_si
+            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            dtype=float,
+        ),
+        "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
         "trap_radii_over_rg": (
             np.asarray(trap_radii_cm, dtype=float)
+            / disk_profile.gravitational_radius_cm
+        ),
+        "anti_trap_radii_over_rg": (
+            np.asarray(anti_trap_radii_cm, dtype=float)
             / disk_profile.gravitational_radius_cm
         ),
     }
@@ -240,46 +252,6 @@ def Toomre_param_outer_radius(
     return float(np.max(roots))
 
 
-def _disk_plot_radius_mask(profile: Mapping[str, np.ndarray | float | str], radius):
-    """Limit one plotted line to its Q=1 outer radius."""
-    radius = np.asarray(radius, dtype=float)
-    r_out = float(profile.get("r_out_over_rg", np.nan))
-    if not np.isfinite(r_out) or r_out <= 0.0:
-        return np.ones_like(radius, dtype=bool)
-    return radius <= r_out
-
-
-def _disk_radius_bounds(
-    profiles: Sequence[Mapping[str, np.ndarray | float | str]],
-) -> tuple[float, float] | None:
-    """Return finite plot limits from solved profile radii and Q=1 outer edges."""
-    radii = []
-    r_out_values = []
-    for profile in profiles:
-        radius = np.asarray(profile["r_over_rg"], dtype=float)
-        valid_radius = radius[
-            np.isfinite(radius) & (radius > 0) & _disk_plot_radius_mask(profile, radius)
-        ]
-        if valid_radius.size:
-            radii.append(valid_radius)
-
-        r_out = float(profile["r_out_over_rg"])
-        if np.isfinite(r_out) and r_out > 0:
-            r_out_values.append(r_out)
-
-    if not radii:
-        return None
-
-    all_radii = np.concatenate(radii)
-    r_min = float(np.nanmin(all_radii))
-    r_max = (
-        float(np.nanmax(r_out_values)) if r_out_values else float(np.nanmax(all_radii))
-    )
-    if r_min <= 0 or r_max <= r_min:
-        return None
-    return r_min, r_max
-
-
 def plot_agn_disk_parameter_profiles(
     output_dir: str = "figs",
     smbh_masses: Sequence[float] = SMBH_MASSES,
@@ -316,7 +288,6 @@ def plot_agn_disk_parameter_profiles(
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
     axes = np.asarray(axes).reshape(-1)
-    radius_bounds = _disk_radius_bounds(profiles)
 
     for ax, (key, ylabel) in zip(axes, parameters):
         for profile, color in zip(profiles, colors):
@@ -347,10 +318,7 @@ def plot_agn_disk_parameter_profiles(
                 alpha=0.75,
             )
 
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        if radius_bounds is not None:
-            ax.set_xlim(radius_bounds)
+        ax.set(xscale="log", yscale="log", xlim=(None, 1.0e7))
         ax.set_ylabel(ylabel, fontsize=RADIAL_AXIS_LABELSIZE)
         ax.grid(True, alpha=0.25, linestyle="--", which="both")
 
@@ -360,7 +328,7 @@ def plot_agn_disk_parameter_profiles(
     axes[0].legend(loc="best", framealpha=0.8, fontsize=LEGEND_FONTSIZE)
 
     fig.tight_layout(rect=(0, 0, 1, 0.95))
-    _save(fig, output_dir, "agn_disk_parameter_profiles")
+    _save(fig, output_dir, "disk_parameter_profiles")
     plt.close(fig)
 
 
@@ -397,7 +365,6 @@ def plot_agn_disk_method_comparison(
         ("q", r"$Q$"),
     ]
     colors = ["#1f77b4", "#BE9A62", "#2A7F62"]
-    radius_bounds = _disk_radius_bounds([*pagn_profiles, *solved_profiles])
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 15), sharex=True)
     axes = np.asarray(axes).reshape(-1)
@@ -421,7 +388,6 @@ def plot_agn_disk_method_comparison(
                     & np.isfinite(values)
                     & (radius > 0)
                     & (values > 0)
-                    & _disk_plot_radius_mask(profile, radius)
                 )
                 if not np.any(mask):
                     continue
@@ -443,10 +409,7 @@ def plot_agn_disk_method_comparison(
                 if np.isfinite(r_out) and r_out > 0:
                     ax.axvline(r_out, color=color, lw=1.7, ls=linestyle, alpha=0.55)
 
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        if radius_bounds is not None:
-            ax.set_xlim(radius_bounds)
+        ax.set(xscale="log", yscale="log", xlim=(None, 1.0e7))
         ax.set_ylabel(ylabel, fontsize=RADIAL_AXIS_LABELSIZE)
         ax.grid(True, alpha=0.25, linestyle="--", which="both")
 
@@ -484,7 +447,118 @@ def plot_agn_disk_method_comparison(
     )
 
     fig.tight_layout()
-    _save(fig, output_dir, "agn_disk_method_comparison")
+    _save(fig, output_dir, "disk_method_comparison")
+    plt.close(fig)
+
+
+def _plot_signed_torque_component(
+    profiles: Sequence[Mapping[str, np.ndarray | float | str]],
+    colors: Sequence[str],
+    *,
+    output_dir: str | Path,
+    component_key: str,
+    ylabel: str,
+    stem: str,
+    show_traps: bool = False,
+) -> None:
+    fig, ax = plt.subplots(figsize=(14, 8))
+    mass_handles = []
+    has_inward = False
+    has_outward = False
+    has_traps = False
+    has_anti_traps = False
+
+    for profile, color in zip(profiles, colors):
+        radius_rg = np.asarray(profile["r_over_rg"], dtype=float)
+        torque_values = np.asarray(profile[component_key], dtype=float)
+        valid = (
+            np.isfinite(radius_rg)
+            & np.isfinite(torque_values)
+            & (radius_rg > 0.0)
+            & (np.abs(torque_values) > 0.0)
+        )
+        if not np.any(valid):
+            continue
+
+        radius_rg = radius_rg[valid]
+        torque_values = torque_values[valid]
+        torque_magnitude = np.abs(torque_values)
+        outward = torque_values > 0.0
+        inward = torque_values < 0.0
+
+        if np.any(outward):
+            ax.plot(
+                radius_rg,
+                np.where(outward, torque_magnitude, np.nan),
+                color=color,
+                lw=3.2,
+                ls="-.",
+                alpha=0.9,
+            )
+            has_outward = True
+
+        if np.any(inward):
+            ax.plot(
+                radius_rg,
+                np.where(inward, torque_magnitude, np.nan),
+                color=color,
+                lw=3.2,
+                ls="-",
+                alpha=0.9,
+            )
+            has_inward = True
+
+        mass_label = (
+            rf"$M_\bullet=10^{{{int(np.log10(profile['smbh_mass']))}}}\,M_\odot$"
+        )
+        mass_handles.append(Line2D([0], [0], color=color, lw=3.2, label=mass_label))
+
+        r_out_over_rg = float(profile["r_out_over_rg"])
+        if np.isfinite(r_out_over_rg) and r_out_over_rg > 0.0:
+            ax.axvline(r_out_over_rg, color=color, lw=1.7, ls=":", alpha=0.55)
+
+    ax.set(xscale="log", yscale="log", xlim=(None, 1.0e7))
+    ax.set_xlabel(r"$R/r_g$", fontsize=RADIAL_AXIS_LABELSIZE)
+    ax.set_ylabel(ylabel, fontsize=RADIAL_AXIS_LABELSIZE)
+    ax.grid(True, alpha=0.25, linestyle="--", which="both")
+
+    plot_handles = []
+    if has_inward:
+        plot_handles.append(
+            Line2D([0], [0], color="0.2", lw=3.2, ls="-", label="Inward migration")
+        )
+    if has_outward:
+        plot_handles.append(
+            Line2D([0], [0], color="0.2", lw=3.2, ls="-.", label="Outward migration")
+        )
+
+    if has_traps:
+        plot_handles.append(
+            Line2D([0], [0], color="0.2", lw=1.4, ls="--", label="Stable trap")
+        )
+
+    if has_anti_traps:
+        plot_handles.append(
+            Line2D(
+                [0],
+                [0],
+                color="0.2",
+                lw=1.4,
+                ls=(0, (4, 1, 1, 1)),
+                label="Anti-trap",
+            )
+        )
+
+    ax.legend(
+        handles=mass_handles + plot_handles,
+        loc="best",
+        framealpha=0.85,
+        ncol=2,
+        fontsize=LEGEND_FONTSIZE,
+    )
+
+    fig.tight_layout()
+    _save(fig, output_dir, stem)
     plt.close(fig)
 
 
@@ -494,16 +568,17 @@ def plot_agn_disk_torque_profiles(
     mdot_per_solar_mass: float | None = None,
     *,
     disk_model: str = "sirko",
-    eddington_ratio: float = 0.1,
+    eddington_ratio: float = 0.5,
     alpha: float = 0.01,
     n_resolution: int | None = None,
     migrator_mass_msun: float = 10.0,
     smoothing: float = 0.005,
 ) -> None:
     """Plot pAGN migration torque magnitudes using the main simulation model."""
-    profiles = [
+
+    torque_profiles = [
         _disk_torque_payload(
-            float(mass),
+            float(smbh_mass),
             mdot_per_solar_mass,
             disk_model=disk_model,
             eddington_ratio=eddington_ratio,
@@ -512,93 +587,44 @@ def plot_agn_disk_torque_profiles(
             migrator_mass_msun=migrator_mass_msun,
             smoothing=smoothing,
         )
-        for mass in smbh_masses
+        for smbh_mass in smbh_masses
     ]
 
     colors = ["#1f77b4", "#BE9A62", "#2A7F62"]
-    radius_bounds = _disk_radius_bounds(profiles)
 
-    fig, ax = plt.subplots(figsize=(14, 8))
-    mass_handles = []
-
-    for profile, color in zip(profiles, colors):
-        radius = np.asarray(profile["r_over_rg"], dtype=float)
-        radius_mask = _disk_plot_radius_mask(profile, radius)
-        gamma_tot_cgs = np.asarray(profile["gamma_tot_cgs"], dtype=float)
-        gamma_abs_cgs = np.abs(gamma_tot_cgs)
-        mask = (
-            np.isfinite(radius)
-            & np.isfinite(gamma_abs_cgs)
-            & (radius > 0)
-            & (gamma_abs_cgs > 0)
-            & radius_mask
-        )
-        if not np.any(mask):
-            continue
-
-        mass_label = (
-            rf"$M_\bullet=10^{{{int(np.log10(profile['smbh_mass']))}}}\,M_\odot$"
-        )
-        mass_handles.append(Line2D([0], [0], color=color, lw=3.2, label=mass_label))
-
-        gamma_outward = np.where(mask & (gamma_tot_cgs > 0.0), gamma_abs_cgs, np.nan)
-        gamma_inward = np.where(mask & (gamma_tot_cgs < 0.0), gamma_abs_cgs, np.nan)
-        ax.plot(
-            radius,
-            gamma_outward,
-            color=color,
-            lw=3.2,
-            ls="-.",
-            alpha=0.9,
-        )
-        ax.plot(
-            radius,
-            gamma_inward,
-            color=color,
-            lw=3.2,
-            ls="-",
-            alpha=0.9,
-        )
-
-        r_out = float(profile["r_out_over_rg"])
-        trap_radii = np.asarray(profile["trap_radii_over_rg"], dtype=float)
-        trap_mask = np.isfinite(trap_radii) & (trap_radii > 0)
-
-        if np.isfinite(r_out) and r_out > 0:
-            trap_mask &= trap_radii <= r_out
-        trap_radii = trap_radii[trap_mask]
-
-        # if trap_radii.size:
-        #     for trap_radius in trap_radii:
-        #         ax.axvline(trap_radius, color=color, lw=3.5, ls="--", alpha=0.8)
-
-        if np.isfinite(r_out) and r_out > 0:
-            ax.axvline(r_out, color=color, lw=3.5, ls=":", alpha=0.65)
-
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    if radius_bounds is not None:
-        ax.set_xlim(radius_bounds)
-    ax.set_xlabel(r"$R/r_g$", fontsize=RADIAL_AXIS_LABELSIZE)
-    ax.set_ylabel(
-        r"$|\Gamma_{\rm tot}|\;(\mathrm{g\,cm^2\,s^{-2}})$",
-        fontsize=RADIAL_AXIS_LABELSIZE,
+    _plot_signed_torque_component(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+        component_key="gamma_i_th_si",
+        ylabel=(
+            r"$|\Gamma_{\mathrm{I}}+e^{-K/K_t}\Gamma_{\mathrm{th}}|"
+            r"\;(\mathrm{N\,m})$"
+        ),
+        stem="tot_torque_profiles",
+        show_traps=True,
     )
-    ax.grid(True, alpha=0.25, linestyle="--", which="both")
-
-    direction_handles = [
-        Line2D([0], [0], color="0.2", lw=3.2, ls="-", label="Inward migration"),
-        Line2D([0], [0], color="0.2", lw=3.2, ls="-.", label="Outward migration"),
-        # Line2D([0], [0], color="0.2", lw=1.4, ls="--", label="Stable trap"),
-    ]
-    ax.legend(
-        handles=mass_handles + direction_handles,
-        loc="best",
-        framealpha=0.85,
-        ncol=2,
-        fontsize=LEGEND_FONTSIZE,
+    _plot_signed_torque_component(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+        component_key="gamma_ii_si",
+        ylabel=r"$|\Gamma_{\mathrm{II}}|\;(\mathrm{N\,m})$",
+        stem="type_ii_torque_profiles",
     )
-
-    fig.tight_layout()
-    _save(fig, output_dir, "agn_disk_torque_profiles")
-    plt.close(fig)
+    _plot_signed_torque_component(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+        component_key="gamma_i_si",
+        ylabel=r"$|\Gamma_{\mathrm{I}}|\;(\mathrm{N\,m})$",
+        stem="type_i_torque_profiles",
+    )
+    _plot_signed_torque_component(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+        component_key="gamma_th_si",
+        ylabel=r"$|\Gamma_{\mathrm{th}}|\;(\mathrm{N\,m})$",
+        stem="thermal_torque_profiles",
+    )

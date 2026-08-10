@@ -58,9 +58,9 @@ def _require_pagn():
 
 def _sort_disk_profile_arrays(disk) -> None:
     """Sort one-dimensional pAGN profile arrays by increasing radius in-place."""
-    radius = np.asarray(disk.R, dtype=float)
-    order = np.argsort(radius)
-    if np.all(order == np.arange(radius.size)):
+    radius_m = np.asarray(disk.R, dtype=float)
+    order = np.argsort(radius_m)
+    if np.all(order == np.arange(radius_m.size)):
         return
 
     for name in [
@@ -79,23 +79,26 @@ def _sort_disk_profile_arrays(disk) -> None:
             continue
         values = getattr(disk, name)
         arr = np.asarray(values)
-        if arr.shape == radius.shape:
+        if arr.shape == radius_m.shape:
             setattr(disk, name, arr[order])
 
 
 def _profile_q(disk, ct) -> np.ndarray:
-    # stability parameter Q
+    """Return the dimensionless Toomre Q profile from pAGN SI arrays."""
+    radius_m = np.asarray(disk.R, dtype=float)
     if hasattr(disk, "Q"):
         toomre_q = np.asarray(disk.Q, dtype=float)
-        if toomre_q.shape == np.asarray(disk.R).shape:
+        if toomre_q.shape == radius_m.shape:
             return toomre_q
 
+    sound_speed_m_s = np.asarray(disk.cs, dtype=float)
+    orbital_frequency_rad_s = np.asarray(disk.Omega, dtype=float)
     surface_density_kg_m2 = (
         2.0 * np.asarray(disk.rho, dtype=float) * np.asarray(disk.h, dtype=float)
     )
     return (
-        np.asarray(disk.cs, dtype=float)
-        * np.asarray(disk.Omega, dtype=float)
+        sound_speed_m_s
+        * orbital_frequency_rad_s
         / (np.pi * ct.G * surface_density_kg_m2)
     )
 
@@ -108,7 +111,8 @@ def _disk_radius_attr_cm(disk, fallback_cm: float, *names: str) -> float:
         value = np.asarray(getattr(disk, name), dtype=float)
         if value.shape != ():
             continue
-        radius_cm = float(value) * METER_TO_CM
+        radius_m = float(value)
+        radius_cm = radius_m * METER_TO_CM
         if np.isfinite(radius_cm) and radius_cm > 0.0:
             return radius_cm
     return float(fallback_cm)
@@ -203,9 +207,11 @@ def _solve_sirko_disk_with_q_outer_radius(disk, n_resolution: int, ct) -> None:
         disk.Rmax = search_radius_m
         _reset_sirko_solve_state(disk)
         disk.solve_disk(N=search_resolution)
+        search_profile_radius_cm = np.asarray(disk.R, dtype=float) * METER_TO_CM
+        search_profile_toomre_q = np.asarray(disk.Q, dtype=float)
         q_outer_radius_cm = _find_toomre_q_outer_radius_cm(
-            np.asarray(disk.R, dtype=float) * METER_TO_CM,
-            np.asarray(disk.Q, dtype=float),
+            search_profile_radius_cm,
+            search_profile_toomre_q,
         )
         if q_outer_radius_cm is not None:
             break
@@ -237,7 +243,7 @@ def build_pagn_disk_profile(
     model: str = "sirko",
     n_resolution: int = 10000,
     eddington_ratio: float = 0.5,
-    alpha: float = 0.1,
+    alpha: float = 0.01,
     b: int = 0,
     accretion_rate_g_s: Optional[float] = None,
     thompson_rout_rg: float = 1.0e7,

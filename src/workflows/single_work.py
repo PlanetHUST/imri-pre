@@ -10,6 +10,7 @@ import physical_process.general_class as agn
 import physical_process.gw_frequency_radius as gw_helpers
 import physical_process.nsc_orbital as nsc_orbital
 import physical_process.sampling as stellar_sampling
+from disk_quantity.migration_torque import TorqueProfile, torque_si_to_cgs
 
 from .config import IMRIDynConfig, YEARS_PER_MYR
 from .detect_rate import classify_detectability
@@ -591,7 +592,12 @@ class IMRISingleWorkflow:
                 target_radius_cm,
             )
 
-        torque_cgs = np.asarray(torque_profile.gamma_tot, dtype=float)
+        torque_cgs = self._migration_torque_cgs(
+            torque_profile,
+            agn_properties,
+            disk_data,
+            mass_g,
+        )
 
         return disk_migration.migration_time_from_torque(
             np.asarray(torque_profile.radius_cm, dtype=float),
@@ -601,6 +607,51 @@ class IMRISingleWorkflow:
             target_radius_cm,
             agn_properties.smbh_mass_msun,
         )
+
+    def _migration_torque_cgs(
+        self,
+        torque_profile: TorqueProfile,
+        agn_properties: agn.AGN_properties,
+        disk_data: DiskProfiles,
+        mass_g: float,
+    ) -> FloatArray:
+        """Compose the caller-selected migration torque and convert SI to CGS."""
+        torque_si = np.asarray(
+            torque_profile.gamma_i_si
+            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            dtype=float,
+        )
+        if self.config.consider_type_ii_migration:
+            torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+            disk_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
+            aspect_ratio = np.asarray(disk_data["aspect_ratio"], dtype=float)
+            order = np.argsort(disk_radius_cm)
+            disk_radius_cm = disk_radius_cm[order]
+            aspect_ratio = aspect_ratio[order]
+            local_aspect_ratio = np.interp(
+                torque_radius_cm,
+                disk_radius_cm,
+                aspect_ratio,
+            )
+            smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
+            type_ii_gap_parameter_dimensionless = mass_g**2 / (
+                disk_migration.DISK_VISCOSITY_ALPHA
+                * local_aspect_ratio**2
+                * smbh_mass_g**2
+            )
+            type_ii_mask = (
+                np.isfinite(type_ii_gap_parameter_dimensionless)
+                & (
+                    type_ii_gap_parameter_dimensionless
+                    > disk_migration.TYPE_II_GAP_PARAMETER_THRESHOLD
+                )
+            )
+            torque_si = torque_si + np.where(
+                type_ii_mask,
+                np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+                0.0,
+            )
+        return torque_si_to_cgs(torque_si)
 
     def semi_analytic_migration_time_to_radius_myr(
         self,
