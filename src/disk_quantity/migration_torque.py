@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ import numpy as np
 METER_TO_CM = 100.0
 SI_TORQUE_TO_CGS = 1.0e7
 DEFAULT_MIN_TRAP_SEPARATION_CELLS = 1.0
+DEFAULT_TRAP_STABLE_REGION_RG = 100.0
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
 
@@ -251,8 +253,10 @@ def comp_gamma_th_coeff(
     orbital_frequency_rad_s = disk.Omega
     density_kg_m3 = disk.rho
 
-    corotation_radius_m = np.abs(dlog_pressure_dlog_radius) * sound_speed_m_s**2 / (
-        3.0 * gamma_adiabat * radius_m * orbital_frequency_rad_s**2
+    corotation_radius_m = (
+        np.abs(dlog_pressure_dlog_radius)
+        * sound_speed_m_s**2
+        / (3.0 * gamma_adiabat * radius_m * orbital_frequency_rad_s**2)
     )
 
     electron_scattering_opacity_m2_kg = electron_scattering_opacity(
@@ -260,8 +264,7 @@ def comp_gamma_th_coeff(
     )
 
     eddington_luminosity_w = (
-        4.0 * np.pi * ct.G * ct.c * migrator_mass_kg
-        / electron_scattering_opacity_m2_kg
+        4.0 * np.pi * ct.G * ct.c * migrator_mass_kg / electron_scattering_opacity_m2_kg
     )
     critical_luminosity_w = (
         4.0
@@ -286,13 +289,9 @@ def comp_gamma_th_coeff(
     )
 
     unsaturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) * (
-        4.0
-        * thermal_saturation_parameter
-        / (1.0 + 4.0 * thermal_saturation_parameter)
+        4.0 * thermal_saturation_parameter / (1.0 + 4.0 * thermal_saturation_parameter)
     ) - (
-        2.0
-        * thermal_saturation_parameter
-        / (1.0 + 2.0 * thermal_saturation_parameter)
+        2.0 * thermal_saturation_parameter / (1.0 + 2.0 * thermal_saturation_parameter)
     )
     saturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) - 1.0
 
@@ -329,15 +328,33 @@ def comp_gamma_type_ii_si(
 
 def compute_torque_profile(
     disk,
+    migrator_mass_msun: float,
+    max_radius_rg: Optional[float],
     *,
-    migrator_mass_msun: float = 10.0,
     smoothing: float = 0.005,
     params: Optional[MigrationParameters] = None,
 ) -> TorqueProfile:
+
     if params is None:
         params = MigrationParameters()
 
     ct, _ = _require_pagn_bits()
+
+    if max_radius_rg is not None:
+        radius_m = np.asarray(disk.R, dtype=float)
+        max_radius_m = 0.5 * float(max_radius_rg) * float(disk.Rs)
+
+        if max_radius_m > float(np.nanmax(radius_m)):
+            for name in ("Rmax", "Rout", "R_out"):
+                if hasattr(disk, name):
+                    setattr(disk, name, max_radius_m)
+                    break
+            for name, value in (("i", 0), ("isf", -1), ("Mdisk", 0.0)):
+                if hasattr(disk, name):
+                    setattr(disk, name, value)
+            with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
+                disk.solve_disk(N=radius_m.size)
+
     disk_view = _sorted_disk_view(disk)
     migrator_mass_kg = float(migrator_mass_msun) * ct.MSun
     radius_m = disk_view.R
@@ -404,9 +421,7 @@ def compute_torque_profile(
     )
 
     gamma_i_si = (
-        (corot * gap_attenuation_factor + lind)
-        / type_i_gap_denominator
-        * gamma_0_si
+        (corot * gap_attenuation_factor + lind) / type_i_gap_denominator * gamma_0_si
     )
 
     gamma_th_si = gamma_0_si * gamma_th_coeff
@@ -452,16 +467,29 @@ def compute_torque_profile(
 def classify_torque_traps(
     radius_cm: np.ndarray,
     torque_values: np.ndarray,
+    *,
+    gravitational_radius_cm: float,
+    stable_region_rg: float = DEFAULT_TRAP_STABLE_REGION_RG,
 ) -> TorqueTrapRadii:
-    """Return trap and anti-trap radii [cm]."""
+    """Return trap and anti-trap radii [cm].
+
+    A sign crossing is only treated as a trap when the torque direction persists
+    over at least ``stable_region_rg`` on both sides of the root.
+    """
     radius_cm = np.asarray(radius_cm, dtype=float)
     values = np.asarray(torque_values, dtype=float)
+    min_stable_region_cm = float(stable_region_rg) * float(gravitational_radius_cm)
 
     finite = np.isfinite(radius_cm) & np.isfinite(values) & (values != 0.0)
     radius_cm = radius_cm[finite]
     values = values[finite]
 
-    if values.size < 2:
+    if (
+        values.size < 2
+        or not np.isfinite(min_stable_region_cm)
+        or gravitational_radius_cm <= 0.0
+        or min_stable_region_cm < 0.0
+    ):
         empty = np.array([], dtype=float)
         return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
 
@@ -469,11 +497,11 @@ def classify_torque_traps(
     radius_cm = radius_cm[order]
     values = values[order]
 
-    root_radius_cm = []
-    crossing_kind = []
+    crossing_indices = np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]
+    all_crossing_roots_cm = []
+    all_crossing_kinds = []
 
-    # check in sign change
-    for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
+    for index in crossing_indices:
         inner_radius_cm, outer_radius_cm = radius_cm[index], radius_cm[index + 1]
         inner_torque_value, outer_torque_value = values[index], values[index + 1]
 
@@ -488,10 +516,34 @@ def classify_torque_traps(
         else:
             continue
 
-        root_radius_cm.append(root_cm)
-        crossing_kind.append(kind)
+        all_crossing_roots_cm.append(root_cm)
+        all_crossing_kinds.append(kind)
 
-    if not root_radius_cm:
+    if not all_crossing_roots_cm:
+        empty = np.array([], dtype=float)
+        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
+
+    all_crossing_roots_cm_array = np.asarray(all_crossing_roots_cm, dtype=float)
+    all_crossing_kinds_array = np.asarray(all_crossing_kinds, dtype=int)
+    root_order = np.argsort(all_crossing_roots_cm_array)
+    all_crossing_roots_cm_array = all_crossing_roots_cm_array[root_order]
+    all_crossing_kinds_array = all_crossing_kinds_array[root_order]
+
+    previous_boundary_cm = np.concatenate(
+        ([radius_cm[0]], all_crossing_roots_cm_array[:-1])
+    )
+    next_boundary_cm = np.concatenate(
+        (all_crossing_roots_cm_array[1:], [radius_cm[-1]])
+    )
+    stable_region_mask = (
+        (all_crossing_roots_cm_array - previous_boundary_cm >= min_stable_region_cm)
+        & (next_boundary_cm - all_crossing_roots_cm_array >= min_stable_region_cm)
+    )
+
+    root_radius_cm = all_crossing_roots_cm_array[stable_region_mask]
+    crossing_kind = all_crossing_kinds_array[stable_region_mask]
+
+    if root_radius_cm.size == 0:
         empty = np.array([], dtype=float)
         return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
 
@@ -511,10 +563,27 @@ def classify_torque_traps(
 def find_traps_locations(
     torque_profile: TorqueProfile,
 ) -> tuple[np.ndarray, np.ndarray]:
+    valid_radius = (
+        np.isfinite(torque_profile.radius_cm)
+        & np.isfinite(torque_profile.radius_rg)
+        & (torque_profile.radius_rg > 0.0)
+    )
+    if not np.any(valid_radius):
+        empty = np.array([], dtype=float)
+        return empty, empty
+
+    gravitational_radius_cm = float(
+        np.median(
+            torque_profile.radius_cm[valid_radius]
+            / torque_profile.radius_rg[valid_radius]
+        )
+    )
 
     trap_radii = classify_torque_traps(
         torque_profile.radius_cm,
         torque_profile.gamma_i_si
         + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+        gravitational_radius_cm=gravitational_radius_cm,
+        stable_region_rg=DEFAULT_TRAP_STABLE_REGION_RG,
     )
     return trap_radii.stable_radius_cm, trap_radii.anti_trap_radius_cm

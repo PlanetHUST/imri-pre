@@ -47,9 +47,8 @@ class IMRIDynEngine:
                 pagn_alpha = PAGN_ALPHA
                 pagn_disk = build_pagn_disk_profile(
                     m_smbh_msun,
+                    pagn_alpha,
                     accretion_rate_g_s=accretion_rate_g_s,
-                    alpha=pagn_alpha,
-                    eddington_ratio=0.1,
                 )
                 self.disk_cache[m_smbh_msun] = {
                     "inner_radius_cm": pagn_disk.inner_radius_cm,

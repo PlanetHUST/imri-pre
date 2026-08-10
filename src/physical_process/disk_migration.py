@@ -5,12 +5,8 @@ import numpy.typing as npt
 
 from disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
 
-try:
-    import physical_process.constants as const
-    from physical_process.general_class import AGN_properties
-except ImportError:
-    import constants as const
-    from general_class import AGN_properties
+import physical_process.constants as const
+from physical_process.general_class import AGN_properties
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -118,9 +114,11 @@ def semi_analytical_migration_timescale(
         radius_grid_cm,
     )
     orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / orbital_radius_cm**3)
+
     gap_parameter = object_mass_g**2 / (
         DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
     )
+
     if consider_type_ii and gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD:
         migration_time_s = 1.0 / (
             DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * orbital_frequency_rad_s
@@ -147,22 +145,12 @@ def integrated_semi_analytical_migration_timescale(
     radius_grid_cm: FloatArray,
     consider_type_ii: bool = True,
 ) -> float:
-    """Return radius-integrated semi-analytic migration time [Myr].
-
-    ``semi_analytical_migration_timescale()`` is a local e-folding time,
-    approximately ``R / |dR/dt|``. For a finite radius interval the matching
-    estimate is therefore ``integral(t_local d ln R)`` over the path.
-    """
-    if object_mass_g <= 0.0:
-        raise ValueError("object mass must be positive")
-    if r_ini_cm <= 0.0 or r_fin_cm <= 0.0:
-        raise ValueError("radii must be positive")
-    if r_ini_cm == r_fin_cm:
-        return 0.0
+    """Return radius-integrated semi-analytic migration time [Myr]."""
 
     radius_grid = np.asarray(radius_grid_cm, dtype=float)
     aspect = np.asarray(aspect_ratio, dtype=float)
     sigma = np.asarray(surface_density_g_cm2, dtype=float)
+
     if radius_grid.shape != aspect.shape or radius_grid.shape != sigma.shape:
         raise ValueError("radius, aspect-ratio, and surface-density grids must match")
 
@@ -177,34 +165,37 @@ def integrated_semi_analytical_migration_timescale(
     radius_grid = radius_grid[finite]
     aspect = aspect[finite]
     sigma = sigma[finite]
-    if radius_grid.size < 2:
-        return np.inf
 
     order = np.argsort(radius_grid)
     radius_grid = radius_grid[order]
     aspect = aspect[order]
     sigma = sigma[order]
+
     unique_radius_cm, unique_indices = np.unique(radius_grid, return_index=True)
     radius_grid = unique_radius_cm
     aspect = aspect[unique_indices]
     sigma = sigma[unique_indices]
+
     if radius_grid.size < 2:
         return np.inf
 
     min_radius_cm = min(r_ini_cm, r_fin_cm)
     max_radius_cm = max(r_ini_cm, r_fin_cm)
+
     lower_tolerance_cm = max(np.spacing(radius_grid[0]), radius_grid[0] * 1.0e-12)
     upper_tolerance_cm = max(np.spacing(radius_grid[-1]), radius_grid[-1] * 1.0e-12)
+
     if (
         min_radius_cm < radius_grid[0] - lower_tolerance_cm
         or max_radius_cm > radius_grid[-1] + upper_tolerance_cm
     ):
         return np.inf
+
     min_radius_cm = max(min_radius_cm, float(radius_grid[0]))
     max_radius_cm = min(max_radius_cm, float(radius_grid[-1]))
 
     mask = (radius_grid >= min_radius_cm) & (radius_grid <= max_radius_cm)
-    segment_radius_cm = np.concatenate(
+    radius_samples_cm = np.concatenate(
         (
             [min_radius_cm],
             radius_grid[
@@ -213,25 +204,28 @@ def integrated_semi_analytical_migration_timescale(
             [max_radius_cm],
         )
     )
-    segment_aspect = np.interp(segment_radius_cm, radius_grid, aspect)
-    segment_sigma = np.interp(segment_radius_cm, radius_grid, sigma)
+
+    aspect_samples = np.interp(radius_samples_cm, radius_grid, aspect)
+    sigma_samples = np.interp(radius_samples_cm, radius_grid, sigma)
 
     smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
-    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / segment_radius_cm**3)
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / radius_samples_cm**3)
+
     gap_parameter = object_mass_g**2 / (
-        DISK_VISCOSITY_ALPHA * segment_aspect**2 * smbh_mass_g**2
+        DISK_VISCOSITY_ALPHA * aspect_samples**2 * smbh_mass_g**2
     )
 
     type_i_time_s = (
         smbh_mass_g**2
-        * segment_aspect**2
+        * aspect_samples**2
+        / 2
         / object_mass_g
-        / segment_sigma
-        / segment_radius_cm**2
+        / sigma_samples
+        / radius_samples_cm**2
         / orbital_frequency_rad_s
     )
     type_ii_time_s = 1.0 / (
-        DISK_VISCOSITY_ALPHA * segment_aspect**2 * orbital_frequency_rad_s
+        DISK_VISCOSITY_ALPHA * aspect_samples**2 * orbital_frequency_rad_s
     )
     local_time_s = np.where(
         consider_type_ii & (gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD),
@@ -243,10 +237,10 @@ def integrated_semi_analytical_migration_timescale(
         return np.inf
 
     if r_ini_cm > r_fin_cm:
-        integration_radius_cm = segment_radius_cm[::-1]
+        integration_radius_cm = radius_samples_cm[::-1]
         integrand_s = local_time_s[::-1]
     else:
-        integration_radius_cm = segment_radius_cm
+        integration_radius_cm = radius_samples_cm
         integrand_s = local_time_s
 
     migration_time_s = abs(

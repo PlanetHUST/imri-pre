@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Dict, Mapping, Sequence, Tuple, Any
+from typing import Dict, Mapping, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,11 +20,19 @@ from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 RADIAL_AXIS_LABELSIZE = 26
 LEGEND_FONTSIZE = 18
 LEGACY_DISK_MDOT_PER_SOLAR_MASS = 1.44e18
+PAGN_DISK_MODEL = "sirko"
+PAGN_EDDINGTON_RATIO = 0.1
+PAGN_B = 0
+PAGN_PROFILE_N_RESOLUTION = 1000
+PAGN_TORQUE_N_RESOLUTION = 30000
+TORQUE_MAX_RADIUS_RG = 1.0e7
+TORQUE_SMOOTHING = 0.005
 
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
 
-SMBH_MASSES = (1e5, 1e6, 1e7)
+
+COLORS_SERIS = ["#1f77b4", "#BE9A62", "#2A7F62", "#2f66a3", "#A89A11", "#3A7F11"]
 
 
 def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
@@ -37,68 +44,54 @@ def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
 
 def _disk_profile_payload(
     smbh_mass: float,
-    mdot_per_solar_mass: float | None = None,
-    *,
-    disk_model: str = "sirko",
-    eddington_ratio: float,
     alpha: float,
-    n_resolution: int | None = None,
 ) -> Dict[str, np.ndarray | float | str]:
-    """Compute pAGN disk profiles for one SMBH mass using the main model path."""
 
-    if n_resolution is None:
-        n_resolution = int(os.getenv("PAGN_DISK_N_RESOLUTION", "10000"))
-
-    accretion_rate_g_s = None
-    if mdot_per_solar_mass is not None:
-        accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
-
-    profile = build_pagn_disk_profile(
+    disk_profile = build_pagn_disk_profile(
         smbh_mass,
-        model=disk_model,
-        n_resolution=n_resolution,
-        eddington_ratio=eddington_ratio,
         alpha=alpha,
-        b=0,
-        accretion_rate_g_s=accretion_rate_g_s,
+        model=PAGN_DISK_MODEL,
+        n_resolution=PAGN_PROFILE_N_RESOLUTION,
+        eddington_ratio=PAGN_EDDINGTON_RATIO,
+        b=PAGN_B,
+        suppress_pagn_output=True,
     )
 
     r_over_rg = (
-        np.asarray(profile.radius_cm, dtype=float) / profile.gravitational_radius_cm
+        np.asarray(disk_profile.radius_cm, dtype=float)
+        / disk_profile.gravitational_radius_cm
     )
 
-    q_values = np.asarray(profile.toomre_q, dtype=float)
+    q_values = np.asarray(disk_profile.toomre_q, dtype=float)
 
     r_out_over_rg = Toomre_param_outer_radius(
         r_over_rg,
         q_values,
-        fallback=float(profile.outer_radius_cm / profile.gravitational_radius_cm),
+        fallback=float(
+            disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
+        ),
     )
 
     return {
         "smbh_mass": float(smbh_mass),
-        "disk_model": profile.model_name,
+        "disk_model": disk_profile.model_name,
         "r_over_rg": r_over_rg,
         "r_out_over_rg": r_out_over_rg,
-        "tc": np.asarray(profile.temperature_k, dtype=float),
+        "tc": np.asarray(disk_profile.temperature_k, dtype=float),
         "q": q_values,
-        "sigma": np.asarray(profile.surface_density_g_cm2, dtype=float),
-        "tau": np.asarray(profile.optical_depth, dtype=float),
-        "h_over_r": np.asarray(profile.aspect_ratio, dtype=float),
-        "cs": np.asarray(profile.sound_speed_cm_s, dtype=float),
-        "rho": np.asarray(profile.density_g_cm3, dtype=float),
+        "sigma": np.asarray(disk_profile.surface_density_g_cm2, dtype=float),
+        "tau": np.asarray(disk_profile.optical_depth, dtype=float),
+        "h_over_r": np.asarray(disk_profile.aspect_ratio, dtype=float),
+        "cs": np.asarray(disk_profile.sound_speed_cm_s, dtype=float),
+        "rho": np.asarray(disk_profile.density_g_cm3, dtype=float),
     }
 
 
 def _disk_solver_profile_payload(
     smbh_mass: float,
-    mdot_per_solar_mass: float | None = None,
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute the in-repo disk_solve.py profiles for one SMBH mass."""
-    if mdot_per_solar_mass is None:
-        mdot_per_solar_mass = LEGACY_DISK_MDOT_PER_SOLAR_MASS
-
-    accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
+    accretion_rate_g_s = float(smbh_mass) * LEGACY_DISK_MDOT_PER_SOLAR_MASS
     (
         outer_radius_cm,
         radius_cm,
@@ -129,38 +122,32 @@ def _disk_solver_profile_payload(
 
 def _disk_torque_payload(
     smbh_mass: float,
-    mdot_per_solar_mass: float | None = None,
-    *,
-    disk_model: str = "sirko",
-    eddington_ratio: float = 0.5,
-    alpha: float = 0.01,
-    n_resolution: int | None = None,
+    alpha: float,
     migrator_mass_msun: float = 10.0,
-    smoothing: float = 0.005,
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute a pAGN torque profile using the main simulation torque model."""
-    if n_resolution is None:
-        n_resolution = int(os.getenv("PAGN_DISK_N_RESOLUTION", "30000"))
-
-    accretion_rate_g_s = None
-    if mdot_per_solar_mass is not None:
-        accretion_rate_g_s = float(smbh_mass) * float(mdot_per_solar_mass)
-
     disk_profile = build_pagn_disk_profile(
         smbh_mass,
-        model=disk_model,
-        n_resolution=n_resolution,
-        eddington_ratio=eddington_ratio,
         alpha=alpha,
-        b=0,
-        accretion_rate_g_s=accretion_rate_g_s,
+        model=PAGN_DISK_MODEL,
+        n_resolution=PAGN_TORQUE_N_RESOLUTION,
+        eddington_ratio=PAGN_EDDINGTON_RATIO,
+        b=PAGN_B,
+        suppress_pagn_output=True,
     )
-    params = MigrationParameters(alpha=alpha)
+    params = MigrationParameters(
+        alpha=alpha,
+        gamma_adiabat=5.0 / 3.0,
+        hydrogen_fraction=0.7,
+        kappa_t=20.0,
+        kappa_norm=25.0,
+    )
 
     torque_profile = compute_torque_profile(
         disk_profile.disk,
         migrator_mass_msun=migrator_mass_msun,
-        smoothing=smoothing,
+        max_radius_rg=TORQUE_MAX_RADIUS_RG,
+        smoothing=TORQUE_SMOOTHING,
         params=params,
     )
     trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
@@ -253,24 +240,15 @@ def Toomre_param_outer_radius(
 
 
 def plot_agn_disk_parameter_profiles(
-    output_dir: str = "figs",
-    smbh_masses: Sequence[float] = SMBH_MASSES,
-    mdot_per_solar_mass: float | None = None,
-    *,
-    disk_model: str = "sirko",
-    eddington_ratio: float = 0.1,
-    alpha: float = 0.01,
-    n_resolution: int | None = None,
+    output_dir: str,
+    alpha: float,
+    smbh_masses: Sequence[float],
 ) -> None:
     """Plot useful pAGN AGN disk parameters versus radius."""
-    profiles = [
+    disk_profiles = [
         _disk_profile_payload(
             float(mass),
-            mdot_per_solar_mass,
-            disk_model=disk_model,
-            eddington_ratio=eddington_ratio,
-            alpha=alpha,
-            n_resolution=n_resolution,
+            alpha,
         )
         for mass in smbh_masses
     ]
@@ -284,13 +262,14 @@ def plot_agn_disk_parameter_profiles(
         ("h_over_r", r"$H/R$"),
         # ("cs", r"$c_{\mathrm{s}}\;(\mathrm{cm\,s^{-1}})$"),
     ]
-    colors = ["#1f77b4", "#BE9A62", "#2A7F62"]
+
+    colors = COLORS_SERIS
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
     axes = np.asarray(axes).reshape(-1)
 
     for ax, (key, ylabel) in zip(axes, parameters):
-        for profile, color in zip(profiles, colors):
+        for profile, color in zip(disk_profiles, colors):
             radius = np.asarray(profile["r_over_rg"], dtype=float)
             values = np.asarray(profile[key], dtype=float)
             mask = (
@@ -333,30 +312,20 @@ def plot_agn_disk_parameter_profiles(
 
 
 def plot_agn_disk_method_comparison(
-    output_dir: str = "figs",
-    smbh_masses: Sequence[float] = SMBH_MASSES,
-    mdot_per_solar_mass: float | None = LEGACY_DISK_MDOT_PER_SOLAR_MASS,
-    *,
-    disk_model: str = "sirko",
-    eddington_ratio: float = 0.1,
-    alpha: float = 0.01,
-    n_resolution: int | None = None,
+    output_dir: str,
+    alpha: float,
+    smbh_masses: Sequence[float],
 ) -> None:
     """Compare pAGN and disk_solve.py AGN disk profiles for the same inputs."""
     pagn_profiles = [
         _disk_profile_payload(
             float(mass),
-            mdot_per_solar_mass,
-            disk_model=disk_model,
-            eddington_ratio=eddington_ratio,
             alpha=alpha,
-            n_resolution=n_resolution,
         )
         for mass in smbh_masses
     ]
     solved_profiles = [
-        _disk_solver_profile_payload(float(mass), mdot_per_solar_mass)
-        for mass in smbh_masses
+        _disk_solver_profile_payload(float(mass)) for mass in smbh_masses
     ]
 
     parameters = [
@@ -364,7 +333,7 @@ def plot_agn_disk_method_comparison(
         ("h_over_r", r"$H/R$"),
         ("q", r"$Q$"),
     ]
-    colors = ["#1f77b4", "#BE9A62", "#2A7F62"]
+    colors = COLORS_SERIS
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 15), sharex=True)
     axes = np.asarray(axes).reshape(-1)
@@ -459,7 +428,6 @@ def _plot_signed_torque_component(
     component_key: str,
     ylabel: str,
     stem: str,
-    show_traps: bool = False,
 ) -> None:
     fig, ax = plt.subplots(figsize=(14, 8))
     mass_handles = []
@@ -563,34 +531,23 @@ def _plot_signed_torque_component(
 
 
 def plot_agn_disk_torque_profiles(
-    output_dir: str = "figs",
-    smbh_masses: Sequence[float] = SMBH_MASSES,
-    mdot_per_solar_mass: float | None = None,
-    *,
-    disk_model: str = "sirko",
-    eddington_ratio: float = 0.5,
-    alpha: float = 0.01,
-    n_resolution: int | None = None,
+    output_dir: str,
+    alpha: float,
+    smbh_masses: Sequence[float],
     migrator_mass_msun: float = 10.0,
-    smoothing: float = 0.005,
 ) -> None:
     """Plot pAGN migration torque magnitudes using the main simulation model."""
 
     torque_profiles = [
         _disk_torque_payload(
             float(smbh_mass),
-            mdot_per_solar_mass,
-            disk_model=disk_model,
-            eddington_ratio=eddington_ratio,
             alpha=alpha,
-            n_resolution=n_resolution,
             migrator_mass_msun=migrator_mass_msun,
-            smoothing=smoothing,
         )
         for smbh_mass in smbh_masses
     ]
 
-    colors = ["#1f77b4", "#BE9A62", "#2A7F62"]
+    colors = COLORS_SERIS
 
     _plot_signed_torque_component(
         torque_profiles,
@@ -602,7 +559,6 @@ def plot_agn_disk_torque_profiles(
             r"\;(\mathrm{N\,m})$"
         ),
         stem="tot_torque_profiles",
-        show_traps=True,
     )
     _plot_signed_torque_component(
         torque_profiles,

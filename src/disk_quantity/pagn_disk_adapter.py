@@ -220,9 +220,7 @@ def _solve_sirko_disk_with_q_outer_radius(disk, n_resolution: int, ct) -> None:
     if q_outer_radius_cm is None:
         disk.Rmax = initial_outer_radius_m
     else:
-        disk.Rmax = (
-            q_outer_radius_cm / METER_TO_CM * SIRKO_Q_BOUNDARY_PADDING
-        )
+        disk.Rmax = q_outer_radius_cm / METER_TO_CM * SIRKO_Q_BOUNDARY_PADDING
     _reset_sirko_solve_state(disk)
     disk.solve_disk(N=n_resolution)
 
@@ -239,11 +237,11 @@ def _set_disk_outer_radius_cm(disk, outer_radius_cm: float) -> None:
 
 def build_pagn_disk_profile(
     smbh_mass_msun: float,
+    alpha: float,
     *,
-    model: str = "sirko",
-    n_resolution: int = 10000,
-    eddington_ratio: float = 0.5,
-    alpha: float = 0.01,
+    model: str = "sriko",
+    n_resolution: int = 1000,
+    eddington_ratio: float = 0.1,
     b: int = 0,
     accretion_rate_g_s: Optional[float] = None,
     thompson_rout_rg: float = 1.0e7,
