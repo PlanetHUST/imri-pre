@@ -39,7 +39,7 @@ from src.physical_process.general_class import AGN_properties
 from src.workflows.config import DISK_ACCRETION_RATE_G_S_PER_MSUN, PAGN_ALPHA
 
 MIGRATOR_MASSES_MSUN = (1.0, 5.0, 10.0)
-SMBH_MASS_MSUN = 1.0e4
+SMBH_MASS_MSUN = 1.0e6
 START_RADIUS_RG = 1.0e5
 TARGET_RADIUS_RG = 1.0e2
 N_RESOLUTION = 3000
@@ -129,12 +129,8 @@ def main() -> None:
             * local_aspect_ratio**2
             * (SMBH_MASS_MSUN * const.msun) ** 2
         )
-        type_ii_mask = (
-            np.isfinite(type_ii_gap_parameter_dimensionless)
-            & (
-                type_ii_gap_parameter_dimensionless
-                > TYPE_II_GAP_PARAMETER_THRESHOLD
-            )
+        type_ii_mask = np.isfinite(type_ii_gap_parameter_dimensionless) & (
+            type_ii_gap_parameter_dimensionless > TYPE_II_GAP_PARAMETER_THRESHOLD
         )
         torque_si = torque_si + np.where(
             type_ii_mask,
@@ -192,9 +188,7 @@ def main() -> None:
         )
 
         semi_mask = np.isfinite(semi_times_myr) & (semi_times_myr > 0.0)
-        int_semi_mask = np.isfinite(int_semi_times_myr) & (
-            int_semi_times_myr > 0.0
-        )
+        int_semi_mask = np.isfinite(int_semi_times_myr) & (int_semi_times_myr > 0.0)
         torque_mask = np.isfinite(torque_times_myr) & (torque_times_myr > 0.0)
 
         ax.plot(

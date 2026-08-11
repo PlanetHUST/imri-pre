@@ -12,7 +12,6 @@ import numpy as np
 
 METER_TO_CM = 100.0
 SI_TORQUE_TO_CGS = 1.0e7
-DEFAULT_MIN_TRAP_SEPARATION_CELLS = 1.0
 DEFAULT_TRAP_STABLE_REGION_RG = 100.0
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
@@ -72,6 +71,11 @@ class TorqueTrapRadii:
     anti_trap_radius_cm: np.ndarray
 
 
+def _empty_torque_traps() -> TorqueTrapRadii:
+    empty = np.array([], dtype=float)
+    return TorqueTrapRadii(empty, empty)
+
+
 def _require_pagn_bits():
     os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
     try:
@@ -107,8 +111,7 @@ def safe_divide(numerator, denominator):
     numerator = np.asarray(numerator, dtype=float)
     denominator = np.asarray(denominator, dtype=float)
     num, den = np.broadcast_arrays(numerator, denominator)
-    out = np.zeros_like(num, dtype=float)
-    return np.divide(num, den, out=out, where=den != 0.0)
+    return np.divide(num, den, out=np.zeros_like(num, dtype=float), where=den != 0.0)
 
 
 def radial_log_slope(radius_m, values, *, smoothing: float = 0.005, k: int = 3):
@@ -139,27 +142,17 @@ def total_pressure_pa(disk):
     ct, _ = _require_pagn_bits()
     k_boltzmann = _constant(ct, "Kb", "kB", "k")
     mass_u = _constant(ct, "massU", "mU", "mp")
-    density_kg_m3 = disk.rho
-    temperature_k = disk.T
-    optical_depth = disk.tauV
-    effective_temperature_fourth_k4 = disk.Teff4
-    gas_pressure_pa = density_kg_m3 * temperature_k * k_boltzmann / mass_u
-    radiation_pressure_pa = (
-        optical_depth * ct.sigmaSB * effective_temperature_fourth_k4 / (2.0 * ct.c)
-    )
+    gas_pressure_pa = disk.rho * disk.T * k_boltzmann / mass_u
+    radiation_pressure_pa = disk.tauV * ct.sigmaSB * disk.Teff4 / (2.0 * ct.c)
     return gas_pressure_pa + radiation_pressure_pa
 
 
 def surface_density_kg_m2(disk):
-    density_kg_m3 = disk.rho
-    scale_height_m = disk.h
-    return 2.0 * density_kg_m3 * scale_height_m
+    return 2.0 * disk.rho * disk.h
 
 
 def comp_corot(
-    dlog_surface_density_dlog_radius,
-    dlog_temperature_dlog_radius,
-    gamma_adiabat,
+    dlog_surface_density_dlog_radius, dlog_temperature_dlog_radius, gamma_adiabat
 ):
     return (
         0.46
@@ -170,32 +163,18 @@ def comp_corot(
 
 def thermal_diffusivity_m2_s(disk, gamma_adiabat):
     ct, _ = _require_pagn_bits()
-    temperature_k = disk.T
-    opacity_m2_kg = disk.kappa
-    density_kg_m3 = disk.rho
-    scale_height_m = disk.h
-    orbital_frequency_rad_s = disk.Omega
     return (
         16.0
         * gamma_adiabat
         * (gamma_adiabat - 1.0)
         * ct.sigmaSB
-        * temperature_k**4
-        / (
-            3.0
-            * opacity_m2_kg
-            * density_kg_m3**2
-            * scale_height_m**2
-            * orbital_frequency_rad_s**2
-        )
+        * disk.T**4
+        / (3.0 * disk.kappa * disk.rho**2 * disk.h**2 * disk.Omega**2)
     )
 
 
 def comp_lind(
-    dlog_surface_density_dlog_radius,
-    dlog_temperature_dlog_radius,
-    disk,
-    gamma_adiabat,
+    dlog_surface_density_dlog_radius, dlog_temperature_dlog_radius, disk, gamma_adiabat
 ):
     thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(disk, gamma_adiabat)
     scale_height_m = disk.h
@@ -220,13 +199,12 @@ def comp_gamma_0_si(
     density_kg_m3,
 ):
     """Return Gamma_0 in SI torque units [kg m^2 s^-2]."""
-    surface_density_kg_m2_values = 2.0 * density_kg_m3 * scale_height_m
     aspect_ratio = scale_height_m / radius_m
     return (
         mass_ratio**2
         * radius_m**4
         * orbital_frequency_rad_s**2
-        * surface_density_kg_m2_values
+        * (2.0 * density_kg_m3 * scale_height_m)
         / aspect_ratio**2
     )
 
@@ -334,10 +312,7 @@ def compute_torque_profile(
     smoothing: float = 0.005,
     params: Optional[MigrationParameters] = None,
 ) -> TorqueProfile:
-
-    if params is None:
-        params = MigrationParameters()
-
+    params = MigrationParameters() if params is None else params
     ct, _ = _require_pagn_bits()
 
     if max_radius_rg is not None:
@@ -357,29 +332,17 @@ def compute_torque_profile(
 
     disk_view = _sorted_disk_view(disk)
     migrator_mass_kg = float(migrator_mass_msun) * ct.MSun
-    radius_m = disk_view.R
-    scale_height_m = disk_view.h
-    density_kg_m3 = disk_view.rho
-    temperature_k = disk_view.T
-    orbital_frequency_rad_s = disk_view.Omega
-
+    radius_m, scale_height_m, density_kg_m3 = disk_view.R, disk_view.h, disk_view.rho
+    temperature_k, orbital_frequency_rad_s = disk_view.T, disk_view.Omega
     surface_density_values_kg_m2 = surface_density_kg_m2(disk_view)
     pressure_values_pa = total_pressure_pa(disk_view)
-
-    dlog_surface_density_dlog_radius = radial_log_slope(
-        radius_m,
-        surface_density_values_kg_m2,
-        smoothing=smoothing,
-    )
-    dlog_temperature_dlog_radius = radial_log_slope(
-        radius_m,
-        temperature_k,
-        smoothing=smoothing,
-    )
-    dlog_pressure_dlog_radius = radial_log_slope(
-        radius_m,
-        pressure_values_pa,
-        smoothing=smoothing,
+    (
+        dlog_surface_density_dlog_radius,
+        dlog_temperature_dlog_radius,
+        dlog_pressure_dlog_radius,
+    ) = (
+        radial_log_slope(radius_m, values, smoothing=smoothing)
+        for values in (surface_density_values_kg_m2, temperature_k, pressure_values_pa)
     )
 
     mass_ratio = migrator_mass_kg / disk_view.Mbh
@@ -461,9 +424,6 @@ def compute_torque_profile(
     )
 
 
-#############################################
-
-
 def classify_torque_traps(
     radius_cm: np.ndarray,
     torque_values: np.ndarray,
@@ -490,18 +450,15 @@ def classify_torque_traps(
         or gravitational_radius_cm <= 0.0
         or min_stable_region_cm < 0.0
     ):
-        empty = np.array([], dtype=float)
-        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
+        return _empty_torque_traps()
 
     order = np.argsort(radius_cm)
     radius_cm = radius_cm[order]
     values = values[order]
 
-    crossing_indices = np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]
-    all_crossing_roots_cm = []
-    all_crossing_kinds = []
-
-    for index in crossing_indices:
+    candidate_roots_cm = []
+    candidate_kinds = []
+    for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
         inner_radius_cm, outer_radius_cm = radius_cm[index], radius_cm[index + 1]
         inner_torque_value, outer_torque_value = values[index], values[index + 1]
 
@@ -516,40 +473,61 @@ def classify_torque_traps(
         else:
             continue
 
-        all_crossing_roots_cm.append(root_cm)
-        all_crossing_kinds.append(kind)
+        candidate_roots_cm.append(root_cm)
+        candidate_kinds.append(kind)
 
-    if not all_crossing_roots_cm:
-        empty = np.array([], dtype=float)
-        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
+    if not candidate_roots_cm:
+        return _empty_torque_traps()
 
-    all_crossing_roots_cm_array = np.asarray(all_crossing_roots_cm, dtype=float)
-    all_crossing_kinds_array = np.asarray(all_crossing_kinds, dtype=int)
-    root_order = np.argsort(all_crossing_roots_cm_array)
-    all_crossing_roots_cm_array = all_crossing_roots_cm_array[root_order]
-    all_crossing_kinds_array = all_crossing_kinds_array[root_order]
+    candidate_roots_cm = np.asarray(candidate_roots_cm, dtype=float)
+    candidate_kinds = np.asarray(candidate_kinds, dtype=int)
+    root_order = np.argsort(candidate_roots_cm)
+    candidate_roots_cm = candidate_roots_cm[root_order]
+    candidate_kinds = candidate_kinds[root_order]
 
-    previous_boundary_cm = np.concatenate(
-        ([radius_cm[0]], all_crossing_roots_cm_array[:-1])
-    )
-    next_boundary_cm = np.concatenate(
-        (all_crossing_roots_cm_array[1:], [radius_cm[-1]])
-    )
-    stable_region_mask = (
-        (all_crossing_roots_cm_array - previous_boundary_cm >= min_stable_region_cm)
-        & (next_boundary_cm - all_crossing_roots_cm_array >= min_stable_region_cm)
-    )
+    root_radius_cm = []
+    crossing_kind = []
+    previous_boundary_cm = np.r_[radius_cm[0], candidate_roots_cm[:-1]]
+    next_boundary_cm = np.r_[candidate_roots_cm[1:], radius_cm[-1]]
 
-    root_radius_cm = all_crossing_roots_cm_array[stable_region_mask]
-    crossing_kind = all_crossing_kinds_array[stable_region_mask]
+    for root_cm, kind, previous_cm, next_cm in zip(
+        candidate_roots_cm,
+        candidate_kinds,
+        previous_boundary_cm,
+        next_boundary_cm,
+    ):
+        if min_stable_region_cm > 0.0:
+            if (
+                root_cm - previous_cm < min_stable_region_cm
+                or next_cm - root_cm < min_stable_region_cm
+            ):
+                continue
+            left_region = (
+                (radius_cm >= root_cm - min_stable_region_cm) & (radius_cm < root_cm)
+            )
+            right_region = (
+                (radius_cm > root_cm) & (radius_cm <= root_cm + min_stable_region_cm)
+            )
+            left_sign, right_sign = (
+                (1.0, -1.0) if kind == STABLE_TRAP_KIND else (-1.0, 1.0)
+            )
+            left_is_stable = np.any(left_region) and np.all(
+                np.sign(values[left_region]) == left_sign
+            )
+            right_is_stable = np.any(right_region) and np.all(
+                np.sign(values[right_region]) == right_sign
+            )
+            if not (left_is_stable and right_is_stable):
+                continue
 
-    if root_radius_cm.size == 0:
-        empty = np.array([], dtype=float)
-        return TorqueTrapRadii(stable_radius_cm=empty, anti_trap_radius_cm=empty)
+        root_radius_cm.append(root_cm)
+        crossing_kind.append(kind)
+
+    if not root_radius_cm:
+        return _empty_torque_traps()
 
     root_radius_cm_array = np.asarray(root_radius_cm, dtype=float)
     crossing_kind_array = np.asarray(crossing_kind, dtype=int)
-
     return TorqueTrapRadii(
         stable_radius_cm=root_radius_cm_array[
             (crossing_kind_array == STABLE_TRAP_KIND)
@@ -569,8 +547,7 @@ def find_traps_locations(
         & (torque_profile.radius_rg > 0.0)
     )
     if not np.any(valid_radius):
-        empty = np.array([], dtype=float)
-        return empty, empty
+        return np.array([], dtype=float), np.array([], dtype=float)
 
     gravitational_radius_cm = float(
         np.median(

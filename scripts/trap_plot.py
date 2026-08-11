@@ -38,8 +38,8 @@ from src.workflows.config import (
     PAGN_ALPHA,
 )
 
-SMBH_MIN_MSUN = 1.0e3
-SMBH_MAX_MSUN = 1.0e7
+SMBH_MIN_MSUN = 1.0e4
+SMBH_MAX_MSUN = 1.0e8
 SMBH_COUNT = 50
 MIGRATOR_MASS_MSUN = 30.0
 N_RESOLUTION = 2000
@@ -47,7 +47,7 @@ OUTPUT_DIR = Path("figs")
 PAGN_DISK_MODEL = "sirko"
 PAGN_EDDINGTON_RATIO = 0.1
 PAGN_B = 0
-TORQUE_MAX_RADIUS_RG = None
+TORQUE_MAX_RADIUS_RG = 1e7
 TORQUE_SMOOTHING = 0.02
 LISA_MIN_GW_FREQUENCY_HZ = IMRI_LISA_MIN_GW_FREQUENCY_HZ
 REDSHIFT = IMRI_REDSHIFT
@@ -77,10 +77,6 @@ def main() -> None:
 
     params = MigrationParameters(
         alpha=PAGN_ALPHA,
-        gamma_adiabat=5.0 / 3.0,
-        hydrogen_fraction=0.7,
-        kappa_t=20.0,
-        kappa_norm=25.0,
     )
 
     for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
@@ -181,19 +177,17 @@ def main() -> None:
         gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
     )
 
-    for grid, color, marker, linestyle, label in (
+    for grid, color, marker, label in (
         (
             trap_radius_rg,
             "#1f77b4",
             "o",
-            "-",
             rf"Stable trap, $m={migrator_mass_msun:g}\,M_\odot$",
         ),
         (
             anti_trap_radius_rg,
             "#7A3DB8",
             "x",
-            "-.",
             rf"Anti-trap, $m={migrator_mass_msun:g}\,M_\odot$",
         ),
     ):
@@ -208,15 +202,15 @@ def main() -> None:
             mask = np.isfinite(y_values) & (y_values > 0.0)
             if not np.any(mask):
                 continue
-            ax.plot(
+            ax.scatter(
                 smbh_masses_msun[mask],
                 y_values[mask],
                 color=color,
-                lw=1.8,
-                ls=linestyle,
                 marker=marker,
-                ms=5.0,
+                s=28.0,
+                linewidths=1.2,
                 label=label if not label_used else None,
+                zorder=3,
             )
             label_used = True
 

@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
 import src.physical_process.constants as const
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
@@ -26,7 +25,11 @@ PAGN_B = 0
 PAGN_PROFILE_N_RESOLUTION = 1000
 PAGN_TORQUE_N_RESOLUTION = 30000
 TORQUE_MAX_RADIUS_RG = 1.0e7
-TORQUE_SMOOTHING = 0.005
+TORQUE_SMOOTHING = 1.0
+TORQUE_PLOT_LOG_SMOOTHING_PER_POINT = 0.03
+TORQUE_PLOT_MIN_SMOOTH_POINTS = 12
+TORQUE_PLOT_MIN_BRANCH_WIDTH_RG = 100.0
+TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.02
 
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
@@ -239,6 +242,63 @@ def Toomre_param_outer_radius(
     return float(np.max(roots))
 
 
+def _smooth_torque_magnitude_for_plot(
+    radius_rg: np.ndarray,
+    torque_magnitude: np.ndarray,
+) -> np.ndarray:
+    """Smooth visual torque magnitude in log-log space."""
+    if radius_rg.size < TORQUE_PLOT_MIN_SMOOTH_POINTS:
+        return torque_magnitude
+
+    from scipy.interpolate import UnivariateSpline
+
+    log_radius = np.log10(radius_rg)
+    log_torque = np.log10(torque_magnitude)
+    spline = UnivariateSpline(
+        log_radius,
+        log_torque,
+        k=3,
+        s=TORQUE_PLOT_LOG_SMOOTHING_PER_POINT * radius_rg.size,
+        ext=0,
+    )
+    return 10.0 ** np.asarray(spline(log_radius), dtype=float)
+
+
+def _torque_magnitude_plot_values(
+    radius_rg: np.ndarray,
+    torque_magnitude: np.ndarray,
+    branch_mask: np.ndarray,
+) -> np.ndarray:
+    plot_values = np.full_like(torque_magnitude, np.nan, dtype=float)
+    branch_indices = np.flatnonzero(branch_mask)
+    split_indices = np.where(np.diff(branch_indices) > 1)[0] + 1
+    for indices in np.split(branch_indices, split_indices):
+        if indices.size == 0:
+            continue
+        branch_radius_rg = radius_rg[indices]
+        branch_width_rg = branch_radius_rg[-1] - branch_radius_rg[0]
+        local_width_rg = TORQUE_PLOT_MIN_BRANCH_FRACTION * np.sqrt(
+            branch_radius_rg[0] * branch_radius_rg[-1]
+        )
+        min_branch_width_rg = max(TORQUE_PLOT_MIN_BRANCH_WIDTH_RG, local_width_rg)
+        if branch_width_rg < min_branch_width_rg:
+            continue
+        edge_width_rg = 0.5 * min_branch_width_rg
+        keep = np.ones(indices.size, dtype=bool)
+        if indices[0] > 0:
+            keep &= branch_radius_rg - branch_radius_rg[0] >= edge_width_rg
+        if indices[-1] < torque_magnitude.size - 1:
+            keep &= branch_radius_rg[-1] - branch_radius_rg >= edge_width_rg
+        plot_indices = indices[keep]
+        if plot_indices.size == 0:
+            continue
+        plot_values[plot_indices] = _smooth_torque_magnitude_for_plot(
+            radius_rg[plot_indices],
+            torque_magnitude[plot_indices],
+        )
+    return plot_values
+
+
 def plot_agn_disk_parameter_profiles(
     output_dir: str,
     alpha: float,
@@ -421,14 +481,16 @@ def plot_agn_disk_method_comparison(
 
 
 def _plot_signed_torque_component(
-    profiles: Sequence[Mapping[str, np.ndarray | float | str]],
+    torque_profiles: Sequence[Mapping[str, np.ndarray | float | str]],
     colors: Sequence[str],
     *,
     output_dir: str | Path,
     component_key: str,
     ylabel: str,
     stem: str,
+    show_traps: bool,
 ) -> None:
+
     fig, ax = plt.subplots(figsize=(14, 8))
     mass_handles = []
     has_inward = False
@@ -436,28 +498,37 @@ def _plot_signed_torque_component(
     has_traps = False
     has_anti_traps = False
 
-    for profile, color in zip(profiles, colors):
-        radius_rg = np.asarray(profile["r_over_rg"], dtype=float)
-        torque_values = np.asarray(profile[component_key], dtype=float)
-        valid = (
-            np.isfinite(radius_rg)
-            & np.isfinite(torque_values)
-            & (radius_rg > 0.0)
-            & (np.abs(torque_values) > 0.0)
-        )
+    for torque_profile, color in zip(torque_profiles, colors):
+        radius_rg = np.asarray(torque_profile["r_over_rg"], dtype=float)
+        torque_values = np.asarray(torque_profile[component_key], dtype=float)
+
+        # safe check
+        valid = np.isfinite(radius_rg) & np.isfinite(torque_values) & (radius_rg > 0.0)
         if not np.any(valid):
             continue
 
         radius_rg = radius_rg[valid]
         torque_values = torque_values[valid]
-        torque_magnitude = np.abs(torque_values)
-        outward = torque_values > 0.0
-        inward = torque_values < 0.0
 
-        if np.any(outward):
+        # radius sort
+        radius_order = np.argsort(radius_rg)
+        radius_rg = radius_rg[radius_order]
+        torque_values = torque_values[radius_order]
+        torque_magnitude = np.abs(torque_values)
+
+        outward_mask = torque_values > 0.0
+        inward_mask = torque_values < 0.0
+
+        if np.any(outward_mask):
+            outward_values = _torque_magnitude_plot_values(
+                radius_rg,
+                torque_magnitude,
+                outward_mask,
+            )
+
             ax.plot(
                 radius_rg,
-                np.where(outward, torque_magnitude, np.nan),
+                outward_values,
                 color=color,
                 lw=3.2,
                 ls="-.",
@@ -465,10 +536,17 @@ def _plot_signed_torque_component(
             )
             has_outward = True
 
-        if np.any(inward):
+        if np.any(inward_mask):
+
+            inward_values = _torque_magnitude_plot_values(
+                radius_rg,
+                torque_magnitude,
+                inward_mask,
+            )
+
             ax.plot(
                 radius_rg,
-                np.where(inward, torque_magnitude, np.nan),
+                inward_values,
                 color=color,
                 lw=3.2,
                 ls="-",
@@ -477,13 +555,37 @@ def _plot_signed_torque_component(
             has_inward = True
 
         mass_label = (
-            rf"$M_\bullet=10^{{{int(np.log10(profile['smbh_mass']))}}}\,M_\odot$"
+            rf"$M_\bullet=10^{{{int(np.log10(torque_profile['smbh_mass']))}}}\,M_\odot$"
         )
         mass_handles.append(Line2D([0], [0], color=color, lw=3.2, label=mass_label))
 
-        r_out_over_rg = float(profile["r_out_over_rg"])
+        r_out_over_rg = float(torque_profile["r_out_over_rg"])
         if np.isfinite(r_out_over_rg) and r_out_over_rg > 0.0:
             ax.axvline(r_out_over_rg, color=color, lw=1.7, ls=":", alpha=0.55)
+
+        if show_traps:
+            trap_radii_rg = np.asarray(
+                torque_profile["trap_radii_over_rg"], dtype=float
+            )
+            anti_trap_radii_rg = np.asarray(
+                torque_profile["anti_trap_radii_over_rg"], dtype=float
+            )
+            for radius in trap_radii_rg[
+                np.isfinite(trap_radii_rg) & (trap_radii_rg > 0.0)
+            ]:
+                ax.axvline(radius, color=color, lw=1.4, ls="--", alpha=0.45)
+                has_traps = True
+            for radius in anti_trap_radii_rg[
+                np.isfinite(anti_trap_radii_rg) & (anti_trap_radii_rg > 0.0)
+            ]:
+                ax.axvline(
+                    radius,
+                    color=color,
+                    lw=1.4,
+                    ls=(0, (4, 1, 1, 1)),
+                    alpha=0.45,
+                )
+                has_anti_traps = True
 
     ax.set(xscale="log", yscale="log", xlim=(None, 1.0e7))
     ax.set_xlabel(r"$R/r_g$", fontsize=RADIAL_AXIS_LABELSIZE)
@@ -559,6 +661,7 @@ def plot_agn_disk_torque_profiles(
             r"\;(\mathrm{N\,m})$"
         ),
         stem="tot_torque_profiles",
+        show_traps=True,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -567,6 +670,7 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_ii_si",
         ylabel=r"$|\Gamma_{\mathrm{II}}|\;(\mathrm{N\,m})$",
         stem="type_ii_torque_profiles",
+        show_traps=False,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -575,6 +679,7 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_i_si",
         ylabel=r"$|\Gamma_{\mathrm{I}}|\;(\mathrm{N\,m})$",
         stem="type_i_torque_profiles",
+        show_traps=False,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -583,4 +688,5 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_th_si",
         ylabel=r"$|\Gamma_{\mathrm{th}}|\;(\mathrm{N\,m})$",
         stem="thermal_torque_profiles",
+        show_traps=False,
     )
