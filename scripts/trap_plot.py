@@ -392,4 +392,4 @@ def main(gap_opening_condition: str) -> None:
 
 
 if __name__ == "__main__":
-    main(_parse_args().gap_opening_condition)
+    main(_parse_args().gap_open_condition)

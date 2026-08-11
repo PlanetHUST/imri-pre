@@ -14,7 +14,7 @@ from src.physical_process.disk_migration import GAP_OPENING_CONDITIONS
 
 DISK_OUTPUT_DIR = Path("figs")
 DISK_ALPHA = 0.1
-SMBH_MASSES = (1e3, 1e4)
+SMBH_MASSES = (1e5, 1e6)
 MIGRATOR_MASS_MSUN = 10.0
 MIN_TRAP_SEPARATION_CELLS = 1.0
 
@@ -31,16 +31,16 @@ def _parse_args() -> argparse.Namespace:
 
 
 def main(gap_opening_condition: str) -> None:
-    plot_agn_disk_parameter_profiles(
-        output_dir=str(DISK_OUTPUT_DIR),
-        alpha=DISK_ALPHA,
-        smbh_masses=SMBH_MASSES,
-    )
-    plot_agn_disk_method_comparison(
-        output_dir=str(DISK_OUTPUT_DIR),
-        alpha=DISK_ALPHA,
-        smbh_masses=SMBH_MASSES,
-    )
+    # plot_agn_disk_parameter_profiles(
+    #     output_dir=str(DISK_OUTPUT_DIR),
+    #     alpha=DISK_ALPHA,
+    #     smbh_masses=SMBH_MASSES,
+    # )
+    # plot_agn_disk_method_comparison(
+    #     output_dir=str(DISK_OUTPUT_DIR),
+    #     alpha=DISK_ALPHA,
+    #     smbh_masses=SMBH_MASSES,
+    # )
     plot_agn_disk_torque_profiles(
         output_dir=str(DISK_OUTPUT_DIR),
         alpha=DISK_ALPHA,
@@ -54,4 +54,4 @@ def main(gap_opening_condition: str) -> None:
 
 
 if __name__ == "__main__":
-    main(_parse_args().gap_opening_condition)
+    main(_parse_args().gap_open_condition)

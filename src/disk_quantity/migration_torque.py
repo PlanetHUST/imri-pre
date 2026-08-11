@@ -12,7 +12,7 @@ import numpy as np
 
 METER_TO_CM = 100.0
 SI_TORQUE_TO_CGS = 1.0e7
-DEFAULT_MIN_TRAP_SEPARATION_CELLS = 1.0
+DEFAULT_MIN_TRAP_SEPARATION_CELLS = 10
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
 
@@ -446,9 +446,7 @@ def _resolved_crossing_mask(
 
     for crossing_index in range(1, root_radius_rg.size):
         previous_index = group[-1]
-        separation_rg = (
-            root_radius_rg[crossing_index] - root_radius_rg[previous_index]
-        )
+        separation_rg = root_radius_rg[crossing_index] - root_radius_rg[previous_index]
         local_resolution_rg = min(
             local_width_rg[crossing_index],
             local_width_rg[previous_index],

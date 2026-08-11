@@ -41,7 +41,7 @@ from src.physical_process.general_class import AGN_properties
 from src.workflows.config import DISK_ACCRETION_RATE_G_S_PER_MSUN, PAGN_ALPHA
 
 MIGRATOR_MASSES_MSUN = (10.0, 30.0, 50.0)
-SMBH_MASS_MSUN = 1.0e4
+SMBH_MASS_MSUN = 1.0e3
 START_RADIUS_RG = 1.0e6
 TARGET_RADIUS_RG = 5e1
 N_RESOLUTION = 3000
@@ -439,4 +439,4 @@ def main(gap_opening_condition: str) -> None:
 
 
 if __name__ == "__main__":
-    main(_parse_args().gap_opening_condition)
+    main(_parse_args().gap_open_condition)
