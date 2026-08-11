@@ -1,8 +1,10 @@
-"""Plot torque trap, anti-trap, disk outer, and LISA-entry radii versus SMBH mass."""
+"""Plot torque trap, anti-trap, disk outer, and LISA-entry radii."""
 
 from __future__ import annotations
 
+import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -28,134 +30,221 @@ from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
     DISK_VISCOSITY_ALPHA,
-    TYPE_II_GAP_PARAMETER_THRESHOLD,
+    GAP_OPENING_CONDITIONS,
+    gap_opening_mask,
 )
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
-from src.workflows.config import (
-    IMRI_LISA_MIN_GW_FREQUENCY_HZ,
-    IMRI_REDSHIFT,
-    PAGN_ALPHA,
-)
+from src.workflows.config import PAGN_ALPHA
 
 SMBH_MIN_MSUN = 1.0e3
 SMBH_MAX_MSUN = 1.0e8
 SMBH_COUNT = 50
-MIGRATOR_MASS_MSUN = 20.0
+MIGRATOR_MASS_MSUN = 30.0
 OUTPUT_DIR = Path("figs")
+OUTPUT_STEM = "trap_radius_2d"
 
 TORQUE_MAX_RADIUS_RG = 1e7
-LISA_MIN_GW_FREQUENCY_HZ = IMRI_LISA_MIN_GW_FREQUENCY_HZ
-REDSHIFT = IMRI_REDSHIFT
-OUTPUT_STEM = "trap_radius_2d"
+MIN_TRAP_SEPARATION_CELLS = 1.0
+LISA_MIN_GW_FREQUENCY_HZ = 1e-3
+REDSHIFT = 10
+
+
+@dataclass
+class TrapPoint:
+    stable_radius_rg: np.ndarray
+    anti_trap_radius_rg: np.ndarray
+    lisa_entry_radius_rg: float
+    disk_outer_radius_rg: float
+    max_gap_parameter: float
+    min_crida_parameter: float
+    max_hill_ratio: float
+
+
+@dataclass
+class TrapResults:
+    smbh_masses_msun: np.ndarray
+    stable_radius_rg: list[np.ndarray]
+    anti_trap_radius_rg: list[np.ndarray]
+    lisa_entry_radius_rg: np.ndarray
+    disk_outer_radius_rg: np.ndarray
+    max_gap_parameter: np.ndarray
+    min_crida_parameter: np.ndarray
+    max_hill_ratio: np.ndarray
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--gap-open-condition",
+        choices=GAP_OPENING_CONDITIONS,
+        default="kii",
+        help="kii: KII > 11; crida: P < 1 and R_H/H > 1",
+    )
+    return parser.parse_args()
 
 
 def _positive_sorted(values: object) -> np.ndarray:
     array = np.asarray(values, dtype=float)
-    array = array[np.isfinite(array) & (array > 0.0)]
-    return np.sort(array)
+    return np.sort(array[np.isfinite(array) & (array > 0.0)])
 
 
-def main() -> None:
-    smbh_masses_msun = np.logspace(
-        np.log10(SMBH_MIN_MSUN),
-        np.log10(SMBH_MAX_MSUN),
-        SMBH_COUNT,
-    )
-    migrator_mass_msun = float(MIGRATOR_MASS_MSUN)
+def _trap_point(
+    smbh_mass_msun: float,
+    migrator_mass_msun: float,
+    gap_opening_condition: str,
+    params: MigrationParameters,
+) -> TrapPoint:
+    smbh_mass_g = smbh_mass_msun * const.msun
     migrator_mass_g = migrator_mass_msun * const.msun
+    mass_ratio = migrator_mass_g / smbh_mass_g
+    rg_cm = const.G * smbh_mass_g / const.c**2
 
-    trap_radius_rg = [np.array([], dtype=float) for _ in smbh_masses_msun]
-    anti_trap_radius_rg = [np.array([], dtype=float) for _ in smbh_masses_msun]
-    lisa_entry_radius_rg = np.full(smbh_masses_msun.size, np.nan, dtype=float)
-    disk_outer_radius_rg = np.full(smbh_masses_msun.size, np.nan, dtype=float)
-    gap_open_parameter = np.full(smbh_masses_msun.size, np.nan, dtype=float)
-
-    params = MigrationParameters(
-        alpha=PAGN_ALPHA,
+    disk_profile = build_pagn_disk_profile(smbh_mass_msun, PAGN_ALPHA)
+    entry_radius_cm = lisa_entry_radius_cm(
+        primary_mass_msun=smbh_mass_msun,
+        secondary_mass_msun=migrator_mass_msun,
+        min_gw_frequency_hz=LISA_MIN_GW_FREQUENCY_HZ,
+        redshift=REDSHIFT,
+    )
+    lisa_entry_radius_rg = (
+        entry_radius_cm / rg_cm
+        if np.isfinite(entry_radius_cm) and entry_radius_cm > 0.0
+        else np.nan
     )
 
-    for smbh_index, smbh_mass_msun in enumerate(smbh_masses_msun):
-        smbh_mass_msun = float(smbh_mass_msun)
-        smbh_mass_g = smbh_mass_msun * const.msun
-        rg_cm = const.G * smbh_mass_g / const.c**2
+    torque_profile = compute_torque_profile(
+        disk_profile.disk,
+        migrator_mass_msun=migrator_mass_msun,
+        max_radius_rg=TORQUE_MAX_RADIUS_RG,
+        params=params,
+    )
+    torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+    solved_disk_radius_m = np.asarray(getattr(disk_profile.disk, "R"), dtype=float)
+    solved_disk_aspect_ratio = (
+        np.asarray(getattr(disk_profile.disk, "h"), dtype=float) / solved_disk_radius_m
+    )
+    disk_order = np.argsort(solved_disk_radius_m)
+    local_aspect_ratio = np.interp(
+        torque_radius_cm,
+        solved_disk_radius_m[disk_order] * 100.0,
+        solved_disk_aspect_ratio[disk_order],
+    )
 
-        disk_profile = build_pagn_disk_profile(
-            smbh_mass_msun,
-            PAGN_ALPHA,
+    gap_parameter = migrator_mass_g**2 / (
+        DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+    )
+    hill_ratio = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
+    crida_parameter = (
+        0.75 / hill_ratio + 50.0 * PAGN_ALPHA * local_aspect_ratio**2 / mass_ratio
+    )
+    selected_gap_mask = gap_opening_mask(
+        mass_ratio, local_aspect_ratio, PAGN_ALPHA, gap_opening_condition
+    )
+    type_i_thermal_torque_si = np.asarray(
+        torque_profile.gamma_type_i_si
+        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
+        dtype=float,
+    )
+    # Gap-open cells use Type II alone; thermal torque stays gap-closed.
+    migration_torque_si = np.where(
+        selected_gap_mask,
+        np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+        type_i_thermal_torque_si,
+    )
+    trap_radii = classify_torque_traps(
+        torque_profile.radius_rg,
+        migration_torque_si,
+        min_separation_cells=MIN_TRAP_SEPARATION_CELLS,
+    )
+
+    positive_gap = _positive_sorted(gap_parameter)
+    positive_crida = _positive_sorted(crida_parameter)
+    positive_hill_ratio = _positive_sorted(hill_ratio)
+    return TrapPoint(
+        stable_radius_rg=_positive_sorted(trap_radii.stable_radius_rg),
+        anti_trap_radius_rg=_positive_sorted(trap_radii.anti_trap_radius_rg),
+        lisa_entry_radius_rg=float(lisa_entry_radius_rg),
+        disk_outer_radius_rg=float(disk_profile.outer_radius_cm / rg_cm),
+        max_gap_parameter=(
+            float(np.max(positive_gap)) if positive_gap.size else np.nan
+        ),
+        min_crida_parameter=(
+            float(np.min(positive_crida)) if positive_crida.size else np.nan
+        ),
+        max_hill_ratio=(
+            float(np.max(positive_hill_ratio)) if positive_hill_ratio.size else np.nan
+        ),
+    )
+
+
+def _compute_results(gap_opening_condition: str) -> TrapResults:
+    smbh_masses_msun = np.logspace(
+        np.log10(SMBH_MIN_MSUN), np.log10(SMBH_MAX_MSUN), SMBH_COUNT
+    )
+    params = MigrationParameters(alpha=PAGN_ALPHA)
+    points = [
+        _trap_point(
+            float(smbh_mass_msun),
+            float(MIGRATOR_MASS_MSUN),
+            gap_opening_condition,
+            params,
         )
-
-        disk_outer_radius_rg[smbh_index] = disk_profile.outer_radius_cm / rg_cm
-
-        disk_radius_cm = np.asarray(disk_profile.radius_cm, dtype=float)
-        disk_aspect_ratio = np.asarray(disk_profile.aspect_ratio, dtype=float)
-        disk_order = np.argsort(disk_radius_cm)
-        disk_radius_cm = disk_radius_cm[disk_order]
-        disk_aspect_ratio = disk_aspect_ratio[disk_order]
-
-        entry_radius_cm = lisa_entry_radius_cm(
-            primary_mass_msun=smbh_mass_msun,
-            secondary_mass_msun=migrator_mass_msun,
-            min_gw_frequency_hz=LISA_MIN_GW_FREQUENCY_HZ,
-            redshift=REDSHIFT,
-        )
-        if np.isfinite(entry_radius_cm) and entry_radius_cm > 0.0:
-            lisa_entry_radius_rg[smbh_index] = entry_radius_cm / rg_cm
-
-        torque_profile = compute_torque_profile(
-            disk_profile.disk,
-            migrator_mass_msun=migrator_mass_msun,
-            max_radius_rg=TORQUE_MAX_RADIUS_RG,
-            params=params,
-        )
-
-        torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
-        torque_radius_rg = np.asarray(torque_profile.radius_rg, dtype=float)
-
-        torque_i_th_si = np.asarray(
-            torque_profile.gamma_type_i_si
-            + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
-            dtype=float,
-        )
-        local_aspect_ratio = np.interp(
-            torque_radius_cm,
-            disk_radius_cm,
-            disk_aspect_ratio,
-        )
-        type_ii_gap_parameter_dimensionless = migrator_mass_g**2 / (
-            DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
-        )
-        finite_gap_parameter = type_ii_gap_parameter_dimensionless[
-            np.isfinite(type_ii_gap_parameter_dimensionless)
-            & (type_ii_gap_parameter_dimensionless > 0.0)
-        ]
-
-        if finite_gap_parameter.size:
-            gap_open_parameter[smbh_index] = float(np.max(finite_gap_parameter))
-        type_ii_mask = np.isfinite(type_ii_gap_parameter_dimensionless) & (
-            type_ii_gap_parameter_dimensionless > TYPE_II_GAP_PARAMETER_THRESHOLD
-        )
-
-        torque_i_th_si = torque_i_th_si + np.where(
-            type_ii_mask,
-            np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-            0.0,
-        )
-
-        trap_radii = classify_torque_traps(
-            torque_radius_rg,
-            torque_i_th_si,
-            stable_region_rg=100.0,
-        )
-
-        trap_radius_rg[smbh_index] = _positive_sorted(trap_radii.stable_radius_rg)
-        anti_trap_radius_rg[smbh_index] = _positive_sorted(
-            trap_radii.anti_trap_radius_rg
-        )
-
-    radius_values = [
-        values for values in (*trap_radius_rg, *anti_trap_radius_rg) if values.size
+        for smbh_mass_msun in smbh_masses_msun
     ]
-    radius_values.extend([lisa_entry_radius_rg, disk_outer_radius_rg])
+    return TrapResults(
+        smbh_masses_msun=smbh_masses_msun,
+        stable_radius_rg=[point.stable_radius_rg for point in points],
+        anti_trap_radius_rg=[point.anti_trap_radius_rg for point in points],
+        lisa_entry_radius_rg=np.asarray(
+            [point.lisa_entry_radius_rg for point in points]
+        ),
+        disk_outer_radius_rg=np.asarray(
+            [point.disk_outer_radius_rg for point in points]
+        ),
+        max_gap_parameter=np.asarray([point.max_gap_parameter for point in points]),
+        min_crida_parameter=np.asarray([point.min_crida_parameter for point in points]),
+        max_hill_ratio=np.asarray([point.max_hill_ratio for point in points]),
+    )
+
+
+def _plot_branches(
+    ax,
+    smbh_masses_msun: np.ndarray,
+    radius_grid: list[np.ndarray],
+    color: str,
+    marker: str,
+    label: str,
+) -> None:
+    label_used = False
+    max_branch_count = max((radii.size for radii in radius_grid), default=0)
+    for branch_index in range(max_branch_count):
+        y_values = np.full_like(smbh_masses_msun, np.nan, dtype=float)
+        for smbh_index, radii_rg in enumerate(radius_grid):
+            if branch_index < radii_rg.size:
+                y_values[smbh_index] = radii_rg[branch_index]
+        mask = np.isfinite(y_values) & (y_values > 0.0)
+        if not np.any(mask):
+            continue
+        ax.scatter(
+            smbh_masses_msun[mask],
+            y_values[mask],
+            color=color,
+            marker=marker,
+            s=28.0,
+            linewidths=1.2,
+            label=label if not label_used else None,
+            zorder=3,
+        )
+        label_used = True
+
+
+def _plot_results(results: TrapResults) -> Path:
+    radius_values = [
+        radii
+        for radii in (*results.stable_radius_rg, *results.anti_trap_radius_rg)
+        if radii.size
+    ]
+    radius_values.extend([results.lisa_entry_radius_rg, results.disk_outer_radius_rg])
     positive_radii = _positive_sorted(np.concatenate(radius_values))
     if positive_radii.size == 0:
         raise RuntimeError("no positive finite radii were computed")
@@ -168,61 +257,43 @@ def main() -> None:
         constrained_layout=True,
         gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
     )
+    migrator_mass_msun = float(MIGRATOR_MASS_MSUN)
+    _plot_branches(
+        ax,
+        results.smbh_masses_msun,
+        results.stable_radius_rg,
+        "#1f77b4",
+        "o",
+        rf"Stable trap, $m={migrator_mass_msun:g}\,M_\odot$",
+    )
+    _plot_branches(
+        ax,
+        results.smbh_masses_msun,
+        results.anti_trap_radius_rg,
+        "#7A3DB8",
+        "x",
+        rf"Anti-trap, $m={migrator_mass_msun:g}\,M_\odot$",
+    )
 
-    for grid, color, marker, label in (
-        (
-            trap_radius_rg,
-            "#1f77b4",
-            "o",
-            rf"Stable trap, $m={migrator_mass_msun:g}\,M_\odot$",
-        ),
-        (
-            anti_trap_radius_rg,
-            "#7A3DB8",
-            "x",
-            rf"Anti-trap, $m={migrator_mass_msun:g}\,M_\odot$",
-        ),
-    ):
-        max_branch_count = max((radii_rg.size for radii_rg in grid), default=0)
-        label_used = False
-        for branch_index in range(max_branch_count):
-            y_values = np.full_like(smbh_masses_msun, np.nan, dtype=float)
-            for smbh_index, radii_rg in enumerate(grid):
-                radii_rg = _positive_sorted(radii_rg)
-                if branch_index < radii_rg.size:
-                    y_values[smbh_index] = radii_rg[branch_index]
-            mask = np.isfinite(y_values) & (y_values > 0.0)
-            if not np.any(mask):
-                continue
-            ax.scatter(
-                smbh_masses_msun[mask],
-                y_values[mask],
-                color=color,
-                marker=marker,
-                s=28.0,
-                linewidths=1.2,
-                label=label if not label_used else None,
-                zorder=3,
-            )
-            label_used = True
-
-    lisa_color = "#D55E00"
-    lisa_mask = np.isfinite(lisa_entry_radius_rg) & (lisa_entry_radius_rg > 0.0)
+    lisa_mask = np.isfinite(results.lisa_entry_radius_rg) & (
+        results.lisa_entry_radius_rg > 0.0
+    )
     if np.any(lisa_mask):
         ax.plot(
-            smbh_masses_msun[lisa_mask],
-            lisa_entry_radius_rg[lisa_mask],
-            color=lisa_color,
+            results.smbh_masses_msun[lisa_mask],
+            results.lisa_entry_radius_rg[lisa_mask],
+            color="#D55E00",
             lw=2.8,
             ls="--",
             label=rf"LISA entry, $m={migrator_mass_msun:g}\,M_\odot$",
         )
-
-    rout_mask = np.isfinite(disk_outer_radius_rg) & (disk_outer_radius_rg > 0.0)
+    rout_mask = np.isfinite(results.disk_outer_radius_rg) & (
+        results.disk_outer_radius_rg > 0.0
+    )
     if np.any(rout_mask):
         ax.plot(
-            smbh_masses_msun[rout_mask],
-            disk_outer_radius_rg[rout_mask],
+            results.smbh_masses_msun[rout_mask],
+            results.disk_outer_radius_rg[rout_mask],
             color="#009E73",
             lw=2.4,
             ls=":",
@@ -241,27 +312,33 @@ def main() -> None:
         rf"$m={migrator_mass_msun:g}\,M_\odot$, $z={REDSHIFT:g}$"
     )
 
-    gap_mask = np.isfinite(gap_open_parameter) & (gap_open_parameter > 0.0)
-    if np.any(gap_mask):
-        gap_ax.plot(
-            smbh_masses_msun[gap_mask],
-            gap_open_parameter[gap_mask],
-            color="0.15",
-            lw=2.2,
-            marker=".",
-            label="Max gap-opening parameter",
-        )
-    gap_ax.axhline(
-        TYPE_II_GAP_PARAMETER_THRESHOLD,
-        color="0.45",
-        lw=1.5,
-        ls="--",
-        label=r"Gap-opening threshold",
+    for values, color, linestyle, label in (
+        (results.max_gap_parameter, "#1f77b4", "-", r"$\max K_\mathrm{II}$"),
+        (
+            results.min_crida_parameter,
+            "#D55E00",
+            "-.",
+            r"$\min P_\mathrm{Crida}$",
+        ),
+        (results.max_hill_ratio, "#2A7F62", ":", r"$\max(R_H/H)$"),
+    ):
+        mask = np.isfinite(values) & (values > 0.0)
+        if np.any(mask):
+            gap_ax.plot(
+                results.smbh_masses_msun[mask],
+                values[mask],
+                color=color,
+                lw=2.2,
+                ls=linestyle,
+                marker="." if linestyle == "-" else None,
+                label=label,
+            )
+    gap_ax.set(
+        xscale="log",
+        yscale="log",
+        xlabel=r"$M_\bullet\;(M_\odot)$",
+        ylabel="Dimensionless value",
     )
-    gap_ax.set_xscale("log")
-    gap_ax.set_yscale("log")
-    gap_ax.set_xlabel(r"$M_\bullet\;(M_\odot)$")
-    gap_ax.set_ylabel(r"$m^2/[\alpha(H/R)^2M_\bullet^2]$")
     gap_ax.grid(True, which="both", alpha=0.25, linestyle="--")
     gap_ax.legend(loc="best", framealpha=0.88)
 
@@ -269,34 +346,50 @@ def main() -> None:
     figure_path = OUTPUT_DIR / f"{OUTPUT_STEM}.png"
     fig.savefig(figure_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
+    return figure_path
 
-    stable_point_count = sum(radii_rg.size for radii_rg in trap_radius_rg)
-    anti_point_count = sum(radii_rg.size for radii_rg in anti_trap_radius_rg)
-    total_cells = int(smbh_masses_msun.size)
-    positive_rout = _positive_sorted(disk_outer_radius_rg)
-    positive_gap = _positive_sorted(gap_open_parameter)
+
+def _print_range(label: str, values: np.ndarray) -> None:
+    positive = _positive_sorted(values)
+    if positive.size:
+        print(f"  {label}: {positive[0]:.6e} to {positive[-1]:.6e}")
+
+
+def _print_results(
+    results: TrapResults,
+    gap_opening_condition: str,
+    figure_path: Path,
+) -> None:
+    masses = results.smbh_masses_msun
     print("Trap radius 2D diagnostic")
     print(
         "  smbh_mass_range_msun: "
-        f"{smbh_masses_msun[0]:.6e} to {smbh_masses_msun[-1]:.6e} "
-        f"({smbh_masses_msun.size} points)"
+        f"{masses[0]:.6e} to {masses[-1]:.6e} ({masses.size} points)"
     )
-    print(f"  migrator_mass_msun: {migrator_mass_msun:.6g}")
-    if positive_rout.size:
-        print(
-            "  disk_outer_radius_rg_range: "
-            f"{positive_rout[0]:.6e} to {positive_rout[-1]:.6e}"
-        )
-    if positive_gap.size:
-        print(
-            "  max_gap_open_parameter_range: "
-            f"{positive_gap[0]:.6e} to {positive_gap[-1]:.6e}"
-        )
-    print(f"  stable_trap_points: {stable_point_count}")
-    print(f"  anti_trap_points: {anti_point_count}")
-    print(f"  torque_cells: {total_cells}")
+    print(f"  migrator_mass_msun: {MIGRATOR_MASS_MSUN:.6g}")
+    print(f"  gap_opening_condition: {gap_opening_condition}")
+    print("  gap_open_torque: type_ii_only")
+    _print_range("disk_outer_radius_rg_range", results.disk_outer_radius_rg)
+    _print_range("max_gap_open_parameter_range", results.max_gap_parameter)
+    _print_range("min_crida_gap_parameter_range", results.min_crida_parameter)
+    _print_range("max_hill_radius_over_scale_height_range", results.max_hill_ratio)
+    print(
+        "  stable_trap_points: "
+        f"{sum(radii.size for radii in results.stable_radius_rg)}"
+    )
+    print(
+        "  anti_trap_points: "
+        f"{sum(radii.size for radii in results.anti_trap_radius_rg)}"
+    )
+    print(f"  torque_cells: {masses.size}")
     print(f"  figure: {figure_path}")
 
 
+def main(gap_opening_condition: str) -> None:
+    results = _compute_results(gap_opening_condition)
+    figure_path = _plot_results(results)
+    _print_results(results, gap_opening_condition, figure_path)
+
+
 if __name__ == "__main__":
-    main()
+    main(_parse_args().gap_opening_condition)

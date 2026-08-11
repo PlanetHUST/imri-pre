@@ -3,14 +3,55 @@
 import numpy as np
 import numpy.typing as npt
 
-from disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
-
-import physical_process.constants as const
-from physical_process.general_class import AGN_properties
+if __package__ == "src.physical_process":
+    from ..disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
+    from . import constants as const
+    from .general_class import AGN_properties
+else:
+    from disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
+    import physical_process.constants as const
+    from physical_process.general_class import AGN_properties
 
 FloatArray = npt.NDArray[np.float64]
 
 TYPE_II_GAP_PARAMETER_THRESHOLD = 11.0
+GAP_OPENING_CONDITIONS = ("kii", "crida")
+
+
+def gap_opening_mask(
+    mass_ratio: float,
+    aspect_ratio: FloatArray,
+    alpha: float,
+    condition: str,
+) -> npt.NDArray[np.bool_]:
+    """Return cells satisfying the selected dimensionless gap condition."""
+    if mass_ratio <= 0.0 or alpha <= 0.0:
+        raise ValueError("mass ratio and alpha must be positive")
+    if condition not in GAP_OPENING_CONDITIONS:
+        raise ValueError(
+            f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
+        )
+
+    local_aspect_ratio = np.asarray(aspect_ratio, dtype=float)
+    valid = np.isfinite(local_aspect_ratio) & (local_aspect_ratio > 0.0)
+    if condition == "kii":
+        gap_parameter = mass_ratio**2 / (alpha * local_aspect_ratio**2)
+        return valid & (gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD)
+
+    hill_radius_over_scale_height = (
+        np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
+    )
+    crida_gap_parameter = (
+        0.75 / hill_radius_over_scale_height
+        + 50.0 * alpha * local_aspect_ratio**2 / mass_ratio
+    )
+    return (
+        valid
+        & np.isfinite(crida_gap_parameter)
+        & np.isfinite(hill_radius_over_scale_height)
+        & (crida_gap_parameter < 1.0)
+        & (hill_radius_over_scale_height > 1.0)
+    )
 
 
 def find_closest_index(radius_grid_cm: FloatArray, radius_cm: float) -> int:

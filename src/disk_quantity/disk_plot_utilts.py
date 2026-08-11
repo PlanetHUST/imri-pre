@@ -10,11 +10,12 @@ from matplotlib.lines import Line2D
 import src.physical_process.constants as const
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
+    classify_torque_traps,
     compute_torque_profile,
-    find_traps_locations,
 )
 from src.disk_quantity.disk_solve import radial_structure
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
+from src.physical_process.disk_migration import gap_opening_mask
 
 RADIAL_AXIS_LABELSIZE = 26
 LEGEND_FONTSIZE = 18
@@ -28,9 +29,9 @@ TORQUE_MAX_RADIUS_RG = 1.0e7
 
 TORQUE_SMOOTHING = 1.0
 TORQUE_PLOT_LOG_SMOOTHING = 0.5
-TORQUE_PLOT_MIN_SMOOTH_POINTS = 12
+TORQUE_PLOT_MIN_SMOOTH_POINTS = 20
 TORQUE_PLOT_MIN_BRANCH_WIDTH_RG = 100.0
-TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.005
+TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.001
 
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
@@ -128,6 +129,8 @@ def _disk_torque_payload(
     smbh_mass: float,
     alpha: float,
     migrator_mass_msun: float = 10.0,
+    min_trap_separation_cells: float = 1.0,
+    gap_opening_condition: str = "kii",
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute a pAGN torque profile using the main simulation torque model."""
     disk_profile = build_pagn_disk_profile(
@@ -154,7 +157,44 @@ def _disk_torque_payload(
         smoothing=TORQUE_SMOOTHING,
         params=params,
     )
-    trap_radii_rg, anti_trap_radii_rg = find_traps_locations(torque_profile)
+
+    solved_disk_radius_m = np.asarray(
+        getattr(disk_profile.disk, "R"),
+        dtype=float,
+    )
+    solved_disk_scale_height_m = np.asarray(
+        getattr(disk_profile.disk, "h"),
+        dtype=float,
+    )
+    solved_disk_aspect_ratio = solved_disk_scale_height_m / solved_disk_radius_m
+    solved_order = np.argsort(solved_disk_radius_m)
+    local_aspect_ratio = np.interp(
+        np.asarray(torque_profile.radius_m, dtype=float),
+        solved_disk_radius_m[solved_order],
+        solved_disk_aspect_ratio[solved_order],
+    )
+    selected_gap_mask = gap_opening_mask(
+        float(migrator_mass_msun) / float(smbh_mass),
+        local_aspect_ratio,
+        alpha,
+        gap_opening_condition,
+    )
+    type_i_thermal_torque_si = np.asarray(
+        torque_profile.gamma_type_i_si
+        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
+        dtype=float,
+    )
+    # Gap-open cells use Type II alone; thermal torque stays gap-closed.
+    migration_torque_si = np.where(
+        selected_gap_mask,
+        np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+        type_i_thermal_torque_si,
+    )
+    trap_radii = classify_torque_traps(
+        torque_profile.radius_rg,
+        migration_torque_si,
+        min_separation_cells=min_trap_separation_cells,
+    )
 
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
 
@@ -178,14 +218,13 @@ def _disk_torque_payload(
         "r_out_over_rg": r_out_over_rg,
         "gamma_i_si": np.asarray(torque_profile.gamma_type_i_si, dtype=float),
         "gamma_th_si": np.asarray(torque_profile.gamma_th_si, dtype=float),
-        "gamma_i_th_si": np.asarray(
-            torque_profile.gamma_type_i_si
-            + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
+        "gamma_migration_si": migration_torque_si,
+        "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+        "trap_radii_over_rg": np.asarray(trap_radii.stable_radius_rg, dtype=float),
+        "anti_trap_radii_over_rg": np.asarray(
+            trap_radii.anti_trap_radius_rg,
             dtype=float,
         ),
-        "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-        "trap_radii_over_rg": (np.asarray(trap_radii_rg, dtype=float)),
-        "anti_trap_radii_over_rg": (np.asarray(anti_trap_radii_rg, dtype=float)),
     }
 
 
@@ -639,6 +678,8 @@ def plot_agn_disk_torque_profiles(
     alpha: float,
     smbh_masses: Sequence[float],
     migrator_mass_msun: float = 10.0,
+    min_trap_separation_cells: float = 1.0,
+    gap_opening_condition: str = "kii",
 ) -> None:
     """Plot pAGN migration torque magnitudes using the main simulation model."""
 
@@ -647,6 +688,8 @@ def plot_agn_disk_torque_profiles(
             float(smbh_mass),
             alpha=alpha,
             migrator_mass_msun=migrator_mass_msun,
+            min_trap_separation_cells=min_trap_separation_cells,
+            gap_opening_condition=gap_opening_condition,
         )
         for smbh_mass in smbh_masses
     ]
@@ -657,11 +700,8 @@ def plot_agn_disk_torque_profiles(
         torque_profiles,
         colors,
         output_dir=output_dir,
-        component_key="gamma_i_th_si",
-        ylabel=(
-            r"$|\Gamma_{\mathrm{I}}+e^{-K/K_t}\Gamma_{\mathrm{th}}|"
-            r"\;(\mathrm{N\,m})$"
-        ),
+        component_key="gamma_migration_si",
+        ylabel=r"$|\Gamma_{\mathrm{migration}}|\;(\mathrm{N\,m})$",
         stem="tot_torque_profiles",
         show_traps=True,
     )

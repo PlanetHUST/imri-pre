@@ -5,10 +5,13 @@ from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
-try:
-    import physical_process.constants as const
-except ImportError:
-    import constants as const
+if __package__ == "src.physical_process":
+    from . import constants as const
+else:
+    try:
+        import physical_process.constants as const
+    except ImportError:
+        import constants as const
 
 FloatArray = npt.NDArray[np.float64]
 IntArray = npt.NDArray[np.int_]
