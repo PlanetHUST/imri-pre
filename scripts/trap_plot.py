@@ -32,23 +32,18 @@ from src.physical_process.disk_migration import (
 )
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
 from src.workflows.config import (
-    DISK_ACCRETION_RATE_G_S_PER_MSUN,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_REDSHIFT,
     PAGN_ALPHA,
 )
 
-SMBH_MIN_MSUN = 1.0e4
+SMBH_MIN_MSUN = 1.0e3
 SMBH_MAX_MSUN = 1.0e8
 SMBH_COUNT = 50
-MIGRATOR_MASS_MSUN = 30.0
-N_RESOLUTION = 2000
+MIGRATOR_MASS_MSUN = 20.0
 OUTPUT_DIR = Path("figs")
-PAGN_DISK_MODEL = "sirko"
-PAGN_EDDINGTON_RATIO = 0.1
-PAGN_B = 0
+
 TORQUE_MAX_RADIUS_RG = 1e7
-TORQUE_SMOOTHING = 0.02
 LISA_MIN_GW_FREQUENCY_HZ = IMRI_LISA_MIN_GW_FREQUENCY_HZ
 REDSHIFT = IMRI_REDSHIFT
 OUTPUT_STEM = "trap_radius_2d"
@@ -83,16 +78,12 @@ def main() -> None:
         smbh_mass_msun = float(smbh_mass_msun)
         smbh_mass_g = smbh_mass_msun * const.msun
         rg_cm = const.G * smbh_mass_g / const.c**2
+
         disk_profile = build_pagn_disk_profile(
             smbh_mass_msun,
-            alpha=PAGN_ALPHA,
-            model=PAGN_DISK_MODEL,
-            n_resolution=N_RESOLUTION,
-            eddington_ratio=PAGN_EDDINGTON_RATIO,
-            b=PAGN_B,
-            accretion_rate_g_s=DISK_ACCRETION_RATE_G_S_PER_MSUN * smbh_mass_msun,
-            suppress_pagn_output=True,
+            PAGN_ALPHA,
         )
+
         disk_outer_radius_rg[smbh_index] = disk_profile.outer_radius_cm / rg_cm
 
         disk_radius_cm = np.asarray(disk_profile.radius_cm, dtype=float)
@@ -114,14 +105,15 @@ def main() -> None:
             disk_profile.disk,
             migrator_mass_msun=migrator_mass_msun,
             max_radius_rg=TORQUE_MAX_RADIUS_RG,
-            smoothing=TORQUE_SMOOTHING,
             params=params,
         )
 
         torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
-        torque_si = np.asarray(
-            torque_profile.gamma_i_si
-            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+        torque_radius_rg = np.asarray(torque_profile.radius_rg, dtype=float)
+
+        torque_i_th_si = np.asarray(
+            torque_profile.gamma_type_i_si
+            + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
             dtype=float,
         )
         local_aspect_ratio = np.interp(
@@ -136,28 +128,28 @@ def main() -> None:
             np.isfinite(type_ii_gap_parameter_dimensionless)
             & (type_ii_gap_parameter_dimensionless > 0.0)
         ]
+
         if finite_gap_parameter.size:
             gap_open_parameter[smbh_index] = float(np.max(finite_gap_parameter))
         type_ii_mask = np.isfinite(type_ii_gap_parameter_dimensionless) & (
             type_ii_gap_parameter_dimensionless > TYPE_II_GAP_PARAMETER_THRESHOLD
         )
-        torque_si = torque_si + np.where(
+
+        torque_i_th_si = torque_i_th_si + np.where(
             type_ii_mask,
             np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
             0.0,
         )
 
         trap_radii = classify_torque_traps(
-            torque_radius_cm,
-            torque_si,
-            gravitational_radius_cm=rg_cm,
+            torque_radius_rg,
+            torque_i_th_si,
             stable_region_rg=100.0,
         )
-        trap_radius_rg[smbh_index] = _positive_sorted(
-            trap_radii.stable_radius_cm / rg_cm
-        )
+
+        trap_radius_rg[smbh_index] = _positive_sorted(trap_radii.stable_radius_rg)
         anti_trap_radius_rg[smbh_index] = _positive_sorted(
-            trap_radii.anti_trap_radius_cm / rg_cm
+            trap_radii.anti_trap_radius_rg
         )
 
     radius_values = [

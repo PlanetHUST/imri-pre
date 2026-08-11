@@ -114,8 +114,8 @@ def main() -> None:
         )
 
         torque_si = np.asarray(
-            torque_profile.gamma_i_si
-            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            torque_profile.gamma_type_i_si
+            + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
             dtype=float,
         )
         torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
@@ -219,12 +219,8 @@ def main() -> None:
         torque_traps = classify_torque_traps(
             torque_radius_cm,
             torque_si,
-            gravitational_radius_cm=rg_cm,
-            stable_region_rg=100.0,
         )
-        trap_radii_cm = torque_traps.stable_radius_cm
-
-        trap_radii_rg = trap_radii_cm / rg_cm
+        trap_radii_rg = torque_traps.stable_radius_rg
 
         trap_radii_rg = trap_radii_rg[
             np.isfinite(trap_radii_rg)

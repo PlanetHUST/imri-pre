@@ -12,7 +12,7 @@ import numpy as np
 
 METER_TO_CM = 100.0
 SI_TORQUE_TO_CGS = 1.0e7
-DEFAULT_TRAP_STABLE_REGION_RG = 100.0
+DEFAULT_TRAP_STABLE_REGION_RG = 500
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
 
@@ -58,7 +58,7 @@ class TorqueProfile:
     gap_attenuation_factor: np.ndarray
     type_i_gap_denominator: np.ndarray
     gamma_0_si: np.ndarray
-    gamma_i_si: np.ndarray
+    gamma_type_i_si: np.ndarray
     gamma_th_si: np.ndarray
     gamma_type_ii_si: np.ndarray
 
@@ -67,8 +67,8 @@ class TorqueProfile:
 class TorqueTrapRadii:
     """Torque zero radii separated by stable and anti-trap behavior."""
 
-    stable_radius_cm: np.ndarray
-    anti_trap_radius_cm: np.ndarray
+    stable_radius_rg: np.ndarray
+    anti_trap_radius_rg: np.ndarray
 
 
 def _empty_torque_traps() -> TorqueTrapRadii:
@@ -418,52 +418,41 @@ def compute_torque_profile(
         gap_attenuation_factor=gap_attenuation_factor,
         type_i_gap_denominator=type_i_gap_denominator,
         gamma_0_si=gamma_0_si,
-        gamma_i_si=gamma_i_si,
+        gamma_type_i_si=gamma_i_si,
         gamma_th_si=gamma_th_si,
         gamma_type_ii_si=gamma_type_ii_si,
     )
 
 
 def classify_torque_traps(
-    radius_cm: np.ndarray,
+    radius_rg: np.ndarray,
     torque_values: np.ndarray,
     *,
-    gravitational_radius_cm: float,
     stable_region_rg: float = DEFAULT_TRAP_STABLE_REGION_RG,
 ) -> TorqueTrapRadii:
-    """Return trap and anti-trap radii [cm].
 
-    A sign crossing is only treated as a trap when the torque direction persists
-    over at least ``stable_region_rg`` on both sides of the root.
-    """
-    radius_cm = np.asarray(radius_cm, dtype=float)
+    radius_rg = np.asarray(radius_rg, dtype=float)
     values = np.asarray(torque_values, dtype=float)
-    min_stable_region_cm = float(stable_region_rg) * float(gravitational_radius_cm)
 
-    finite = np.isfinite(radius_cm) & np.isfinite(values) & (values != 0.0)
-    radius_cm = radius_cm[finite]
+    finite = np.isfinite(radius_rg) & np.isfinite(values) & (values != 0.0)
+    radius_rg = radius_rg[finite]
     values = values[finite]
 
-    if (
-        values.size < 2
-        or not np.isfinite(min_stable_region_cm)
-        or gravitational_radius_cm <= 0.0
-        or min_stable_region_cm < 0.0
-    ):
+    if values.size < 2 or not np.isfinite(stable_region_rg) or stable_region_rg < 0.0:
         return _empty_torque_traps()
 
-    order = np.argsort(radius_cm)
-    radius_cm = radius_cm[order]
+    order = np.argsort(radius_rg)
+    radius_rg = radius_rg[order]
     values = values[order]
 
-    candidate_roots_cm = []
+    candidate_roots_rg = []
     candidate_kinds = []
     for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
-        inner_radius_cm, outer_radius_cm = radius_cm[index], radius_cm[index + 1]
+        inner_radius_rg, outer_radius_rg = radius_rg[index], radius_rg[index + 1]
         inner_torque_value, outer_torque_value = values[index], values[index + 1]
 
-        root_cm = inner_radius_cm - inner_torque_value * (
-            outer_radius_cm - inner_radius_cm
+        root_rg = inner_radius_rg - inner_torque_value * (
+            outer_radius_rg - inner_radius_rg
         ) / (outer_torque_value - inner_torque_value)
 
         if inner_torque_value > 0.0 and outer_torque_value < 0.0:
@@ -473,40 +462,40 @@ def classify_torque_traps(
         else:
             continue
 
-        candidate_roots_cm.append(root_cm)
+        candidate_roots_rg.append(root_rg)
         candidate_kinds.append(kind)
 
-    if not candidate_roots_cm:
+    if not candidate_roots_rg:
         return _empty_torque_traps()
 
-    candidate_roots_cm = np.asarray(candidate_roots_cm, dtype=float)
+    candidate_roots_rg = np.asarray(candidate_roots_rg, dtype=float)
     candidate_kinds = np.asarray(candidate_kinds, dtype=int)
-    root_order = np.argsort(candidate_roots_cm)
-    candidate_roots_cm = candidate_roots_cm[root_order]
+    root_order = np.argsort(candidate_roots_rg)
+    candidate_roots_rg = candidate_roots_rg[root_order]
     candidate_kinds = candidate_kinds[root_order]
 
-    root_radius_cm = []
+    root_radius_rg = []
     crossing_kind = []
-    previous_boundary_cm = np.r_[radius_cm[0], candidate_roots_cm[:-1]]
-    next_boundary_cm = np.r_[candidate_roots_cm[1:], radius_cm[-1]]
+    previous_boundary_rg = np.r_[radius_rg[0], candidate_roots_rg[:-1]]
+    next_boundary_rg = np.r_[candidate_roots_rg[1:], radius_rg[-1]]
 
-    for root_cm, kind, previous_cm, next_cm in zip(
-        candidate_roots_cm,
+    for root_rg, kind, previous_rg, next_rg in zip(
+        candidate_roots_rg,
         candidate_kinds,
-        previous_boundary_cm,
-        next_boundary_cm,
+        previous_boundary_rg,
+        next_boundary_rg,
     ):
-        if min_stable_region_cm > 0.0:
+        if stable_region_rg > 0.0:
             if (
-                root_cm - previous_cm < min_stable_region_cm
-                or next_cm - root_cm < min_stable_region_cm
+                root_rg - previous_rg < stable_region_rg
+                or next_rg - root_rg < stable_region_rg
             ):
                 continue
-            left_region = (
-                (radius_cm >= root_cm - min_stable_region_cm) & (radius_cm < root_cm)
+            left_region = (radius_rg >= root_rg - stable_region_rg) & (
+                radius_rg < root_rg
             )
-            right_region = (
-                (radius_cm > root_cm) & (radius_cm <= root_cm + min_stable_region_cm)
+            right_region = (radius_rg > root_rg) & (
+                radius_rg <= root_rg + stable_region_rg
             )
             left_sign, right_sign = (
                 (1.0, -1.0) if kind == STABLE_TRAP_KIND else (-1.0, 1.0)
@@ -520,19 +509,20 @@ def classify_torque_traps(
             if not (left_is_stable and right_is_stable):
                 continue
 
-        root_radius_cm.append(root_cm)
+        root_radius_rg.append(root_rg)
         crossing_kind.append(kind)
 
-    if not root_radius_cm:
+    if not root_radius_rg:
         return _empty_torque_traps()
 
-    root_radius_cm_array = np.asarray(root_radius_cm, dtype=float)
+    root_radius_rg_array = np.asarray(root_radius_rg, dtype=float)
     crossing_kind_array = np.asarray(crossing_kind, dtype=int)
+
     return TorqueTrapRadii(
-        stable_radius_cm=root_radius_cm_array[
+        stable_radius_rg=root_radius_rg_array[
             (crossing_kind_array == STABLE_TRAP_KIND)
         ],
-        anti_trap_radius_cm=root_radius_cm_array[
+        anti_trap_radius_rg=root_radius_rg_array[
             (crossing_kind_array == ANTI_TRAP_KIND)
         ],
     )
@@ -541,6 +531,7 @@ def classify_torque_traps(
 def find_traps_locations(
     torque_profile: TorqueProfile,
 ) -> tuple[np.ndarray, np.ndarray]:
+
     valid_radius = (
         np.isfinite(torque_profile.radius_cm)
         & np.isfinite(torque_profile.radius_rg)
@@ -549,18 +540,10 @@ def find_traps_locations(
     if not np.any(valid_radius):
         return np.array([], dtype=float), np.array([], dtype=float)
 
-    gravitational_radius_cm = float(
-        np.median(
-            torque_profile.radius_cm[valid_radius]
-            / torque_profile.radius_rg[valid_radius]
-        )
-    )
-
     trap_radii = classify_torque_traps(
-        torque_profile.radius_cm,
-        torque_profile.gamma_i_si
-        + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
-        gravitational_radius_cm=gravitational_radius_cm,
+        torque_profile.radius_rg,
+        torque_profile.gamma_type_i_si
+        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
         stable_region_rg=DEFAULT_TRAP_STABLE_REGION_RG,
     )
-    return trap_radii.stable_radius_cm, trap_radii.anti_trap_radius_cm
+    return trap_radii.stable_radius_rg, trap_radii.anti_trap_radius_rg

@@ -12,7 +12,7 @@ from src.disk_quantity.disk_plot_utilts import (
 
 DISK_OUTPUT_DIR = Path("figs")
 DISK_ALPHA = 0.1
-SMBH_MASSES = (1e3, 1e4, 1e5, 1e6, 1e7)
+SMBH_MASSES = (1e4, 1e6, 1e7, 1e8)
 MIGRATOR_MASS_MSUN = 10.0
 
 plot_agn_disk_parameter_profiles(

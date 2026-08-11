@@ -25,17 +25,18 @@ PAGN_B = 0
 PAGN_PROFILE_N_RESOLUTION = 1000
 PAGN_TORQUE_N_RESOLUTION = 30000
 TORQUE_MAX_RADIUS_RG = 1.0e7
+
 TORQUE_SMOOTHING = 1.0
-TORQUE_PLOT_LOG_SMOOTHING_PER_POINT = 0.03
+TORQUE_PLOT_LOG_SMOOTHING = 0.5
 TORQUE_PLOT_MIN_SMOOTH_POINTS = 12
 TORQUE_PLOT_MIN_BRANCH_WIDTH_RG = 100.0
-TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.02
+TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.005
 
 plt.rcParams["xtick.labelsize"] = 20
 plt.rcParams["ytick.labelsize"] = 20
 
 
-COLORS_SERIS = ["#1f77b4", "#BE9A62", "#2A7F62", "#2f66a3", "#A89A11", "#3A7F11"]
+COLORS_SERIS = ["#1f77b4", "#BE9A62", "#2A7F62", "#2B56a3", "#A89A11", "#3A7F11"]
 
 
 def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
@@ -153,7 +154,7 @@ def _disk_torque_payload(
         smoothing=TORQUE_SMOOTHING,
         params=params,
     )
-    trap_radii_cm, anti_trap_radii_cm = find_traps_locations(torque_profile)
+    trap_radii_rg, anti_trap_radii_rg = find_traps_locations(torque_profile)
 
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
 
@@ -175,22 +176,16 @@ def _disk_torque_payload(
         "disk_model": disk_profile.model_name,
         "r_over_rg": torque_radius_over_rg,
         "r_out_over_rg": r_out_over_rg,
-        "gamma_i_si": np.asarray(torque_profile.gamma_i_si, dtype=float),
+        "gamma_i_si": np.asarray(torque_profile.gamma_type_i_si, dtype=float),
         "gamma_th_si": np.asarray(torque_profile.gamma_th_si, dtype=float),
         "gamma_i_th_si": np.asarray(
-            torque_profile.gamma_i_si
-            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            torque_profile.gamma_type_i_si
+            + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
             dtype=float,
         ),
         "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-        "trap_radii_over_rg": (
-            np.asarray(trap_radii_cm, dtype=float)
-            / disk_profile.gravitational_radius_cm
-        ),
-        "anti_trap_radii_over_rg": (
-            np.asarray(anti_trap_radii_cm, dtype=float)
-            / disk_profile.gravitational_radius_cm
-        ),
+        "trap_radii_over_rg": (np.asarray(trap_radii_rg, dtype=float)),
+        "anti_trap_radii_over_rg": (np.asarray(anti_trap_radii_rg, dtype=float)),
     }
 
 
@@ -258,7 +253,7 @@ def _smooth_torque_magnitude_for_plot(
         log_radius,
         log_torque,
         k=3,
-        s=TORQUE_PLOT_LOG_SMOOTHING_PER_POINT * radius_rg.size,
+        s=TORQUE_PLOT_LOG_SMOOTHING,
         ext=0,
     )
     return 10.0 ** np.asarray(spline(log_radius), dtype=float)
@@ -269,8 +264,10 @@ def _torque_magnitude_plot_values(
     torque_magnitude: np.ndarray,
     branch_mask: np.ndarray,
 ) -> np.ndarray:
+
     plot_values = np.full_like(torque_magnitude, np.nan, dtype=float)
     branch_indices = np.flatnonzero(branch_mask)
+    # split the branch based on it's diff
     split_indices = np.where(np.diff(branch_indices) > 1)[0] + 1
     for indices in np.split(branch_indices, split_indices):
         if indices.size == 0:
@@ -284,14 +281,18 @@ def _torque_magnitude_plot_values(
         if branch_width_rg < min_branch_width_rg:
             continue
         edge_width_rg = 0.5 * min_branch_width_rg
+
+        # select keep values
         keep = np.ones(indices.size, dtype=bool)
         if indices[0] > 0:
             keep &= branch_radius_rg - branch_radius_rg[0] >= edge_width_rg
         if indices[-1] < torque_magnitude.size - 1:
             keep &= branch_radius_rg[-1] - branch_radius_rg >= edge_width_rg
+
         plot_indices = indices[keep]
         if plot_indices.size == 0:
             continue
+
         plot_values[plot_indices] = _smooth_torque_magnitude_for_plot(
             radius_rg[plot_indices],
             torque_magnitude[plot_indices],
@@ -537,7 +538,6 @@ def _plot_signed_torque_component(
             has_outward = True
 
         if np.any(inward_mask):
-
             inward_values = _torque_magnitude_plot_values(
                 radius_rg,
                 torque_magnitude,
@@ -560,8 +560,9 @@ def _plot_signed_torque_component(
         mass_handles.append(Line2D([0], [0], color=color, lw=3.2, label=mass_label))
 
         r_out_over_rg = float(torque_profile["r_out_over_rg"])
+
         if np.isfinite(r_out_over_rg) and r_out_over_rg > 0.0:
-            ax.axvline(r_out_over_rg, color=color, lw=1.7, ls=":", alpha=0.55)
+            ax.axvline(r_out_over_rg, color=color, lw=3.0, ls=":", alpha=0.8)
 
         if show_traps:
             trap_radii_rg = np.asarray(
@@ -573,15 +574,16 @@ def _plot_signed_torque_component(
             for radius in trap_radii_rg[
                 np.isfinite(trap_radii_rg) & (trap_radii_rg > 0.0)
             ]:
-                ax.axvline(radius, color=color, lw=1.4, ls="--", alpha=0.45)
+                ax.axvline(radius, color=color, lw=2.5, ls="--", alpha=0.45)
                 has_traps = True
+
             for radius in anti_trap_radii_rg[
                 np.isfinite(anti_trap_radii_rg) & (anti_trap_radii_rg > 0.0)
             ]:
                 ax.axvline(
                     radius,
                     color=color,
-                    lw=1.4,
+                    lw=2.5,
                     ls=(0, (4, 1, 1, 1)),
                     alpha=0.45,
                 )
@@ -670,7 +672,7 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_ii_si",
         ylabel=r"$|\Gamma_{\mathrm{II}}|\;(\mathrm{N\,m})$",
         stem="type_ii_torque_profiles",
-        show_traps=False,
+        show_traps=True,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -679,7 +681,7 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_i_si",
         ylabel=r"$|\Gamma_{\mathrm{I}}|\;(\mathrm{N\,m})$",
         stem="type_i_torque_profiles",
-        show_traps=False,
+        show_traps=True,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -688,5 +690,5 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_th_si",
         ylabel=r"$|\Gamma_{\mathrm{th}}|\;(\mathrm{N\,m})$",
         stem="thermal_torque_profiles",
-        show_traps=False,
+        show_traps=True,
     )

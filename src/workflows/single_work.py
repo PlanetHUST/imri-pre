@@ -617,7 +617,7 @@ class IMRISingleWorkflow:
     ) -> FloatArray:
         """Compose the caller-selected migration torque and convert SI to CGS."""
         torque_si = np.asarray(
-            torque_profile.gamma_i_si
+            torque_profile.gamma_type_i_si
             + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
             dtype=float,
         )
@@ -639,12 +639,9 @@ class IMRISingleWorkflow:
                 * local_aspect_ratio**2
                 * smbh_mass_g**2
             )
-            type_ii_mask = (
-                np.isfinite(type_ii_gap_parameter_dimensionless)
-                & (
-                    type_ii_gap_parameter_dimensionless
-                    > disk_migration.TYPE_II_GAP_PARAMETER_THRESHOLD
-                )
+            type_ii_mask = np.isfinite(type_ii_gap_parameter_dimensionless) & (
+                type_ii_gap_parameter_dimensionless
+                > disk_migration.TYPE_II_GAP_PARAMETER_THRESHOLD
             )
             torque_si = torque_si + np.where(
                 type_ii_mask,

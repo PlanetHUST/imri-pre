@@ -239,7 +239,7 @@ def build_pagn_disk_profile(
     smbh_mass_msun: float,
     alpha: float,
     *,
-    model: str = "sriko",
+    model: str = "sirko",
     n_resolution: int = 1000,
     eddington_ratio: float = 0.1,
     b: int = 0,
