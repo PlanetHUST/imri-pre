@@ -5,7 +5,10 @@ import time
 from pathlib import Path
 from typing import Sequence
 
+from physical_process.disk_migration import GAP_OPENING_CONDITIONS
+
 from .config import (
+    DEFAULT_GAP_OPENING_CONDITION,
     IMRI_GW_ECCENTRICITY,
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
@@ -110,6 +113,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="force embedded compact objects to use type-I migration",
     )
     parser.add_argument(
+        "--gap-open-condition",
+        choices=GAP_OPENING_CONDITIONS,
+        default=DEFAULT_GAP_OPENING_CONDITION,
+        help="gap-opening condition used to select the Type-II torque branch",
+    )
+    parser.add_argument(
         "--lisa-min-gw-frequency-hz",
         type=float,
         default=IMRI_LISA_MIN_GW_FREQUENCY_HZ,
@@ -198,6 +207,7 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         initial_stellar_density_gamma=arguments.initial_stellar_density_gamma,
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
         consider_type_ii_migration=not arguments.no_type_ii_migration,
+        gap_opening_condition=arguments.gap_open_condition,
         lisa_min_gw_frequency_hz=arguments.lisa_min_gw_frequency_hz,
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
         max_gw_time_myr=arguments.max_gw_time_myr,

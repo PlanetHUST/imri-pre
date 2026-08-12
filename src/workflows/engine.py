@@ -21,6 +21,10 @@ from .models import DiskProfiles
 from .runtime import vprint
 
 
+class TorqueProfileError(RuntimeError):
+    """Raised when the required pAGN torque profile cannot be constructed."""
+
+
 class IMRIDynEngine:
     """Shared IMRI engine resources used by single-realization workflows."""
 
@@ -107,10 +111,10 @@ class IMRIDynEngine:
         disk_data: DiskProfiles,
         smbh_mass_msun: float,
         migrator_mass_msun: float,
-    ) -> TorqueProfile | None:
-        """Return a cached mass-dependent pAGN torque profile when available."""
+    ) -> TorqueProfile:
+        """Return a cached mass-dependent pAGN torque profile."""
         if "torque_disk" not in disk_data:
-            return None
+            raise TorqueProfileError("cached disk has no pAGN torque model")
 
         torque_alpha = (
             float(disk_data["torque_alpha"]) if "torque_alpha" in disk_data else 0.01
@@ -126,13 +130,13 @@ class IMRIDynEngine:
                 self.torque_profile_cache[cache_key] = compute_torque_profile(
                     disk_data["torque_disk"],
                     migrator_mass_msun=migrator_mass_msun,
+                    max_radius_rg=None,
                     params=params,
                 )
             except Exception as exc:
-                vprint(
-                    "  torque profile unavailable for "
+                raise TorqueProfileError(
+                    "torque profile construction failed for "
                     f"smbh_mass_msun={smbh_mass_msun:.3e}, "
                     f"migrator_mass_msun={migrator_mass_msun:.3e}: {exc}"
-                )
-                return None
+                ) from exc
         return self.torque_profile_cache[cache_key]

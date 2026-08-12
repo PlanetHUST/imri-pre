@@ -6,6 +6,8 @@ from typing import Sequence
 import numpy as np
 import numpy.typing as npt
 
+from physical_process.disk_migration import GAP_OPENING_CONDITIONS
+
 FloatArray = npt.NDArray[np.float64]
 
 SECONDS_PER_MINUTE = 60.0
@@ -28,6 +30,7 @@ IMRI_SNR_THRESHOLD = 20.0
 IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
+DEFAULT_GAP_OPENING_CONDITION = "kii"
 
 
 class IMRIDynConfig:
@@ -73,6 +76,7 @@ class IMRIDynConfig:
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
         nsc_radius_reference_mass_msun: float = 3.6e6,
+        gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
     ) -> None:
         if len(smbh_masses_msun) == 0 or len(nsc_masses_msun) == 0:
             raise ValueError("SMBH and NSC mass vectors must not be empty")
@@ -112,6 +116,10 @@ class IMRIDynConfig:
             or cosmic_merge_radius_factor <= 0.0
         ):
             raise ValueError("cosmic merger radius factor must be positive")
+        if gap_opening_condition not in GAP_OPENING_CONDITIONS:
+            raise ValueError(
+                f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
+            )
 
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
@@ -127,6 +135,7 @@ class IMRIDynConfig:
 
         self.use_disk_inner_radius = use_disk_inner_radius
         self.consider_type_ii_migration = consider_type_ii_migration
+        self.gap_opening_condition = gap_opening_condition
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr

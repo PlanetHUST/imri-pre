@@ -10,7 +10,12 @@ import physical_process.gw_frequency_radius as gw_helpers
 from .config import IMRIDynConfig, SECONDS_PER_MINUTE
 from .engine import IMRIDynEngine
 from .models import IMRIDynAveragedResult, IMRIDynSingleResult
-from .outputs import save_events, save_metadata, save_results
+from .outputs import (
+    save_events,
+    save_metadata,
+    save_migration_diagnostics,
+    save_results,
+)
 from .single_work import IMRISingleWorkflow
 
 
@@ -49,6 +54,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
+    print(f"gap_opening_condition: {config.gap_opening_condition}")
     print(f"Redshift: {config.redshift:.3e}")
     source_lisa_min_hz = gw_helpers.source_frame_gw_frequency_hz(
         config.lisa_min_gw_frequency_hz,
@@ -110,6 +116,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
                     repeat_index,
                 )
                 _print_result_summary(result)
+                save_migration_diagnostics(result, config.output_dir, config)
                 if config.print_debug_results:
                     debug_print_result(result)
                 repeat_results.append(result)
@@ -162,6 +169,14 @@ def _print_result_summary(result: IMRIDynSingleResult) -> None:
     print(f"  no-IMRI objects       : {result.no_imri_count:.3e}")
     print(f"  detectable IMRIs      : {result.detectable_imri_count:.3e}")
     print(f"  non-detectable IMRIs  : {result.no_detectable_imri_count:.3e}")
+    print(
+        "  Torque migration      : "
+        f"evaluated={result.torque_migration_evaluated_count}, "
+        f"finite={result.finite_torque_migration_count}, "
+        f"trap_bound={result.trap_bound_migration_count}, "
+        f"errors={result.torque_migration_error_count}"
+    )
+    print(f"  Trap-bound mass       : {result.trap_bound_mass_msun:.6e} Msun")
     print(f"  IMRI candidate rate   : {result.imri_rate_per_myr:.3e} /Myr")
     print(f"  detectable IMRI rate  : {result.detectable_imri_rate_per_myr:.3e} /Myr")
     print(

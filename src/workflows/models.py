@@ -109,6 +109,8 @@ class IMRIEventRecord(TypedDict):
     gas_elapsed_time_myr: float
     gas_final_time_myr: float
     migration_time_to_entry_myr: float
+    migration_status: str
+    blocking_radius_rg: float | None
     gw_time_to_entry_myr: float
     gw_time_after_gas_myr: float
     detection_time_myr: float
@@ -120,6 +122,14 @@ class IMRIEventRecord(TypedDict):
     snr_proxy: float
     event_rate_reason: str
     detect_rate_reason: str
+
+
+class TorqueErrorRecord(TypedDict):
+    object_index: int
+    mass_msun: float
+    r_ini_rg: float
+    r_entry_rg: float
+    error: str
 
 
 class IMRIDynSingleResult:
@@ -149,11 +159,17 @@ class IMRIDynSingleResult:
         self.detectable_imri_mass_msun = 0.0
         self.detectable_imri_rate_per_myr = 0.0
         self.detectable_imri_mass_rate_msun_per_myr = 0.0
+        self.torque_migration_evaluated_count = 0
+        self.finite_torque_migration_count = 0
+        self.trap_bound_migration_count = 0
+        self.torque_migration_error_count = 0
+        self.trap_bound_mass_msun = 0.0
         self.disk_inner_radius_cm: float | None = None
         self.disk_outer_radius_cm: float | None = None
         self.nsc_radius_cm: float | None = None
         self.mean_relaxation_time_myr_geo = np.nan
         self.imri_events: list[IMRIEventRecord] = []
+        self.torque_errors: list[TorqueErrorRecord] = []
         self.intermediate_initial_population: IntermediatePopulation | None = None
         self.intermediate_disk_crossing_population: IntermediatePopulation | None = None
 
@@ -182,6 +198,13 @@ class IMRIDynSingleResult:
             "detectable_imri_mass_rate_msun_per_myr": (
                 self.detectable_imri_mass_rate_msun_per_myr
             ),
+            "torque_migration_evaluated_count": (
+                self.torque_migration_evaluated_count
+            ),
+            "finite_torque_migration_count": self.finite_torque_migration_count,
+            "trap_bound_migration_count": self.trap_bound_migration_count,
+            "torque_migration_error_count": self.torque_migration_error_count,
+            "trap_bound_mass_msun": self.trap_bound_mass_msun,
             "disk_inner_radius_cm": self.disk_inner_radius_cm,
             "disk_outer_radius_cm": self.disk_outer_radius_cm,
             "nsc_radius_cm": self.nsc_radius_cm,
@@ -256,6 +279,21 @@ class IMRIDynAveragedResult:
             ),
             "no_detectable_imri_count_mean": float(
                 np.mean(values("no_detectable_imri_count"))
+            ),
+            "torque_migration_evaluated_count_mean": float(
+                np.mean(values("torque_migration_evaluated_count"))
+            ),
+            "finite_torque_migration_count_mean": float(
+                np.mean(values("finite_torque_migration_count"))
+            ),
+            "trap_bound_migration_count_mean": float(
+                np.mean(values("trap_bound_migration_count"))
+            ),
+            "torque_migration_error_count_mean": float(
+                np.mean(values("torque_migration_error_count"))
+            ),
+            "trap_bound_mass_mean_msun": float(
+                np.mean(values("trap_bound_mass_msun"))
             ),
             "mean_relaxation_time_geo_mean_myr": float(
                 np.mean(values("mean_relaxation_time_myr_geo"))

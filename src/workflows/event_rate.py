@@ -39,10 +39,7 @@ def _safe_migration_time_myr(
     start_radius_cm: float,
     target_radius_cm: float,
 ) -> float:
-    try:
-        value = float(migration_time_myr(start_radius_cm, target_radius_cm))
-    except (ArithmeticError, ValueError, OverflowError):
-        return np.inf
+    value = float(migration_time_myr(start_radius_cm, target_radius_cm))
     return value if np.isfinite(value) and value >= 0.0 else np.inf
 
 
@@ -110,7 +107,7 @@ def solve_gas_final_radius_cm(
             0.0,
             total_migration_time_myr,
             total_gw_time_myr,
-            "migration_unavailable",
+            "migration_trap_bound",
         )
 
     # gw dominates at start
@@ -159,7 +156,7 @@ def solve_gas_final_radius_cm(
         )
 
         if not np.isfinite(evloved_embed_myr):
-            stop_reason = "migration_unavailable"
+            stop_reason = "migration_trap_bound"
             break
 
         if evloved_embed_myr > available_gas_time_myr:
@@ -168,6 +165,10 @@ def solve_gas_final_radius_cm(
 
         r_gas_fin_cm = float(radius_sample_cm)
         gas_elapsed_time_myr = evloved_embed_myr
+
+        if not np.isfinite(remaining_migration_myr):
+            stop_reason = "migration_trap_bound"
+            break
 
         if remaining_migration_myr >= remaining_gw_myr:
             stop_reason = "gw_dominates_after_gas"

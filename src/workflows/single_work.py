@@ -14,10 +14,9 @@ from disk_quantity.migration_torque import TorqueProfile, torque_si_to_cgs
 
 from .config import IMRIDynConfig, YEARS_PER_MYR
 from .detect_rate import classify_detectability
-from .engine import IMRIDynEngine
+from .engine import IMRIDynEngine, TorqueProfileError
 from .event_rate import BH_ORIGIN_MIGRATION_FORMED, classify_event_rate
 from .models import (
-    BoolArray,
     DampingResult,
     DampingTask,
     DiskProfiles,
@@ -26,7 +25,7 @@ from .models import (
     IMRIEventRecord,
     IMRIDynSingleResult,
     IntermediatePopulation,
-    StellarPopulation,
+    TorqueErrorRecord,
 )
 from .redshift_evolve import RedshiftEvolution
 from .runtime import vprint
@@ -114,95 +113,6 @@ class IMRISingleWorkflow:
         self.config: IMRIDynConfig = engine.config
         self.duty_cycle_myr = engine.duty_cycle_myr
 
-    def select_disk_crossing_objects(
-        self,
-        semi_major_axis_cm: FloatArray,
-        eccentricity: FloatArray,
-        cos_omega: FloatArray,
-        disk_inner_radius_cm: float,
-        disk_outer_radius_cm: float,
-    ) -> tuple[BoolArray, FloatArray, FloatArray]:
-        """Select disk-crossing orbits and return node radii [cm]."""
-        inner_node_radius_cm = (
-            semi_major_axis_cm
-            * (1.0 - eccentricity**2)
-            / (1.0 + eccentricity * cos_omega)
-        )
-        outer_node_radius_cm = (
-            semi_major_axis_cm
-            * (1.0 - eccentricity**2)
-            / (1.0 - eccentricity * cos_omega)
-        )
-        if self.config.use_disk_inner_radius:
-            mask = (inner_node_radius_cm < disk_outer_radius_cm) & (
-                outer_node_radius_cm > disk_inner_radius_cm
-            )
-        else:
-            mask = inner_node_radius_cm < disk_outer_radius_cm
-        return mask, inner_node_radius_cm, outer_node_radius_cm
-
-    def sample_full_population(
-        self, m_smbh_msun: float, m_nsc_msun: float
-    ) -> StellarPopulation:
-        """Sample progenitor masses, lifetimes, and orbital elements."""
-
-        mass_msun, lifetime_yr = stellar_sampling.sample_efficient(
-            m_nsc_msun, Z=self.config.metallicity
-        )
-        vprint(
-            "sampled progenitor mass range is "
-            f"{mass_msun.min():.3e} to {mass_msun.max():.3e} Msun"
-        )
-
-        nsc_radius_cm = self.engine.estimate_nsc_radius_cm(m_nsc_msun)
-
-        (
-            semi_major_axis_cm,
-            eccentricity,
-            inclination_rad,
-            cos_omega,
-        ) = nsc_orbital.initial_star(
-            star_count=len(mass_msun),
-            smbh_mass_msun=m_smbh_msun,
-            max_radius_cm=nsc_radius_cm,
-            gamma=self.config.initial_stellar_density_gamma,
-        )
-
-        return {
-            "mass_msun": np.asarray(mass_msun, dtype=float),
-            "formation_time_myr": np.asarray(
-                lifetime_yr / YEARS_PER_MYR,
-                dtype=float,
-            ),
-            "semi_major_axis_cm": np.asarray(semi_major_axis_cm, dtype=float),
-            "eccentricity": np.asarray(eccentricity, dtype=float),
-            "inclination_rad": np.asarray(inclination_rad, dtype=float),
-            "cos_omega": np.asarray(cos_omega, dtype=float),
-            "nsc_radius_cm": nsc_radius_cm,
-        }
-
-    def build_damping_tasks(
-        self, geo_pool: GeometricPopulation, flags: agn.damp_flag
-    ) -> list[DampingTask]:
-        """Build damping tasks for the initial disk-crossing population."""
-        tasks: list[DampingTask] = []
-        for index in range(len(geo_pool["mass_msun"])):
-            tasks.append(
-                {
-                    "task_kind": "primary",
-                    "idx": index,
-                    "mass_g": float(geo_pool["mass_msun"][index] * const.msun),
-                    "semi_major_axis_cm": float(geo_pool["semi_major_axis_cm"][index]),
-                    "eccentricity": float(geo_pool["eccentricity"][index]),
-                    "inclination_rad": float(geo_pool["inclination_rad"][index]),
-                    "cos_omega": float(geo_pool["cos_omega"][index]),
-                    "formation_time_myr": float(geo_pool["formation_time_myr"][index]),
-                    "state_time_s": 0.0,
-                    "type_flag": int(flags.type_flag[index]),
-                }
-            )
-        return tasks
-
     def run_single_simulation(
         self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int
     ) -> IMRIDynSingleResult:
@@ -226,16 +136,39 @@ class IMRISingleWorkflow:
             f"{disk_data['outer_radius_cm']/const.parsec:.3e} pc"
         )
 
-        population = self.sample_full_population(m_smbh_msun, m_nsc_msun)
-        result.nsc_radius_cm = population["nsc_radius_cm"]
-        result.total_sampled_objects = len(population["mass_msun"])
-        mask, _, _ = self.select_disk_crossing_objects(
-            population["semi_major_axis_cm"],
-            population["eccentricity"],
-            population["cos_omega"],
-            disk_data["inner_radius_cm"],
-            disk_data["outer_radius_cm"],
+        # Sample the full nuclear star cluster population.
+        mass_msun, lifetime_yr = stellar_sampling.sample_efficient(
+            m_nsc_msun,
+            Z=self.config.metallicity,
         )
+        vprint(
+            "sampled progenitor mass range is "
+            f"{mass_msun.min():.3e} to {mass_msun.max():.3e} Msun"
+        )
+        result.nsc_radius_cm = self.engine.estimate_nsc_radius_cm(m_nsc_msun)
+        (
+            semi_major_axis_cm,
+            eccentricity,
+            inclination_rad,
+            cos_omega,
+        ) = nsc_orbital.initial_star(
+            star_count=len(mass_msun),
+            smbh_mass_msun=m_smbh_msun,
+            max_radius_cm=result.nsc_radius_cm,
+            gamma=self.config.initial_stellar_density_gamma,
+        )
+        population = {
+            "mass_msun": np.asarray(mass_msun, dtype=float),
+            "formation_time_myr": np.asarray(
+                lifetime_yr / YEARS_PER_MYR,
+                dtype=float,
+            ),
+            "semi_major_axis_cm": np.asarray(semi_major_axis_cm, dtype=float),
+            "eccentricity": np.asarray(eccentricity, dtype=float),
+            "inclination_rad": np.asarray(inclination_rad, dtype=float),
+            "cos_omega": np.asarray(cos_omega, dtype=float),
+        }
+        result.total_sampled_objects = len(population["mass_msun"])
         _vprint_population_ranges(
             "initial population",
             population["mass_msun"],
@@ -252,6 +185,29 @@ class IMRISingleWorkflow:
             population["inclination_rad"],
         )
 
+        # Keep objects whose orbital nodes cross the AGN disk.
+        inner_node_radius_cm = (
+            population["semi_major_axis_cm"]
+            * (1.0 - population["eccentricity"] ** 2)
+            / (
+                1.0
+                + population["eccentricity"] * population["cos_omega"]
+            )
+        )
+        if self.config.use_disk_inner_radius:
+            outer_node_radius_cm = (
+                population["semi_major_axis_cm"]
+                * (1.0 - population["eccentricity"] ** 2)
+                / (
+                    1.0
+                    - population["eccentricity"] * population["cos_omega"]
+                )
+            )
+            mask = (inner_node_radius_cm < disk_data["outer_radius_cm"]) & (
+                outer_node_radius_cm > disk_data["inner_radius_cm"]
+            )
+        else:
+            mask = inner_node_radius_cm < disk_data["outer_radius_cm"]
         selected_indices = np.where(mask)[0]
         result.disk_crossing_objects = len(selected_indices)
         result.f_geo = (
@@ -311,11 +267,30 @@ class IMRISingleWorkflow:
             f"{result.mean_relaxation_time_myr_geo:.3e} Myr"
         )
 
+        # Damp the selected orbits, then classify their IMRI outcomes.
+        flags = agn.damp_flag(len(selected_indices))
+        damping_tasks: list[DampingTask] = [
+            {
+                "task_kind": "primary",
+                "idx": index,
+                "mass_g": float(geo_pool["mass_msun"][index] * const.msun),
+                "semi_major_axis_cm": float(
+                    geo_pool["semi_major_axis_cm"][index]
+                ),
+                "eccentricity": float(geo_pool["eccentricity"][index]),
+                "inclination_rad": float(geo_pool["inclination_rad"][index]),
+                "cos_omega": float(geo_pool["cos_omega"][index]),
+                "formation_time_myr": float(
+                    geo_pool["formation_time_myr"][index]
+                ),
+                "state_time_s": 0.0,
+                "type_flag": int(flags.type_flag[index]),
+            }
+            for index in range(len(selected_indices))
+        ]
         damping_results = sorted(
             run_damping_tasks_parallel(
-                self.build_damping_tasks(
-                    geo_pool, agn.damp_flag(len(selected_indices))
-                ),
+                damping_tasks,
                 agn_properties,
                 disk_data["radius_cm"],
                 disk_data["surface_density_g_cm2"],
@@ -350,15 +325,52 @@ class IMRISingleWorkflow:
                 result.outside_or_failed_count += 1
                 continue
 
-            event = self._imri_event_record(
-                result,
-                agn_properties,
-                disk_data,
-                damping_result,
-                rg_cm,
-            )
+            result.torque_migration_evaluated_count += 1
+            try:
+                event = self._imri_event_record(
+                    result,
+                    agn_properties,
+                    disk_data,
+                    damping_result,
+                    rg_cm,
+                )
+            except (disk_migration.TorqueMigrationError, TorqueProfileError) as exc:
+                r_entry_cm = gw_helpers.lisa_entry_radius_cm(
+                    result.m_smbh_msun,
+                    damping_result["mass_msun"],
+                    self.config.lisa_min_gw_frequency_hz,
+                    self.config.redshift,
+                )
+                torque_error: TorqueErrorRecord = {
+                    "object_index": damping_result["idx"],
+                    "mass_msun": damping_result["mass_msun"],
+                    "r_ini_rg": damping_result["final_semi_major_axis_cm"] / rg_cm,
+                    "r_entry_rg": r_entry_cm / rg_cm,
+                    "error": str(exc),
+                }
+                result.torque_errors.append(torque_error)
+                result.torque_migration_error_count += 1
+                vprint(
+                    "Torque migration error: "
+                    f"object_index={damping_result['idx']}, "
+                    f"mass_msun={damping_result['mass_msun']:.6e}, error={exc}"
+                )
+                continue
 
             result.imri_events.append(event)
+            if event["migration_status"] == "trap_bound":
+                result.trap_bound_migration_count += 1
+                result.trap_bound_mass_msun += event["mass_msun"]
+                vprint(
+                    "Trap-bound migration: "
+                    f"object_index={event['object_index']}, "
+                    f"mass_msun={event['mass_msun']:.6e}, "
+                    f"r_ini_rg={event['r_ini_rg']:.6e}, "
+                    f"r_entry_rg={event['r_entry_rg']:.6e}, "
+                    f"blocking_radius_rg={event['blocking_radius_rg']}"
+                )
+            else:
+                result.finite_torque_migration_count += 1
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
 
@@ -412,23 +424,33 @@ class IMRISingleWorkflow:
         )
         print(f"r_ini is {r_ini_cm:.3e} cm, r_entry is {r_entry_cm:.3e} cm")
 
+        migration_outcomes: dict[
+            tuple[float, float], disk_migration.TorqueMigrationOutcome
+        ] = {}
+
+        def migration_outcome_call(
+            start_radius_cm: float, target_radius_cm: float
+        ) -> disk_migration.TorqueMigrationOutcome:
+            key = (float(start_radius_cm), float(target_radius_cm))
+            if key not in migration_outcomes:
+                migration_outcomes[key] = self.torque_migration_outcome_to_radius(
+                    agn_properties,
+                    disk_data,
+                    damping_result["mass_g"],
+                    start_radius_cm,
+                    target_radius_cm,
+                )
+            return migration_outcomes[key]
+
         def migration_time_myr_call(
             start_radius_cm: float, target_radius_cm: float
         ) -> float:
-            return self.torque_migration_time_to_radius_myr(
-                agn_properties,
-                disk_data,
-                damping_result["mass_g"],
+            return migration_outcome_call(
                 start_radius_cm,
                 target_radius_cm,
-            )
-            # return self.semi_analytic_migration_time_to_radius_myr(
-            #     agn_properties,
-            #     disk_data,
-            #     migrator_mass_msun * const.msun,
-            #     start_radius_cm,
-            #     target_radius_cm,
-            # )
+            ).time_myr
+
+        initial_migration_outcome = migration_outcome_call(r_ini_cm, r_entry_cm)
 
         def gw_time_to_entry_myr_call(radius_cm: float) -> float:
             return gw_helpers.peters_time_to_lisa_band_myr(
@@ -549,6 +571,12 @@ class IMRISingleWorkflow:
             "gas_elapsed_time_myr": event_decision.gas_elapsed_time_myr,
             "gas_final_time_myr": event_decision.gas_final_time_myr,
             "migration_time_to_entry_myr": (event_decision.migration_time_to_entry_myr),
+            "migration_status": initial_migration_outcome.status,
+            "blocking_radius_rg": (
+                initial_migration_outcome.blocking_radius_cm / rg_cm
+                if initial_migration_outcome.blocking_radius_cm is not None
+                else None
+            ),
             "gw_time_to_entry_myr": event_decision.gw_time_to_entry_myr,
             "gw_time_after_gas_myr": detect_decision.gw_time_after_gas_myr,
             "detection_time_myr": detect_decision.detection_time_myr,
@@ -562,19 +590,25 @@ class IMRISingleWorkflow:
             "detect_rate_reason": detect_decision.detect_rate_reason,
         }
 
-    def torque_migration_time_to_radius_myr(
+    def torque_migration_outcome_to_radius(
         self,
         agn_properties: agn.AGN_properties,
         disk_data: DiskProfiles,
         mass_g: float,
         start_radius_cm: float,
         target_radius_cm: float,
-    ) -> float:
-        """Integrate the cached pAGN torque profile from start to target radius."""
-        if not np.isfinite(target_radius_cm) or start_radius_cm <= 0.0:
-            return np.inf
+    ) -> disk_migration.TorqueMigrationOutcome:
+        """Return the signed torque migration outcome for one radial path."""
+
         if start_radius_cm <= target_radius_cm:
-            return 0.0
+            return disk_migration.torque_migration_outcome(
+                np.asarray([], dtype=float),
+                np.asarray([], dtype=float),
+                mass_g,
+                start_radius_cm,
+                target_radius_cm,
+                agn_properties.smbh_mass_msun,
+            )
 
         migrator_mass_msun = mass_g / const.msun
         torque_profile = self.engine.get_torque_profile(
@@ -583,15 +617,6 @@ class IMRISingleWorkflow:
             migrator_mass_msun,
         )
 
-        if torque_profile is None:
-            return self.semi_analytic_migration_time_to_radius_myr(
-                agn_properties,
-                disk_data,
-                mass_g,
-                start_radius_cm,
-                target_radius_cm,
-            )
-
         torque_cgs = self._migration_torque_cgs(
             torque_profile,
             agn_properties,
@@ -599,7 +624,7 @@ class IMRISingleWorkflow:
             mass_g,
         )
 
-        return disk_migration.migration_time_from_torque(
+        return disk_migration.torque_migration_outcome(
             np.asarray(torque_profile.radius_cm, dtype=float),
             torque_cgs,
             mass_g,
@@ -616,65 +641,37 @@ class IMRISingleWorkflow:
         mass_g: float,
     ) -> FloatArray:
         """Compose the caller-selected migration torque and convert SI to CGS."""
-        torque_si = np.asarray(
+        type_i_thermal_torque_si = np.asarray(
             torque_profile.gamma_type_i_si
-            + torque_profile.gap_attenuation_factor * torque_profile.gamma_th_si,
+            + (1.0 - torque_profile.gap_attenuation_factor)
+            * torque_profile.gamma_th_si,
             dtype=float,
         )
-        if self.config.consider_type_ii_migration:
-            torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
-            disk_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
-            aspect_ratio = np.asarray(disk_data["aspect_ratio"], dtype=float)
-            order = np.argsort(disk_radius_cm)
-            disk_radius_cm = disk_radius_cm[order]
-            aspect_ratio = aspect_ratio[order]
-            local_aspect_ratio = np.interp(
-                torque_radius_cm,
-                disk_radius_cm,
-                aspect_ratio,
-            )
-            smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
-            type_ii_gap_parameter_dimensionless = mass_g**2 / (
-                disk_migration.DISK_VISCOSITY_ALPHA
-                * local_aspect_ratio**2
-                * smbh_mass_g**2
-            )
-            type_ii_mask = np.isfinite(type_ii_gap_parameter_dimensionless) & (
-                type_ii_gap_parameter_dimensionless
-                > disk_migration.TYPE_II_GAP_PARAMETER_THRESHOLD
-            )
-            torque_si = torque_si + np.where(
-                type_ii_mask,
-                np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-                0.0,
-            )
-        return torque_si_to_cgs(torque_si)
+        if not self.config.consider_type_ii_migration:
+            return torque_si_to_cgs(type_i_thermal_torque_si)
 
-    def semi_analytic_migration_time_to_radius_myr(
-        self,
-        agn_properties: agn.AGN_properties,
-        disk_data: DiskProfiles,
-        mass_g: float,
-        start_radius_cm: float,
-        target_radius_cm: float,
-    ) -> float:
-        """Approximate migration time [Myr] using the semi-analytic radial integral."""
-        if not np.isfinite(target_radius_cm) or start_radius_cm <= 0.0:
-            return np.inf
-        if start_radius_cm <= target_radius_cm:
-            return 0.0
-        migration_time_myr = (
-            disk_migration.integrated_semi_analytical_migration_timescale(
-                agn_properties,
-                mass_g,
-                start_radius_cm,
-                target_radius_cm,
-                aspect_ratio=disk_data["aspect_ratio"],
-                surface_density_g_cm2=disk_data["surface_density_g_cm2"],
-                radius_grid_cm=disk_data["radius_cm"],
-                consider_type_ii=self.config.consider_type_ii_migration,
-            )
+        torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+        disk_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
+        aspect_ratio = np.asarray(disk_data["aspect_ratio"], dtype=float)
+        order = np.argsort(disk_radius_cm)
+        local_aspect_ratio = np.interp(
+            torque_radius_cm,
+            disk_radius_cm[order],
+            aspect_ratio[order],
         )
-        if not np.isfinite(migration_time_myr) or migration_time_myr <= 0.0:
-            return np.inf
-        return float(migration_time_myr)
+        torque_alpha = float(disk_data.get("torque_alpha", 0.01))
+        mass_ratio = mass_g / (
+            agn_properties.smbh_mass_msun * const.msun
+        )
+        type_ii_mask = disk_migration.gap_opening_mask(
+            mass_ratio,
+            local_aspect_ratio,
+            torque_alpha,
+            self.config.gap_opening_condition,
+        )
+        torque_si = np.where(
+            type_ii_mask,
+            np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+            type_i_thermal_torque_si,
+        )
+        return torque_si_to_cgs(torque_si)

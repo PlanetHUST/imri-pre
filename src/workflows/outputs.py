@@ -18,7 +18,7 @@ from .config import (
     METADATA_FILENAME,
     IMRIDynConfig,
 )
-from .models import IMRIEventRecord, IMRIDynAveragedResult
+from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
 
 IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
@@ -45,6 +45,11 @@ IMRI_RESULT_COLUMN_MAP = [
     ("detectable_imri_count_mean", "n_det"),
     ("detectable_imri_count_min", "n_det_min"),
     ("detectable_imri_count_max", "n_det_max"),
+    ("torque_migration_evaluated_count_mean", "n_mig_eval"),
+    ("finite_torque_migration_count_mean", "n_mig_finite"),
+    ("trap_bound_migration_count_mean", "n_mig_trap"),
+    ("torque_migration_error_count_mean", "n_mig_error"),
+    ("trap_bound_mass_mean_msun", "m_mig_trap_msun"),
     # ("detectable_imri_mass_mean_msun", "m_det_msun"),
     # ("detectable_imri_mass_rate_mean_msun_per_myr", "mdot_det_msun_per_myr"),
     # ("mean_relaxation_time_geo_mean_myr", "t_relax_geo_myr"),
@@ -188,6 +193,82 @@ def save_events(
     return frame
 
 
+def save_migration_diagnostics(
+    result: IMRIDynSingleResult,
+    output_dir: Path,
+    config: IMRIDynConfig,
+) -> Path:
+    """Save strict per-repeat torque migration diagnostics as JSON."""
+    def json_float(value: float | None) -> float | None:
+        if value is None or not np.isfinite(value):
+            return None
+        return float(value)
+
+    intermediate_dir = output_dir / "intermediate"
+    intermediate_dir.mkdir(parents=True, exist_ok=True)
+    smbh_token = f"{result.m_smbh_msun:.6e}".replace("+", "")
+    nsc_token = f"{result.m_nsc_msun:.6e}".replace("+", "")
+    path = intermediate_dir / (
+        f"migration_smbh_{smbh_token}_nsc_{nsc_token}_"
+        f"repeat_{result.repeat_idx:04d}.json"
+    )
+
+    trap_bound_objects = [
+        {
+            "object_index": event["object_index"],
+            "mass_msun": json_float(event["mass_msun"]),
+            "r_ini_rg": json_float(event["r_ini_rg"]),
+            "r_entry_rg": json_float(event["r_entry_rg"]),
+            "migration_time_to_entry_myr": None,
+            "migration_status": event["migration_status"],
+            "blocking_radius_rg": json_float(event["blocking_radius_rg"]),
+        }
+        for event in result.imri_events
+        if event["migration_status"] == "trap_bound"
+    ]
+    if (
+        result.torque_migration_evaluated_count
+        != result.finite_torque_migration_count
+        + result.trap_bound_migration_count
+        + result.torque_migration_error_count
+    ):
+        raise ValueError("torque migration counters do not sum to evaluated count")
+    if result.trap_bound_migration_count != len(trap_bound_objects):
+        raise ValueError("trap-bound counter does not match event records")
+    if result.torque_migration_error_count != len(result.torque_errors):
+        raise ValueError("torque error counter does not match error records")
+
+    payload = {
+        "m_smbh_msun": json_float(result.m_smbh_msun),
+        "m_nsc_msun": json_float(result.m_nsc_msun),
+        "repeat": result.repeat_idx,
+        "gap_opening_condition": config.gap_opening_condition,
+        "consider_type_ii_migration": config.consider_type_ii_migration,
+        "torque_migration_evaluated_count": (
+            result.torque_migration_evaluated_count
+        ),
+        "finite_torque_migration_count": result.finite_torque_migration_count,
+        "trap_bound_migration_count": result.trap_bound_migration_count,
+        "torque_migration_error_count": result.torque_migration_error_count,
+        "trap_bound_mass_msun": json_float(result.trap_bound_mass_msun),
+        "trap_bound_objects": trap_bound_objects,
+        "torque_errors": [
+            {
+                "object_index": error["object_index"],
+                "mass_msun": json_float(error["mass_msun"]),
+                "r_ini_rg": json_float(error["r_ini_rg"]),
+                "r_entry_rg": json_float(error["r_entry_rg"]),
+                "error": error["error"],
+            }
+            for error in result.torque_errors
+        ],
+    }
+    with path.open("w") as diagnostics_file:
+        json.dump(payload, diagnostics_file, indent=2, allow_nan=False)
+    print(f"saved: {path}")
+    return path
+
+
 def save_metadata(
     output_dir: Path,
     config: IMRIDynConfig,
@@ -217,6 +298,7 @@ def save_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "consider_type_ii_migration": config.consider_type_ii_migration,
+            "gap_opening_condition": config.gap_opening_condition,
             "redshift": config.redshift,
             "hubble_constant_per_myr": config.hubble_constant_per_myr,
             "redshift_transport_time_myr": gw_helpers.redshift_transport_time_myr(
