@@ -1,18 +1,36 @@
 """Multiprocessing boundary for IMRI orbital damping tasks."""
 
 import os
+import multiprocessing
 from multiprocessing import Pool
 from typing import Sequence
 
 import physical_process.constants as const
-import physical_process.nsc_orbital as nsc_orbital
-from physical_process.damp import DampingCalculator, OrbitalState
-from physical_process.general_class import AGN_properties
+from physical_process.agn import AGNProperties
+from physical_process.damp import DampingCalculator, DampingStatus, OrbitalState
 
-from .models import DampingResult, DampingTask, FloatArray
+from .models import DampingResult, DampingTask, FloatArray, GeometricPopulation
 from .runtime import vprint
 
 _WORKER_CALCULATOR: DampingCalculator | None = None
+
+
+def build_damping_tasks(population: GeometricPopulation) -> list[DampingTask]:
+    """Serialize one selected population for the damping worker boundary."""
+    return [
+        {
+            "task_kind": "primary",
+            "idx": index,
+            "mass_g": float(population["mass_msun"][index] * const.msun),
+            "semi_major_axis_cm": float(population["semi_major_axis_cm"][index]),
+            "eccentricity": float(population["eccentricity"][index]),
+            "inclination_rad": float(population["inclination_rad"][index]),
+            "cos_omega": float(population["cos_omega"][index]),
+            "formation_time_myr": float(population["formation_time_myr"][index]),
+            "state_time_s": 0.0,
+        }
+        for index in range(len(population["mass_msun"]))
+    ]
 
 
 def get_hpc_cpu_count() -> int:
@@ -24,11 +42,14 @@ def get_hpc_cpu_count() -> int:
                 return max(1, int(value))
             except ValueError:
                 pass
-    return nsc_orbital.get_cpu_count()
+    try:
+        return max(1, multiprocessing.cpu_count() - 1)
+    except NotImplementedError:
+        return 2
 
 
 def init_damping_worker(
-    agn_properties: AGN_properties,
+    agn_properties: AGNProperties,
     radius_cm: FloatArray,
     surface_density_g_cm2: FloatArray,
     aspect_ratio: FloatArray,
@@ -57,35 +78,36 @@ def process_damping_task(task: DampingTask) -> DampingResult:
             cos_omega=task["cos_omega"],
             time_s=task["state_time_s"],
         )
-        final_time_s, final_axis_cm, object_type = (
+        final_time_s, final_axis_cm, status = (
             _WORKER_CALCULATOR.damping_simulation(
                 task["mass_g"],
                 state,
                 task["formation_time_myr"],
                 "Star",
-                task["type_flag"],
             )
         )
-        if object_type == 2 and final_time_s == 0.0:
+        if status is DampingStatus.OUTSIDE_DISK and final_time_s == 0.0:
             damping_time_myr = float("nan")
         else:
             damping_time_myr = max(
                 0.0,
                 final_time_s / const.Myr - task["state_time_s"] / const.Myr,
             )
-    except Exception:
+        error = None
+    except Exception as exc:
         final_time_s = 0.0
         final_axis_cm = 0.0
-        object_type = -1
+        status = DampingStatus.CALCULATION_ERROR
         damping_time_myr = float("nan")
+        error = f"{type(exc).__name__}: {exc}"
 
-    return {
+    result: DampingResult = {
         "task_kind": task["task_kind"],
         "idx": task["idx"],
         "final_time_s": final_time_s,
         "final_time_myr": final_time_s / const.Myr,
         "final_semi_major_axis_cm": final_axis_cm,
-        "obj_type": object_type,
+        "status": status,
         "formation_time_myr": task["formation_time_myr"],
         "state_time_myr": task["state_time_s"] / const.Myr,
         "damping_time_myr": damping_time_myr,
@@ -96,11 +118,14 @@ def process_damping_task(task: DampingTask) -> DampingResult:
         "mass_g": task["mass_g"],
         "mass_msun": task["mass_g"] / const.msun,
     }
+    if error is not None:
+        result["error"] = error
+    return result
 
 
 def run_damping_tasks_parallel(
     tasks: Sequence[DampingTask],
-    agn_properties: AGN_properties,
+    agn_properties: AGNProperties,
     radius_cm: FloatArray,
     surface_density_g_cm2: FloatArray,
     aspect_ratio: FloatArray,

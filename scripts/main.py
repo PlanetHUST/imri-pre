@@ -14,8 +14,7 @@ for path in (
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from src.workflows import *  # noqa: F403
-from src.workflows import run_cli
+from src.workflows.cli import run_cli
 
 if __name__ == "__main__":
     run_cli()

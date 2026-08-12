@@ -539,26 +539,3 @@ def classify_torque_traps(
             keep & (candidate_kinds == ANTI_TRAP_KIND)
         ],
     )
-
-
-def find_traps_locations(
-    torque_profile: TorqueProfile,
-    *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
-) -> tuple[np.ndarray, np.ndarray]:
-
-    valid_radius = (
-        np.isfinite(torque_profile.radius_cm)
-        & np.isfinite(torque_profile.radius_rg)
-        & (torque_profile.radius_rg > 0.0)
-    )
-    if not np.any(valid_radius):
-        return np.array([], dtype=float), np.array([], dtype=float)
-
-    trap_radii = classify_torque_traps(
-        torque_profile.radius_rg,
-        torque_profile.gamma_type_i_si
-        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
-        min_separation_cells=min_separation_cells,
-    )
-    return trap_radii.stable_radius_rg, trap_radii.anti_trap_radius_rg

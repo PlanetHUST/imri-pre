@@ -1,7 +1,5 @@
 """NSC orbital sampling and relaxation helpers."""
 
-import multiprocessing
-
 import numpy as np
 import numpy.typing as npt
 
@@ -12,8 +10,6 @@ except ImportError:
 
 FloatArray = npt.NDArray[np.float64]
 
-DISK_INNER_RADIUS_RG = 6.0
-NSC_TO_SMBH_MASS_RATIO = 10.0
 MIN_INCLINATION_RAD = np.pi / 18.0
 MAX_INCLINATION_RAD = 17.0 * np.pi / 18.0
 VELOCITY_DISPERSION_NORMALIZATION_CM_S = 2.3e5
@@ -23,43 +19,10 @@ COULOMB_LOGARITHM = 10.0
 RELAXATION_REFERENCE_STELLAR_MASS_G = const.msun
 
 
-def get_cpu_count() -> int:
-    """Return available CPU count while reserving one core when possible."""
-    try:
-        return max(1, multiprocessing.cpu_count() - 1)
-    except NotImplementedError:
-        return 2
-
-
-def initial_mass(
-    sample_count: int,
-    min_mass_msun: float = 1e4,
-    max_mass_msun: float = 1e5,
-) -> FloatArray:
-    """Return ``N`` logarithmically spaced masses [Msun].
-
-    Both mass bounds are measured in solar masses.
-    """
-    if sample_count <= 0:
-        raise ValueError("number of mass samples must be positive")
-    if not 0.0 < min_mass_msun <= max_mass_msun:
-        raise ValueError("mass bounds must satisfy 0 < min <= max")
-    return np.logspace(
-        np.log10(min_mass_msun),
-        np.log10(max_mass_msun),
-        sample_count,
-    )
-
-
-def get_NSC_mass(smbh_mass_msun: float | FloatArray) -> float | FloatArray:
-    """Estimate NSC mass [Msun] from SMBH mass [Msun]."""
-    nsc_mass_msun = NSC_TO_SMBH_MASS_RATIO * np.asarray(smbh_mass_msun)
-    return float(nsc_mass_msun) if nsc_mass_msun.ndim == 0 else nsc_mass_msun
-
-
 def initial_star(
     star_count: int,
     smbh_mass_msun: float,
+    minimum_radius_cm: float,
     max_radius_cm: float,
     gamma: float = 7.0 / 4.0,
 ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray]:
@@ -68,6 +31,7 @@ def initial_star(
     Args:
         star_count: Number of stellar orbits.
         smbh_mass_msun: SMBH mass [Msun].
+        minimum_radius_cm: Minimum semi-major axis [cm].
         max_radius_cm: Maximum semi-major axis [cm].
         gamma: Number-density power-law index.
 
@@ -77,13 +41,11 @@ def initial_star(
     """
     if star_count < 0:
         raise ValueError("number of stars must be nonnegative")
-    if smbh_mass_msun <= 0.0 or max_radius_cm <= 0.0:
-        raise ValueError("SMBH mass and maximum radius must be positive")
+    if smbh_mass_msun <= 0.0 or minimum_radius_cm <= 0.0 or max_radius_cm <= 0.0:
+        raise ValueError("SMBH mass and orbital radii must be positive")
 
     volume_integral_exponent = 2.0 - gamma
     inverse_cdf_exponent = volume_integral_exponent + 1.0
-    gravitational_radius_cm = const.G * smbh_mass_msun * const.msun / const.c**2
-    minimum_radius_cm = DISK_INNER_RADIUS_RG * gravitational_radius_cm
     if max_radius_cm < minimum_radius_cm:
         raise ValueError("maximum radius must exceed the inner orbital radius")
 
@@ -104,6 +66,45 @@ def initial_star(
     )
     cos_omega = np.random.random(star_count)
     return semi_major_axis_cm, eccentricity, inclination_rad, cos_omega
+
+
+def estimate_nsc_radius_cm(
+    nsc_mass_msun: float,
+    reference_radius_pc: float,
+    reference_mass_msun: float,
+    mass_slope: float,
+) -> float:
+    """Return the configured NSC mass-radius relation in centimeters."""
+    nsc_radius_pc = reference_radius_pc * (
+        nsc_mass_msun / reference_mass_msun
+    ) ** mass_slope
+    return float(nsc_radius_pc * const.parsec)
+
+
+def disk_crossing_mask(
+    semi_major_axis_cm: FloatArray,
+    eccentricity: FloatArray,
+    cos_omega: FloatArray,
+    disk_inner_radius_cm: float,
+    disk_outer_radius_cm: float,
+    use_disk_inner_radius: bool,
+) -> npt.NDArray[np.bool_]:
+    """Return objects whose orbital nodes intersect the selected disk annulus."""
+    inner_node_radius_cm = (
+        semi_major_axis_cm
+        * (1.0 - eccentricity**2)
+        / (1.0 + eccentricity * cos_omega)
+    )
+    if not use_disk_inner_radius:
+        return inner_node_radius_cm < disk_outer_radius_cm
+    outer_node_radius_cm = (
+        semi_major_axis_cm
+        * (1.0 - eccentricity**2)
+        / (1.0 - eccentricity * cos_omega)
+    )
+    return (inner_node_radius_cm < disk_outer_radius_cm) & (
+        outer_node_radius_cm > disk_inner_radius_cm
+    )
 
 
 def velocity_disp(smbh_mass_msun: float) -> float:

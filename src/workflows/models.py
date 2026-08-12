@@ -5,6 +5,8 @@ from typing import Any, NotRequired, Sequence, TypedDict
 import numpy as np
 import numpy.typing as npt
 
+from physical_process.damp import DampingStatus
+
 FloatArray = npt.NDArray[np.float64]
 BoolArray = npt.NDArray[np.bool_]
 
@@ -19,7 +21,6 @@ class DampingTask(TypedDict):
     cos_omega: float
     formation_time_myr: float
     state_time_s: float
-    type_flag: int
 
 
 class DampingResult(TypedDict):
@@ -28,7 +29,7 @@ class DampingResult(TypedDict):
     final_time_s: float
     final_time_myr: float
     final_semi_major_axis_cm: float
-    obj_type: int
+    status: DampingStatus
     formation_time_myr: float
     state_time_myr: float
     damping_time_myr: float
@@ -38,6 +39,7 @@ class DampingResult(TypedDict):
     cos_omega: float
     mass_g: float
     mass_msun: float
+    error: NotRequired[str]
 
 
 class DiskProfiles(TypedDict):
@@ -49,6 +51,7 @@ class DiskProfiles(TypedDict):
     gravitational_radius_cm: float
     torque_disk: NotRequired[object]
     torque_alpha: NotRequired[float]
+    torque_profile_error: NotRequired[str]
 
 
 class StellarPopulation(TypedDict):
@@ -78,6 +81,23 @@ class IntermediatePopulation(TypedDict):
     inclination_rad: FloatArray
 
 
+def intermediate_population_from_arrays(
+    mass_msun: FloatArray,
+    formation_time_myr: FloatArray,
+    semi_major_axis_cm: FloatArray,
+    eccentricity: FloatArray,
+    inclination_rad: FloatArray,
+) -> IntermediatePopulation:
+    """Copy unit-explicit arrays into an intermediate population record."""
+    return {
+        "mass_msun": np.asarray(mass_msun, dtype=float),
+        "formation_time_myr": np.asarray(formation_time_myr, dtype=float),
+        "semi_major_axis_cm": np.asarray(semi_major_axis_cm, dtype=float),
+        "eccentricity": np.asarray(eccentricity, dtype=float),
+        "inclination_rad": np.asarray(inclination_rad, dtype=float),
+    }
+
+
 class IMRIEventRecord(TypedDict):
     m_smbh_msun: float
     m_nsc_msun: float
@@ -100,12 +120,12 @@ class IMRIEventRecord(TypedDict):
     r_entry_rg: float
     r_det_entry_cm: float
     r_det_entry_rg: float
-    f_ini_src_microhz: float
-    f_ini_obs_microhz: float
-    f_gas_fin_src_microhz: float
-    f_gas_fin_obs_microhz: float
-    f_entry_src_mhz: float
-    f_entry_obs_mhz: float
+    f_ini_src_hz: float
+    f_ini_obs_hz: float
+    f_gas_fin_src_hz: float
+    f_gas_fin_obs_hz: float
+    f_entry_src_hz: float
+    f_entry_obs_hz: float
     gas_elapsed_time_myr: float
     gas_final_time_myr: float
     migration_time_to_entry_myr: float
@@ -166,6 +186,7 @@ class IMRIDynSingleResult:
         self.trap_bound_mass_msun = 0.0
         self.disk_inner_radius_cm: float | None = None
         self.disk_outer_radius_cm: float | None = None
+        self.gravitational_radius_cm: float | None = None
         self.nsc_radius_cm: float | None = None
         self.mean_relaxation_time_myr_geo = np.nan
         self.imri_events: list[IMRIEventRecord] = []
@@ -207,6 +228,7 @@ class IMRIDynSingleResult:
             "trap_bound_mass_msun": self.trap_bound_mass_msun,
             "disk_inner_radius_cm": self.disk_inner_radius_cm,
             "disk_outer_radius_cm": self.disk_outer_radius_cm,
+            "gravitational_radius_cm": self.gravitational_radius_cm,
             "nsc_radius_cm": self.nsc_radius_cm,
             "mean_relaxation_time_myr_geo": self.mean_relaxation_time_myr_geo,
         }

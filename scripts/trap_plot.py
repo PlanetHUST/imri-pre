@@ -29,9 +29,8 @@ from src.disk_quantity.migration_torque import (
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
-    DISK_VISCOSITY_ALPHA,
     GAP_OPENING_CONDITIONS,
-    gap_opening_mask,
+    select_migration_torque_si,
 )
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
 from src.workflows.config import PAGN_ALPHA
@@ -39,7 +38,7 @@ from src.workflows.config import PAGN_ALPHA
 SMBH_MIN_MSUN = 1.0e3
 SMBH_MAX_MSUN = 1.0e8
 SMBH_COUNT = 50
-MIGRATOR_MASS_MSUN = 30.0
+MIGRATOR_MASS_MSUN = 10.0
 OUTPUT_DIR = Path("figs")
 OUTPUT_STEM = "trap_radius_2d"
 
@@ -131,26 +130,20 @@ def _trap_point(
     )
 
     gap_parameter = migrator_mass_g**2 / (
-        DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+        PAGN_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
     )
     hill_ratio = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
     crida_parameter = (
         0.75 / hill_ratio + 50.0 * PAGN_ALPHA * local_aspect_ratio**2 / mass_ratio
     )
-    selected_gap_mask = gap_opening_mask(
-        mass_ratio, local_aspect_ratio, PAGN_ALPHA, gap_opening_condition
-    )
-    type_i_thermal_torque_si = np.asarray(
-        torque_profile.gamma_type_i_si
-        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
-        dtype=float,
-    )
-    # Gap-open cells use Type II alone; thermal torque stays gap-closed.
-    migration_torque_si = np.where(
-        selected_gap_mask,
-        np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-        type_i_thermal_torque_si,
-    )
+    migration_torque_si = select_migration_torque_si(
+        torque_profile,
+        mass_ratio,
+        local_aspect_ratio,
+        PAGN_ALPHA,
+        gap_opening_condition,
+        consider_type_ii_migration=True,
+    ).torque_si
     trap_radii = classify_torque_traps(
         torque_profile.radius_rg,
         migration_torque_si,

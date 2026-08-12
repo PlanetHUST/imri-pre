@@ -11,7 +11,6 @@ from .redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
 DETECTION_CLASS_NOT_DETECTABLE = "non-detectable"
-DEFAULT_SNR_THRESHOLD = 20.0
 
 
 @dataclass(frozen=True)
@@ -38,7 +37,7 @@ def single_frequency_snr_proxy(
     observed_frequency_hz: float,
     min_observed_frequency_hz: float,
     max_observed_frequency_hz: float,
-    snr_threshold: float = DEFAULT_SNR_THRESHOLD,
+    snr_threshold: float,
 ) -> float:
     """Return a minimal SNR proxy for the current single-frequency model."""
     in_band = (
@@ -65,7 +64,7 @@ def classify_detectability(
     cosmic_merge_time_myr: float,
     cosmic_merge_smbh_mass_factor: float,
     cosmic_merge_radius_factor: float,
-    snr_threshold: float = DEFAULT_SNR_THRESHOLD,
+    snr_threshold: float,
 ) -> DetectRateDecision:
     """Classify one IMRI candidate after gas delivery and cosmic evolution."""
     if not is_imri_candidate:

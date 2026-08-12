@@ -1,8 +1,36 @@
-"""Linear redshift evolution helpers for simplified cosmic IMRI workflows."""
+"""Redshift, transport-time, and cosmic-time relations for IMRI workflows."""
 
 from dataclasses import dataclass
 
 import numpy as np
+
+
+def redshift_transport_time_myr(
+    redshift: float,
+    hubble_constant_per_myr: float,
+) -> float:
+    """Return the configured linear light-transport estimate ``z / H0`` [Myr]."""
+    if not np.isfinite(redshift) or redshift < 0.0:
+        raise ValueError("redshift must be nonnegative")
+    if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
+        raise ValueError("Hubble constant must be positive")
+    return float(redshift / hubble_constant_per_myr)
+
+
+def redshift_source_time_budget_myr(
+    redshift: float,
+    hubble_constant_per_myr: float,
+    zero_redshift_limit_myr: float,
+) -> float:
+    """Return the existing linear-transport source-frame budget [Myr]."""
+    if not np.isfinite(zero_redshift_limit_myr) or zero_redshift_limit_myr <= 0.0:
+        raise ValueError("zero-redshift GW time limit must be positive")
+    if redshift == 0.0:
+        return float(zero_redshift_limit_myr)
+    return float(
+        redshift_transport_time_myr(redshift, hubble_constant_per_myr)
+        / (1.0 + redshift)
+    )
 
 
 @dataclass(frozen=True)
@@ -15,7 +43,7 @@ class RedshiftEvolutionState:
 
 @dataclass(frozen=True)
 class RedshiftEvolution:
-    """using the z vs t relationship to be (1+z)=(H_0 * t)**(-2/3)"""
+    """Evolve cosmic redshift with ``(1+z) = (H0 t)**(-2/3)``."""
 
     hubble_constant_per_myr: float
 

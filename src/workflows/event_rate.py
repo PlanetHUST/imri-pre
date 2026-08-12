@@ -5,12 +5,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from physical_process.damp import DampingStatus
+
 BH_ORIGIN_EMBEDDED = "ebh"
 BH_ORIGIN_MIGRATION_FORMED = "mfbh"
 BH_ORIGIN_NOT_FORMED = "no_bh"
 
 EVENT_RATE_IMRI_CANDIDATE = "imri candi"
 EVENT_RATE_NO_IMRI = "no-IMRI"
+GAS_FINAL_RADIUS_SAMPLES = 96
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,7 @@ class EventRateDecision:
     migration_time_to_entry_myr: float
     gw_time_to_entry_myr: float
     r_gas_fin_cm: float
+    gas_stop_reason: str
     event_rate_class: str
     event_rate_reason: str
 
@@ -61,7 +65,7 @@ def solve_gas_final_radius_cm(
     available_gas_time_myr: float,
     migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr: GwTimeFunction,
-    num_radius_samples: int = 96,
+    num_radius_samples: int,
 ) -> tuple[float, float, float, float, str]:
     """Return the final gas-delivered radius before GW or duty-cycle stopping.
 
@@ -83,11 +87,7 @@ def solve_gas_final_radius_cm(
         r_ini_cm,
         r_entry_cm,
     )
-    print(f"total_migration_time is {total_migration_time_myr:.3e} myr")
-
     total_gw_time_myr = _safe_gw_time_myr(gw_time_to_entry_myr, r_ini_cm)
-
-    print(f"total_gw_time is {total_gw_time_myr:.3e} myr")
 
     if r_ini_cm <= r_entry_cm:
         return r_ini_cm, 0.0, 0.0, 0.0, "already_inside_lisa_entry"
@@ -189,7 +189,7 @@ def solve_gas_final_radius_cm(
 
 def classify_event_rate(
     *,
-    object_type: int,
+    object_status: DampingStatus,
     formation_time_myr: float,
     damping_time_myr: float,
     embed_time_myr: float,
@@ -198,7 +198,7 @@ def classify_event_rate(
     migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr_call: GwTimeFunction,
     duty_cycle_myr: float,
-    num_radius_samples: int = 96,
+    num_radius_samples: int,
 ) -> EventRateDecision:
     """Classify whether gas migration produces an IMRI event candidate."""
 
@@ -219,13 +219,11 @@ def classify_event_rate(
         num_radius_samples=num_radius_samples,
     )
 
-    print(f"stop reason is {gas_stop_reason}, r_gas_fin is {r_gas_fin_cm:.3e} cm")
-
     gas_final_time_myr = embed_time_myr + gas_elapsed_time_myr
-    embedded_bh = object_type == 1
+    embedded_bh = object_status is DampingStatus.EMBEDDED_BH
 
     migration_formed_bh = bool(
-        object_type == 0
+        object_status is DampingStatus.EMBEDDED_STAR
         and np.isfinite(formation_time_myr)
         and np.isfinite(damping_time_myr)
         and formation_time_myr < damping_time_myr + gas_elapsed_time_myr
@@ -254,6 +252,7 @@ def classify_event_rate(
             migration_time_to_entry_myr=migration_time_to_entry_myr,
             gw_time_to_entry_myr=gw_time_to_entry_myr_at_start,
             r_gas_fin_cm=r_gas_fin_cm,
+            gas_stop_reason=gas_stop_reason,
             event_rate_class=EVENT_RATE_NO_IMRI,
             event_rate_reason="not_bh_before_gas_final",
         )
@@ -276,6 +275,7 @@ def classify_event_rate(
         migration_time_to_entry_myr=migration_time_to_entry_myr,
         gw_time_to_entry_myr=gw_time_to_entry_myr_at_start,
         r_gas_fin_cm=r_gas_fin_cm,
+        gas_stop_reason=gas_stop_reason,
         event_rate_class=(
             EVENT_RATE_IMRI_CANDIDATE if is_imri_candidate else EVENT_RATE_NO_IMRI
         ),

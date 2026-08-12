@@ -46,39 +46,6 @@ def observed_frame_time_myr(source_time_myr: float, redshift: float) -> float:
     return float(source_time_myr * (1.0 + redshift))
 
 
-def redshift_transport_time_myr(
-    redshift: float,
-    hubble_constant_per_myr: float,
-) -> float:
-    """Return the prompt's linear light-transport time ``z / H0`` [Myr]."""
-    if not np.isfinite(redshift) or redshift < 0.0:
-        raise ValueError("redshift must be nonnegative")
-    if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
-        raise ValueError("Hubble constant must be positive")
-    return float(redshift / hubble_constant_per_myr)
-
-
-def redshift_source_time_budget_myr(
-    redshift: float,
-    hubble_constant_per_myr: float,
-    zero_redshift_limit_myr: float,
-) -> float:
-    """Return the source-frame GW time budget for an IMRI at redshift ``z``.
-
-    For nonzero redshift this applies the prompt's ``t_src = t_obs / (1 + z)``
-    to the transport time. At ``z = 0``, use the existing local Hubble-time
-    budget to keep local-universe runs backward compatible.
-    """
-    if not np.isfinite(zero_redshift_limit_myr) or zero_redshift_limit_myr <= 0.0:
-        raise ValueError("zero-redshift GW time limit must be positive")
-    if redshift == 0.0:
-        return float(zero_redshift_limit_myr)
-    return float(
-        redshift_transport_time_myr(redshift, hubble_constant_per_myr)
-        / (1.0 + redshift)
-    )
-
-
 def gw_frequency_hz(
     total_mass_msun: float,
     semi_major_axis_cm: float,
@@ -288,43 +255,3 @@ def peters_radius_after_time_cm(
         else:
             high_cm = mid_cm
     return float(0.5 * (low_cm + high_cm))
-
-
-def imri_lisa_time_buget_radius_cm(
-    primary_mass_msun: float,
-    secondary_mass_msun: float,
-    max_gw_time_myr: float,
-    min_gw_frequency_hz: float,
-    eccentricity: float,
-    redshift: float,
-) -> float:
-    """Return the outermost radius [cm] that reaches LISA within ``max_gw_time``.
-
-    This simplified demo keeps a fixed eccentricity when solving the threshold.
-    With the default ``e=0``, it is exactly the circular Peters solution.
-    """
-    if max_gw_time_myr <= 0.0:
-        raise ValueError("maximum GW time must be positive")
-    entry_radius_cm = lisa_entry_radius_cm(
-        primary_mass_msun,
-        secondary_mass_msun,
-        min_gw_frequency_hz,
-        redshift,
-    )
-    if not np.isfinite(entry_radius_cm):
-        return np.inf
-
-    coefficient_myr_per_cm4 = peters_merger_time_myr(
-        primary_mass_msun,
-        secondary_mass_msun,
-        1.0,
-        eccentricity,
-    )
-    entry_time_myr = peters_merger_time_myr(
-        primary_mass_msun,
-        secondary_mass_msun,
-        entry_radius_cm,
-        eccentricity,
-    )
-    threshold_time_myr = max_gw_time_myr + entry_time_myr
-    return float((threshold_time_myr / coefficient_myr_per_cm4) ** 0.25)

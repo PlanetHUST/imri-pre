@@ -31,13 +31,12 @@ from src.disk_quantity.migration_torque import (
 from src.disk_quantity.pagn_disk_adapter import PagnDiskProfile, build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
-    DISK_VISCOSITY_ALPHA,
     GAP_OPENING_CONDITIONS,
     TYPE_II_GAP_PARAMETER_THRESHOLD,
     gap_opening_mask,
     migration_time_from_torque,
+    select_migration_torque_si,
 )
-from src.physical_process.general_class import AGN_properties
 from src.workflows.config import DISK_ACCRETION_RATE_G_S_PER_MSUN, PAGN_ALPHA
 
 MIGRATOR_MASSES_MSUN = (10.0, 30.0, 50.0)
@@ -92,8 +91,6 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _build_disk() -> MigrationDisk:
-    agn_properties = AGN_properties()
-    agn_properties.init_AGN(SMBH_MASS_MSUN, duty_cycle_myr=1.0)
     profile = build_pagn_disk_profile(
         SMBH_MASS_MSUN,
         alpha=PAGN_ALPHA,
@@ -108,7 +105,7 @@ def _build_disk() -> MigrationDisk:
     order = np.argsort(radius_cm)
     return MigrationDisk(
         profile=profile,
-        rg_cm=agn_properties.gravitational_radius_cm,
+        rg_cm=const.G * SMBH_MASS_MSUN * const.msun / const.c**2,
         radius_cm=radius_cm[order],
         aspect_ratio=np.asarray(profile.aspect_ratio, dtype=float)[order],
         surface_density_g_cm2=np.asarray(profile.surface_density_g_cm2, dtype=float)[
@@ -141,27 +138,22 @@ def _migration_series(
     )
 
     gap_parameter = migrator_mass_g**2 / (
-        DISK_VISCOSITY_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+        PAGN_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
     )
     hill_ratio = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
     crida_parameter = (
         0.75 / hill_ratio + 50.0 * PAGN_ALPHA * local_aspect_ratio**2 / mass_ratio
     )
-    selected_gap_mask = gap_opening_mask(
-        mass_ratio, local_aspect_ratio, PAGN_ALPHA, gap_opening_condition
+    selection = select_migration_torque_si(
+        torque_profile,
+        mass_ratio,
+        local_aspect_ratio,
+        PAGN_ALPHA,
+        gap_opening_condition,
+        consider_type_ii_migration=True,
     )
-
-    type_i_thermal_torque_si = np.asarray(
-        torque_profile.gamma_type_i_si
-        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
-        dtype=float,
-    )
-    # Gap-open cells use Type II alone; thermal torque stays gap-closed.
-    torque_si = np.where(
-        selected_gap_mask,
-        np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-        type_i_thermal_torque_si,
-    )
+    selected_gap_mask = selection.type_ii_mask
+    torque_si = selection.torque_si
     torque_cgs = torque_si_to_cgs(torque_si)
 
     orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / torque_radius_cm**3)

@@ -7,10 +7,10 @@ import numpy as np
 import numpy.typing as npt
 
 if __package__ == "src.physical_process":
-    from ..disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
+    from ..disk_quantity.migration_torque import TorqueProfile
     from . import constants as const
 else:
-    from disk_quantity.disk_solve import DISK_VISCOSITY_ALPHA
+    from disk_quantity.migration_torque import TorqueProfile
     import physical_process.constants as const
 
 FloatArray = npt.NDArray[np.float64]
@@ -31,6 +31,14 @@ class TorqueMigrationOutcome:
     time_myr: float
     status: MigrationStatus
     blocking_radius_cm: float | None
+
+
+@dataclass(frozen=True)
+class MigrationTorqueSelection:
+    """Selected migration torque in SI and the cells using Type II."""
+
+    torque_si: FloatArray
+    type_ii_mask: npt.NDArray[np.bool_]
 
 
 def gap_opening_mask(
@@ -66,6 +74,40 @@ def gap_opening_mask(
         & np.isfinite(hill_radius_over_scale_height)
         & (crida_gap_parameter < 1.0)
         & (hill_radius_over_scale_height > 1.0)
+    )
+
+
+def select_migration_torque_si(
+    torque_profile: TorqueProfile,
+    mass_ratio: float,
+    local_aspect_ratio: FloatArray,
+    alpha: float,
+    gap_opening_condition: str,
+    consider_type_ii_migration: bool,
+) -> MigrationTorqueSelection:
+    """Compose the caller-selected migration torque in SI units [N m]."""
+    type_i_thermal_torque_si = np.asarray(
+        torque_profile.gamma_type_i_si
+        + (1.0 - torque_profile.gap_attenuation_factor)
+        * torque_profile.gamma_th_si,
+        dtype=float,
+    )
+    if consider_type_ii_migration:
+        type_ii_mask = gap_opening_mask(
+            mass_ratio,
+            np.asarray(local_aspect_ratio, dtype=float),
+            alpha,
+            gap_opening_condition,
+        )
+    else:
+        type_ii_mask = np.zeros(type_i_thermal_torque_si.shape, dtype=bool)
+    return MigrationTorqueSelection(
+        torque_si=np.where(
+            type_ii_mask,
+            np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+            type_i_thermal_torque_si,
+        ),
+        type_ii_mask=type_ii_mask,
     )
 
 

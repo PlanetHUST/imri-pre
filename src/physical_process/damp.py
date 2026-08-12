@@ -7,14 +7,15 @@ to avoid repeated recomputation.
 import numpy as np
 import numpy.typing as npt
 from dataclasses import dataclass
+from enum import Enum
 from typing import TypedDict
 
 try:
+    from physical_process.agn import AGNProperties
     import physical_process.constants as const
-    from physical_process.general_class import AGN_properties
 except ImportError:
+    from agn import AGNProperties
     import constants as const
-    from general_class import AGN_properties
 
 try:
     from physical_process.disk_migration import find_closest_index
@@ -33,6 +34,16 @@ GROW_TIME_STEP_RELATIVE_CHANGE = 0.001
 SHRINK_TIME_STEP_FACTOR = 0.5
 GROW_TIME_STEP_FACTOR = 2.0
 STELLAR_MASS_RADIUS_EXPONENT = 0.8
+
+
+class DampingStatus(str, Enum):
+    """Physical or numerical outcome of one orbital-damping calculation."""
+
+    EMBEDDED_STAR = "embedded_star"
+    EMBEDDED_BH = "embedded_bh"
+    OUTSIDE_DISK = "outside_disk"
+    CALCULATION_ERROR = "calculation_error"
+    TEST = "test"
 
 
 class TimescaleData(TypedDict):
@@ -155,7 +166,7 @@ class DragProperties:
         mass_g: float,
         state: OrbitalState,
         disk: DiskProperties,
-        agn_properties: AGN_properties,
+        agn_properties: AGNProperties,
         obj_type: str,
     ) -> "DragProperties":
         """Compute drag properties using orbital state and disk properties."""
@@ -237,7 +248,7 @@ class TimescaleCalculator:
 
     def __init__(
         self,
-        agn_properties: AGN_properties,
+        agn_properties: AGNProperties,
         radius_grid_cm: FloatArray,
         surface_density_g_cm2: FloatArray,
         aspect_ratio: FloatArray,
@@ -376,7 +387,7 @@ class DampingCalculator:
 
     def __init__(
         self,
-        agn_properties: AGN_properties,
+        agn_properties: AGNProperties,
         verbose: bool,
         radius_grid_cm: FloatArray,
         surface_density_g_cm2: FloatArray,
@@ -608,12 +619,11 @@ class DampingCalculator:
         initial_state: OrbitalState,
         formation_time_myr: float,
         obj_type: str,
-        type_flag: int,
         max_iter: int = 50000,
-    ) -> tuple[float, float, int]:
+    ) -> tuple[float, float, DampingStatus]:
         """
         Numerical integration of orbital damping.
-        Returns: (final_time [s], final_semi_major_axis [cm], type_flag)
+        Returns: (final_time [s], final_semi_major_axis [cm], status)
         """
         if mass_g <= 0.0:
             raise ValueError("damped object mass must be positive")
@@ -774,14 +784,14 @@ class DampingCalculator:
         formation_time_s: float,
         duty_cycle_s: float,
         obj_type: str,
-    ) -> tuple[float, float, int] | None:
-        """Return (t_BH, a_final, new_flag) if transition occurs, else None."""
+    ) -> tuple[float, float, DampingStatus] | None:
+        """Return a completed transition outcome, or ``None`` to continue."""
         if "test" in obj_type:
             return None
         if obj_type == "BH":
             if state.time_s < duty_cycle_s:
                 return None
-            return (0.0, 0.0, 2)  # BH outside disk
+            return (0.0, 0.0, DampingStatus.OUTSIDE_DISK)
         if obj_type == "Star":
             if state.time_s <= formation_time_s:
                 return None
@@ -793,9 +803,9 @@ class DampingCalculator:
                 return (
                     black_hole_embedding_time_s,
                     state.semi_major_axis_cm,
-                    1,
+                    DampingStatus.EMBEDDED_BH,
                 )
-            return (0.0, 0.0, 2)
+            return (0.0, 0.0, DampingStatus.OUTSIDE_DISK)
         return None
 
     def _determine_final_state(
@@ -804,14 +814,14 @@ class DampingCalculator:
         formation_time_s: float,
         duty_cycle_s: float,
         obj_type: str,
-    ) -> tuple[float, float, int]:
-        """Return final time [s], semi-major axis [cm], and object flag."""
+    ) -> tuple[float, float, DampingStatus]:
+        """Return final time [s], semi-major axis [cm], and damping status."""
         if "test" in obj_type:
-            return state.time_s, state.semi_major_axis_cm, -1
+            return state.time_s, state.semi_major_axis_cm, DampingStatus.TEST
         if state.time_s > duty_cycle_s:
-            return 0.0, 0.0, 2
+            return 0.0, 0.0, DampingStatus.OUTSIDE_DISK
         if state.time_s <= formation_time_s:
-            final_type_flag = 0
+            final_status = DampingStatus.EMBEDDED_STAR
         else:
-            final_type_flag = 1
-        return state.time_s, state.semi_major_axis_cm, final_type_flag
+            final_status = DampingStatus.EMBEDDED_BH
+        return state.time_s, state.semi_major_axis_cm, final_status

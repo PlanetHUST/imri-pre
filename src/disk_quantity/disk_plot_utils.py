@@ -1,8 +1,11 @@
+"""Compute and render AGN disk and migration-torque diagnostics."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, Mapping, Sequence
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
@@ -15,7 +18,7 @@ from src.disk_quantity.migration_torque import (
 )
 from src.disk_quantity.disk_solve import radial_structure
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
-from src.physical_process.disk_migration import gap_opening_mask
+from src.physical_process.disk_migration import select_migration_torque_si
 
 RADIAL_AXIS_LABELSIZE = 26
 LEGEND_FONTSIZE = 18
@@ -32,9 +35,7 @@ TORQUE_PLOT_LOG_SMOOTHING = 0.5
 TORQUE_PLOT_MIN_SMOOTH_POINTS = 20
 TORQUE_PLOT_MIN_BRANCH_WIDTH_RG = 100.0
 TORQUE_PLOT_MIN_BRANCH_FRACTION = 0.001
-
-plt.rcParams["xtick.labelsize"] = 20
-plt.rcParams["ytick.labelsize"] = 20
+PLOT_STYLE = {"xtick.labelsize": 20, "ytick.labelsize": 20}
 
 
 COLORS_SERIS = ["#1f77b4", "#BE9A62", "#2A7F62", "#2B56a3", "#A89A11", "#3A7F11"]
@@ -68,13 +69,8 @@ def _disk_profile_payload(
     )
 
     q_values = np.asarray(disk_profile.toomre_q, dtype=float)
-
-    r_out_over_rg = Toomre_param_outer_radius(
-        r_over_rg,
-        q_values,
-        fallback=float(
-            disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
-        ),
+    r_out_over_rg = float(
+        disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
     )
 
     return {
@@ -173,23 +169,14 @@ def _disk_torque_payload(
         solved_disk_radius_m[solved_order],
         solved_disk_aspect_ratio[solved_order],
     )
-    selected_gap_mask = gap_opening_mask(
+    migration_torque_si = select_migration_torque_si(
+        torque_profile,
         float(migrator_mass_msun) / float(smbh_mass),
         local_aspect_ratio,
         alpha,
         gap_opening_condition,
-    )
-    type_i_thermal_torque_si = np.asarray(
-        torque_profile.gamma_type_i_si
-        + (1 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
-        dtype=float,
-    )
-    # Gap-open cells use Type II alone; thermal torque stays gap-closed.
-    migration_torque_si = np.where(
-        selected_gap_mask,
-        np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-        type_i_thermal_torque_si,
-    )
+        consider_type_ii_migration=True,
+    ).torque_si
     trap_radii = classify_torque_traps(
         torque_profile.radius_rg,
         migration_torque_si,
@@ -198,17 +185,8 @@ def _disk_torque_payload(
 
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
 
-    radius_over_rg = (
-        np.asarray(disk_profile.radius_cm, dtype=float)
-        / disk_profile.gravitational_radius_cm
-    )
-
-    r_out_over_rg = Toomre_param_outer_radius(
-        radius_over_rg,
-        np.asarray(disk_profile.toomre_q, dtype=float),
-        fallback=float(
-            disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
-        ),
+    r_out_over_rg = float(
+        disk_profile.outer_radius_cm / disk_profile.gravitational_radius_cm
     )
 
     return {
@@ -226,54 +204,6 @@ def _disk_torque_payload(
             dtype=float,
         ),
     }
-
-
-def Toomre_param_outer_radius(
-    radius_over_rg: np.ndarray,
-    q_values: np.ndarray,
-    *,
-    fallback: float,
-) -> float:
-    """Return the outer Q=1 radius in rg units, falling back when absent."""
-    radius = np.asarray(radius_over_rg, dtype=float)
-    q = np.asarray(q_values, dtype=float)
-    n = min(radius.size, q.size)
-    if n == 0:
-        return float(fallback)
-
-    radius = radius[:n]
-    q = q[:n]
-    valid = np.isfinite(radius) & np.isfinite(q) & (radius > 0.0) & (q > 0.0)
-    radius = radius[valid]
-    q = q[valid]
-    if radius.size == 0:
-        return float(fallback)
-
-    order = np.argsort(radius)
-    radius = radius[order]
-    q = q[order]
-    log_radius = np.log10(radius)
-    log_q = np.log10(q)
-
-    exact = np.where(np.isclose(log_q, 0.0, rtol=0.0, atol=1.0e-8))[0]
-    if exact.size:
-        return float(radius[exact[-1]])
-
-    crossing_indices = np.where(np.sign(log_q[1:]) != np.sign(log_q[:-1]))[0]
-    if crossing_indices.size == 0:
-        return float(fallback)
-
-    roots = []
-    for idx in crossing_indices:
-        x0, x1 = log_radius[idx], log_radius[idx + 1]
-        y0, y1 = log_q[idx], log_q[idx + 1]
-        if y1 == y0:
-            continue
-        roots.append(10.0 ** (x0 - y0 * (x1 - x0) / (y1 - y0)))
-
-    if not roots:
-        return float(fallback)
-    return float(np.max(roots))
 
 
 def _smooth_torque_magnitude_for_plot(
@@ -339,6 +269,7 @@ def _torque_magnitude_plot_values(
     return plot_values
 
 
+@mpl.rc_context(PLOT_STYLE)
 def plot_agn_disk_parameter_profiles(
     output_dir: str,
     alpha: float,
@@ -411,6 +342,7 @@ def plot_agn_disk_parameter_profiles(
     plt.close(fig)
 
 
+@mpl.rc_context(PLOT_STYLE)
 def plot_agn_disk_method_comparison(
     output_dir: str,
     alpha: float,
@@ -673,6 +605,7 @@ def _plot_signed_torque_component(
     plt.close(fig)
 
 
+@mpl.rc_context(PLOT_STYLE)
 def plot_agn_disk_torque_profiles(
     output_dir: str,
     alpha: float,
