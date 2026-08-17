@@ -16,24 +16,25 @@ def vprint_population_ranges(
     if len(mass_msun) == 0:
         vprint(f"{label}: no objects")
         return
+
     vprint(
-        f"{label} mass range is "
+        f"{label} \nmass range is "
         f"{mass_msun.min():.3e} to {mass_msun.max():.3e} Msun"
     )
     vprint(
-        f"{label} formation time range is "
+        f"formation time range is "
         f"{formation_time_myr.min():.3e} to {formation_time_myr.max():.3e} Myr"
     )
     vprint(
-        f"{label} sma range is "
+        f"sma range is "
         f"{semi_major_axis_cm.min():.3e} to {semi_major_axis_cm.max():.3e} cm"
     )
     vprint(
-        f"{label} eccentricity range is "
+        f"eccentricity range is "
         f"{eccentricity.min():.3e} to {eccentricity.max():.3e}"
     )
     vprint(
-        f"{label} inclination range is "
+        f"inclination range is "
         f"{inclination_rad.min():.3e} to {inclination_rad.max():.3e} rad"
     )
 

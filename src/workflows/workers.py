@@ -53,6 +53,9 @@ def init_damping_worker(
     radius_cm: FloatArray,
     surface_density_g_cm2: FloatArray,
     aspect_ratio: FloatArray,
+    disk_inner_radius_cm: float,
+    disk_outer_radius_cm: float,
+    use_disk_inner_radius: bool,
 ) -> None:
     """Create one damping calculator per worker process."""
     global _WORKER_CALCULATOR
@@ -62,6 +65,9 @@ def init_damping_worker(
         radius_grid_cm=radius_cm,
         surface_density_g_cm2=surface_density_g_cm2,
         aspect_ratio=aspect_ratio,
+        disk_inner_radius_cm=disk_inner_radius_cm,
+        disk_outer_radius_cm=disk_outer_radius_cm,
+        use_disk_inner_radius=use_disk_inner_radius,
     )
 
 
@@ -70,33 +76,26 @@ def process_damping_task(task: DampingTask) -> DampingResult:
     if _WORKER_CALCULATOR is None:
         raise RuntimeError("damping worker was not initialized")
 
+    state = OrbitalState(
+        semi_major_axis_cm=task["semi_major_axis_cm"],
+        eccentricity=task["eccentricity"],
+        inclination_rad=task["inclination_rad"],
+        cos_omega=task["cos_omega"],
+        time_s=task["state_time_s"],
+    )
     try:
-        state = OrbitalState(
-            semi_major_axis_cm=task["semi_major_axis_cm"],
-            eccentricity=task["eccentricity"],
-            inclination_rad=task["inclination_rad"],
-            cos_omega=task["cos_omega"],
-            time_s=task["state_time_s"],
+        outcome = _WORKER_CALCULATOR.damping_simulation(
+            task["mass_g"],
+            state,
+            task["formation_time_myr"],
+            "Star",
         )
-        final_time_s, final_axis_cm, status = (
-            _WORKER_CALCULATOR.damping_simulation(
-                task["mass_g"],
-                state,
-                task["formation_time_myr"],
-                "Star",
-            )
-        )
-        if status is DampingStatus.OUTSIDE_DISK and final_time_s == 0.0:
-            damping_time_myr = float("nan")
-        else:
-            damping_time_myr = max(
-                0.0,
-                final_time_s / const.Myr - task["state_time_s"] / const.Myr,
-            )
+        final_state = outcome.final_state
+        status = outcome.status
+        damping_time_myr = outcome.elapsed_time_s / const.Myr
         error = None
     except Exception as exc:
-        final_time_s = 0.0
-        final_axis_cm = 0.0
+        final_state = state
         status = DampingStatus.CALCULATION_ERROR
         damping_time_myr = float("nan")
         error = f"{type(exc).__name__}: {exc}"
@@ -104,17 +103,20 @@ def process_damping_task(task: DampingTask) -> DampingResult:
     result: DampingResult = {
         "task_kind": task["task_kind"],
         "idx": task["idx"],
-        "final_time_s": final_time_s,
-        "final_time_myr": final_time_s / const.Myr,
-        "final_semi_major_axis_cm": final_axis_cm,
+        "final_time_s": final_state.time_s,
+        "final_time_myr": final_state.time_s / const.Myr,
+        "final_semi_major_axis_cm": final_state.semi_major_axis_cm,
+        "final_eccentricity": final_state.eccentricity,
+        "final_inclination_rad": final_state.inclination_rad,
+        "final_cos_omega": final_state.cos_omega,
         "status": status,
         "formation_time_myr": task["formation_time_myr"],
         "state_time_myr": task["state_time_s"] / const.Myr,
         "damping_time_myr": damping_time_myr,
         "initial_semi_major_axis_cm": task["semi_major_axis_cm"],
-        "eccentricity": task["eccentricity"],
-        "inclination_rad": task["inclination_rad"],
-        "cos_omega": task["cos_omega"],
+        "initial_eccentricity": task["eccentricity"],
+        "initial_inclination_rad": task["inclination_rad"],
+        "initial_cos_omega": task["cos_omega"],
         "mass_g": task["mass_g"],
         "mass_msun": task["mass_g"] / const.msun,
     }
@@ -129,6 +131,9 @@ def run_damping_tasks_parallel(
     radius_cm: FloatArray,
     surface_density_g_cm2: FloatArray,
     aspect_ratio: FloatArray,
+    disk_inner_radius_cm: float,
+    disk_outer_radius_cm: float,
+    use_disk_inner_radius: bool,
     cpu_count: int,
 ) -> list[DampingResult]:
     """Run damping tasks in a worker pool."""
@@ -148,6 +153,9 @@ def run_damping_tasks_parallel(
             radius_cm,
             surface_density_g_cm2,
             aspect_ratio,
+            disk_inner_radius_cm,
+            disk_outer_radius_cm,
+            use_disk_inner_radius,
         ),
     ) as pool:
         return list(

@@ -5,42 +5,6 @@ from dataclasses import dataclass
 import numpy as np
 
 
-def redshift_transport_time_myr(
-    redshift: float,
-    hubble_constant_per_myr: float,
-) -> float:
-    """Return the configured linear light-transport estimate ``z / H0`` [Myr]."""
-    if not np.isfinite(redshift) or redshift < 0.0:
-        raise ValueError("redshift must be nonnegative")
-    if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
-        raise ValueError("Hubble constant must be positive")
-    return float(redshift / hubble_constant_per_myr)
-
-
-def redshift_source_time_budget_myr(
-    redshift: float,
-    hubble_constant_per_myr: float,
-    zero_redshift_limit_myr: float,
-) -> float:
-    """Return the existing linear-transport source-frame budget [Myr]."""
-    if not np.isfinite(zero_redshift_limit_myr) or zero_redshift_limit_myr <= 0.0:
-        raise ValueError("zero-redshift GW time limit must be positive")
-    if redshift == 0.0:
-        return float(zero_redshift_limit_myr)
-    return float(
-        redshift_transport_time_myr(redshift, hubble_constant_per_myr)
-        / (1.0 + redshift)
-    )
-
-
-@dataclass(frozen=True)
-class RedshiftEvolutionState:
-    """System redshift at a source-frame elapsed time."""
-
-    elapsed_time_myr: float
-    redshift: float
-
-
 @dataclass(frozen=True)
 class RedshiftEvolution:
     """Evolve cosmic redshift with ``(1+z) = (H0 t)**(-2/3)``."""
@@ -62,36 +26,27 @@ class RedshiftEvolution:
         redshift = (self.hubble_constant_per_myr * cosmic_time_myr) ** (-2 / 3) - 1
         return redshift
 
-    def redshift_after_time(
+    def redshift_evlove_with_time(
         self,
         initial_redshift: float,
-        elapsed_time_myr: float,
+        evolve_time_myr: float,
     ) -> float:
-        """Return redshift after ``elapsed_time_myr`` of source-frame evolution."""
+        """Return redshift after ``evolve_time_myr`` of source-frame evolution."""
+
         if not np.isfinite(initial_redshift) or initial_redshift < 0.0:
             raise ValueError("initial redshift must be nonnegative")
-        if not np.isfinite(elapsed_time_myr) or elapsed_time_myr < 0.0:
-            raise ValueError("elapsed time must be nonnegative")
+        if not np.isfinite(evolve_time_myr) or evolve_time_myr < 0.0:
+            raise ValueError("evolved time must be nonnegative")
 
         time_initial_myr = self.redshift_to_cosmic_time(initial_redshift)
-        time_final_myr = time_initial_myr + elapsed_time_myr
+        time_final_myr = time_initial_myr + evolve_time_myr
         redshift = self.cosmic_time_to_redshift(time_final_myr)
 
         return float(max(0.0, redshift))
 
-    def state_after_time(
-        self,
-        initial_redshift: float,
-        elapsed_time_myr: float,
-    ) -> RedshiftEvolutionState:
-        """Return a compact redshift-state payload."""
-        return RedshiftEvolutionState(
-            elapsed_time_myr=float(elapsed_time_myr),
-            redshift=self.redshift_after_time(initial_redshift, elapsed_time_myr),
-        )
-
     def remaining_time_to_zero_redshift_myr(self, redshift: float) -> float:
         """Return source-frame time [Myr] until this model reaches z=0."""
+
         if not np.isfinite(redshift) or redshift < 0.0:
             raise ValueError("redshift must be nonnegative")
 

@@ -18,6 +18,7 @@ def source_frame_gw_frequency_hz(
     redshift: float,
 ) -> float:
     """Return source-frame GW frequency [Hz] from an observed frequency."""
+
     if not np.isfinite(observed_gw_frequency_hz) or observed_gw_frequency_hz <= 0.0:
         raise ValueError("observed GW frequency must be positive")
     if not np.isfinite(redshift) or redshift < 0.0:
@@ -30,20 +31,12 @@ def observed_frame_gw_frequency_hz(
     redshift: float,
 ) -> float:
     """Return observed-frame GW frequency [Hz] from a source-frame frequency."""
+
     if not np.isfinite(source_gw_frequency_hz) or source_gw_frequency_hz <= 0.0:
         raise ValueError("source GW frequency must be positive")
     if not np.isfinite(redshift) or redshift < 0.0:
         raise ValueError("redshift must be nonnegative")
     return float(source_gw_frequency_hz * (1.0 + redshift))
-
-
-def observed_frame_time_myr(source_time_myr: float, redshift: float) -> float:
-    """Return observed-frame time [Myr] from a source-frame duration."""
-    if np.isnan(source_time_myr) or source_time_myr < 0.0:
-        raise ValueError("source-frame time must be nonnegative")
-    if not np.isfinite(redshift) or redshift < 0.0:
-        raise ValueError("redshift must be nonnegative")
-    return float(source_time_myr * (1.0 + redshift))
 
 
 def gw_frequency_hz(
@@ -61,6 +54,7 @@ def gw_frequency_hz(
         or semi_major_axis_cm <= 0.0
     ):
         raise ValueError("binary mass and semi-major axis must be positive")
+
     total_mass_g = total_mass_msun * const.msun
     orbital_frequency_hz = np.sqrt(const.G * total_mass_g / semi_major_axis_cm**3) / (
         2.0 * np.pi
@@ -73,6 +67,7 @@ def gw_radius_for_frequency_cm(
     gw_frequency_hz: float,
 ) -> float:
     """Return the circular binary separation [cm] for a GW frequency [Hz]."""
+
     if (
         not np.isfinite(total_mass_msun)
         or total_mass_msun <= 0.0
@@ -80,7 +75,9 @@ def gw_radius_for_frequency_cm(
         or gw_frequency_hz <= 0.0
     ):
         raise ValueError("binary mass and GW frequency must be positive")
+
     total_mass_g = total_mass_msun * const.msun
+
     return float(
         (const.G * total_mass_g / (np.pi * gw_frequency_hz) ** 2) ** (1.0 / 3.0)
     )

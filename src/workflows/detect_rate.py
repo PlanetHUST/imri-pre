@@ -108,7 +108,7 @@ def classify_detectability(
         radius_growth_factor=cosmic_merge_radius_factor,
     )
     current_time_myr = float(max(0.0, gas_final_time_myr))
-    current_redshift = redshift_model.redshift_after_time(
+    current_redshift = redshift_model.redshift_evlove_with_time(
         initial_redshift,
         current_time_myr,
     )
@@ -188,7 +188,7 @@ def classify_detectability(
             entry_radius_cm,
         )
         current_time_myr += time_to_merge_myr
-        current_redshift = redshift_model.redshift_after_time(
+        current_redshift = redshift_model.redshift_evlove_with_time(
             initial_redshift,
             current_time_myr,
         )
@@ -227,7 +227,7 @@ def classify_detectability(
         )
 
     detection_time_myr = current_time_myr + gw_time_after_gas_myr
-    detection_redshift = redshift_model.redshift_after_time(
+    detection_redshift = redshift_model.redshift_evlove_with_time(
         initial_redshift,
         detection_time_myr,
     )

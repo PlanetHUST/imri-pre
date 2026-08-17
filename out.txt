@@ -1,0 +1,1488 @@
+
+########################################################################
+                          IMRI DYN SIMULATION                           
+########################################################################
+Grid size: 4 x 1 = 4
+Repeats per point: 10
+Duty cycle: 1.000e+01 Myr
+Metallicity: 1.000e-05 Zsun
+Type-II migration: True
+gap_opening_condition: kii
+Redshift: 1.500e+01
+Observed LISA GW band: 1.000e-03 to 1.000e-01 Hz
+Source-frame LISA GW band: 6.250e-05 to 6.250e-03 Hz
+Cosmic merge time: 1.000e+03 Myr
+Output directory: imri_dyn_results
+Damping CPU count: auto
+
+------------------------------------------------------------------------
+    Grid Point 1/4: smbh_mass_msun=1.00e+03, nsc_mass_msun=2.00e+05     
+------------------------------------------------------------------------
+Repeat 1/10
+AGN initialized done.
+  cached pAGN disk profile for damping and torque work at smbh_mass_msun=1.000e+03
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 2.047e+16 to 4.038e+18 cm
+eccentricity range is 1.185e-02 to 9.999e-01
+inclination range is 1.749e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.504e+01 to 1.821e+02 Msun
+formation time range is 2.289e+00 to 1.034e+01 Myr
+sma range is 2.047e+16 to 3.635e+18 cm
+eccentricity range is 8.474e-01 to 9.999e-01
+inclination range is 1.793e-01 to 2.960e+00 rad
+Geometry selection: 74/4528 objects selected (f_geo=1.634e-02)
+Relaxation times initialized, mean_trel_myr_geo = 9.327e+00 Myr
+Running 74 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.528e+03
+  disk-crossing objects : 7.400e+01
+  f_geo                 : 1.634e-02
+  embedded stars        : 7.300e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 3.000e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=73, finite=21, trap_bound=9, errors=43
+  Trap-bound mass       : 1.529853e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0000.json
+Repeat 2/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 1.212e+16 to 4.037e+18 cm
+eccentricity range is 1.521e-02 to 9.999e-01
+inclination range is 1.748e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.431e+01 to 1.305e+02 Msun
+formation time range is 2.486e+00 to 1.099e+01 Myr
+sma range is 1.212e+16 to 3.125e+18 cm
+eccentricity range is 5.904e-01 to 9.999e-01
+inclination range is 2.771e-01 to 2.789e+00 rad
+Geometry selection: 42/4438 objects selected (f_geo=9.464e-03)
+Relaxation times initialized, mean_trel_myr_geo = 9.207e+00 Myr
+Running 42 damping tasks with cpus=7, chunksize=1
+  total sampled objects : 4.438e+03
+  disk-crossing objects : 4.200e+01
+  f_geo                 : 9.464e-03
+  embedded stars        : 3.900e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.200e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=39, finite=6, trap_bound=6, errors=27
+  Trap-bound mass       : 1.084541e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0001.json
+Repeat 3/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 2.736e+15 to 4.038e+18 cm
+eccentricity range is 9.522e-03 to 9.998e-01
+inclination range is 1.753e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.380e+01 to 1.812e+02 Msun
+formation time range is 2.291e+00 to 1.150e+01 Myr
+sma range is 2.736e+15 to 3.598e+18 cm
+eccentricity range is 2.271e-01 to 9.998e-01
+inclination range is 2.092e-01 to 2.941e+00 rad
+Geometry selection: 61/4508 objects selected (f_geo=1.353e-02)
+Relaxation times initialized, mean_trel_myr_geo = 7.353e+00 Myr
+Running 61 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.508e+03
+  disk-crossing objects : 6.100e+01
+  f_geo                 : 1.353e-02
+  embedded stars        : 5.800e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.700e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=58, finite=20, trap_bound=7, errors=31
+  Trap-bound mass       : 1.191572e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0002.json
+Repeat 4/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.965e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 1.231e+15 to 4.039e+18 cm
+eccentricity range is 5.457e-03 to 1.000e+00
+inclination range is 1.757e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.366e+01 to 1.747e+02 Msun
+formation time range is 2.310e+00 to 1.165e+01 Myr
+sma range is 1.231e+15 to 4.021e+18 cm
+eccentricity range is 2.484e-01 to 1.000e+00
+inclination range is 1.968e-01 to 2.959e+00 rad
+Geometry selection: 75/4574 objects selected (f_geo=1.640e-02)
+Relaxation times initialized, mean_trel_myr_geo = 8.843e+00 Myr
+Running 75 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.574e+03
+  disk-crossing objects : 7.500e+01
+  f_geo                 : 1.640e-02
+  embedded stars        : 7.300e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.800e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=73, finite=17, trap_bound=11, errors=45
+  Trap-bound mass       : 1.833066e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0003.json
+Repeat 5/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 2.364e+15 to 4.032e+18 cm
+eccentricity range is 9.723e-03 to 9.998e-01
+inclination range is 1.752e-01 to 2.965e+00 rad
+disk-crossing population 
+mass range is 1.385e+01 to 1.914e+02 Msun
+formation time range is 2.264e+00 to 1.145e+01 Myr
+sma range is 2.364e+15 to 3.813e+18 cm
+eccentricity range is 6.626e-01 to 9.998e-01
+inclination range is 2.263e-01 to 2.929e+00 rad
+Geometry selection: 54/4457 objects selected (f_geo=1.212e-02)
+Relaxation times initialized, mean_trel_myr_geo = 7.171e+00 Myr
+Running 54 damping tasks with cpus=7, chunksize=1
+  total sampled objects : 4.457e+03
+  disk-crossing objects : 5.400e+01
+  f_geo                 : 1.212e-02
+  embedded stars        : 5.200e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 2.300e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=53, finite=19, trap_bound=5, errors=29
+  Trap-bound mass       : 7.894206e+01 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 3.966e+00 Msun/Myr
+  detectable mass rate  : 3.966e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0004.json
+Repeat 6/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 7.940e+15 to 4.037e+18 cm
+eccentricity range is 1.716e-02 to 9.998e-01
+inclination range is 1.750e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.389e+01 to 1.625e+02 Msun
+formation time range is 2.350e+00 to 1.141e+01 Myr
+sma range is 7.940e+15 to 3.916e+18 cm
+eccentricity range is 5.164e-01 to 9.998e-01
+inclination range is 2.142e-01 to 2.857e+00 rad
+Geometry selection: 51/4524 objects selected (f_geo=1.127e-02)
+Relaxation times initialized, mean_trel_myr_geo = 8.156e+00 Myr
+Running 51 damping tasks with cpus=7, chunksize=1
+  total sampled objects : 4.524e+03
+  disk-crossing objects : 5.100e+01
+  f_geo                 : 1.127e-02
+  embedded stars        : 5.000e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.900e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=50, finite=13, trap_bound=6, errors=31
+  Trap-bound mass       : 1.078312e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0005.json
+Repeat 7/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 1.900e+15 to 4.039e+18 cm
+eccentricity range is 2.992e-03 to 1.000e+00
+inclination range is 1.746e-01 to 2.965e+00 rad
+disk-crossing population 
+mass range is 1.427e+01 to 1.655e+02 Msun
+formation time range is 2.339e+00 to 1.103e+01 Myr
+sma range is 1.900e+15 to 4.032e+18 cm
+eccentricity range is 5.092e-01 to 1.000e+00
+inclination range is 1.831e-01 to 2.898e+00 rad
+Geometry selection: 74/4610 objects selected (f_geo=1.605e-02)
+Relaxation times initialized, mean_trel_myr_geo = 8.800e+00 Myr
+Running 74 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.610e+03
+  disk-crossing objects : 7.400e+01
+  f_geo                 : 1.605e-02
+  embedded stars        : 7.100e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 3.700e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=72, finite=28, trap_bound=10, errors=34
+  Trap-bound mass       : 1.671323e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 5.928e+00 Msun/Myr
+  detectable mass rate  : 5.928e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0006.json
+Repeat 8/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 8.023e+15 to 4.036e+18 cm
+eccentricity range is 1.862e-02 to 1.000e+00
+inclination range is 1.774e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.396e+01 to 1.547e+02 Msun
+formation time range is 2.378e+00 to 1.134e+01 Myr
+sma range is 8.023e+15 to 3.422e+18 cm
+eccentricity range is 3.469e-01 to 1.000e+00
+inclination range is 2.490e-01 to 2.863e+00 rad
+Geometry selection: 61/4464 objects selected (f_geo=1.366e-02)
+Relaxation times initialized, mean_trel_myr_geo = 8.032e+00 Myr
+Running 61 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.464e+03
+  disk-crossing objects : 6.100e+01
+  f_geo                 : 1.366e-02
+  embedded stars        : 6.000e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.500e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=60, finite=15, trap_bound=10, errors=35
+  Trap-bound mass       : 1.814841e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0007.json
+Repeat 9/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 8.162e+15 to 4.038e+18 cm
+eccentricity range is 2.321e-02 to 9.999e-01
+inclination range is 1.746e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.389e+01 to 1.848e+02 Msun
+formation time range is 2.281e+00 to 1.140e+01 Myr
+sma range is 8.162e+15 to 3.986e+18 cm
+eccentricity range is 3.306e-01 to 9.999e-01
+inclination range is 1.814e-01 to 2.915e+00 rad
+Geometry selection: 70/4418 objects selected (f_geo=1.584e-02)
+Relaxation times initialized, mean_trel_myr_geo = 9.363e+00 Myr
+Running 70 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.418e+03
+  disk-crossing objects : 7.000e+01
+  f_geo                 : 1.584e-02
+  embedded stars        : 6.600e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 3.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=66, finite=22, trap_bound=12, errors=32
+  Trap-bound mass       : 2.065030e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0008.json
+Repeat 10/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.827e+15 cm = 3.185e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 3.026e+15 to 4.038e+18 cm
+eccentricity range is 1.690e-02 to 1.000e+00
+inclination range is 1.745e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.392e+01 to 1.849e+02 Msun
+formation time range is 2.281e+00 to 1.138e+01 Myr
+sma range is 3.026e+15 to 3.794e+18 cm
+eccentricity range is 1.516e-01 to 1.000e+00
+inclination range is 1.897e-01 to 2.948e+00 rad
+Geometry selection: 63/4476 objects selected (f_geo=1.408e-02)
+Relaxation times initialized, mean_trel_myr_geo = 9.947e+00 Myr
+Running 63 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.476e+03
+  disk-crossing objects : 6.300e+01
+  f_geo                 : 1.408e-02
+  embedded stars        : 6.000e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 2.600e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=61, finite=16, trap_bound=11, errors=34
+  Trap-bound mass       : 1.932549e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 2.827e+00 Msun/Myr
+  detectable mass rate  : 2.827e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e03_nsc_2.000000e05_repeat_0009.json
+
+------------------------------------------------------------------------
+    Grid Point 2/4: smbh_mass_msun=1.00e+04, nsc_mass_msun=2.00e+05     
+------------------------------------------------------------------------
+Repeat 1/10
+AGN initialized done.
+  cached pAGN disk profile for damping and torque work at smbh_mass_msun=1.000e+04
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.970e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 6.082e+15 to 4.039e+18 cm
+eccentricity range is 4.785e-03 to 1.000e+00
+inclination range is 1.746e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.368e+01 to 1.960e+02 Msun
+formation time range is 2.252e+00 to 1.163e+01 Myr
+sma range is 6.082e+15 to 3.946e+18 cm
+eccentricity range is 5.733e-01 to 1.000e+00
+inclination range is 1.997e-01 to 2.951e+00 rad
+Geometry selection: 109/4603 objects selected (f_geo=2.368e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.985e+01 Myr
+Running 109 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.603e+03
+  disk-crossing objects : 1.090e+02
+  f_geo                 : 2.368e-02
+  embedded stars        : 6.900e+01
+  embedded BHs          : 5.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.700e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=74, finite=2, trap_bound=25, errors=47
+  Trap-bound mass       : 1.373102e+03 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0000.json
+Repeat 2/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.961e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 1.143e+15 to 4.037e+18 cm
+eccentricity range is 9.504e-03 to 9.997e-01
+inclination range is 1.747e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.369e+01 to 1.725e+02 Msun
+formation time range is 2.317e+00 to 1.162e+01 Myr
+sma range is 1.143e+15 to 4.030e+18 cm
+eccentricity range is 1.485e-01 to 9.997e-01
+inclination range is 1.886e-01 to 2.936e+00 rad
+Geometry selection: 100/4479 objects selected (f_geo=2.233e-02)
+Relaxation times initialized, mean_trel_myr_geo = 4.120e+01 Myr
+Running 100 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.479e+03
+  disk-crossing objects : 1.000e+02
+  f_geo                 : 2.233e-02
+  embedded stars        : 6.300e+01
+  embedded BHs          : 6.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=69, finite=0, trap_bound=24, errors=45
+  Trap-bound mass       : 8.686017e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0001.json
+Repeat 3/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.962e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 6.062e+15 to 4.038e+18 cm
+eccentricity range is 1.519e-02 to 1.000e+00
+inclination range is 1.748e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.393e+01 to 1.940e+02 Msun
+formation time range is 2.257e+00 to 1.136e+01 Myr
+sma range is 6.062e+15 to 3.973e+18 cm
+eccentricity range is 2.215e-01 to 1.000e+00
+inclination range is 1.899e-01 to 2.954e+00 rad
+Geometry selection: 106/4523 objects selected (f_geo=2.344e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.939e+01 Myr
+Running 106 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.523e+03
+  disk-crossing objects : 1.060e+02
+  f_geo                 : 2.344e-02
+  embedded stars        : 7.100e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.200e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=73, finite=0, trap_bound=22, errors=51
+  Trap-bound mass       : 1.290000e+03 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0002.json
+Repeat 4/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 1.489e+15 to 4.038e+18 cm
+eccentricity range is 1.225e-02 to 9.997e-01
+inclination range is 1.752e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.381e+01 to 1.900e+02 Msun
+formation time range is 2.268e+00 to 1.149e+01 Myr
+sma range is 1.489e+15 to 3.987e+18 cm
+eccentricity range is 3.849e-01 to 9.997e-01
+inclination range is 1.757e-01 to 2.936e+00 rad
+Geometry selection: 110/4494 objects selected (f_geo=2.448e-02)
+Relaxation times initialized, mean_trel_myr_geo = 4.024e+01 Myr
+Running 110 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.494e+03
+  disk-crossing objects : 1.100e+02
+  f_geo                 : 2.448e-02
+  embedded stars        : 6.700e+01
+  embedded BHs          : 7.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 4.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 3.100e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=74, finite=2, trap_bound=29, errors=43
+  Trap-bound mass       : 1.283609e+03 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0003.json
+Repeat 5/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.960e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 6.439e+15 to 4.037e+18 cm
+eccentricity range is 1.617e-02 to 9.997e-01
+inclination range is 1.766e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.361e+01 to 1.725e+02 Msun
+formation time range is 2.317e+00 to 1.171e+01 Myr
+sma range is 6.439e+15 to 3.949e+18 cm
+eccentricity range is 3.205e-01 to 9.997e-01
+inclination range is 1.801e-01 to 2.949e+00 rad
+Geometry selection: 106/4538 objects selected (f_geo=2.336e-02)
+Relaxation times initialized, mean_trel_myr_geo = 4.016e+01 Myr
+Running 106 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.538e+03
+  disk-crossing objects : 1.060e+02
+  f_geo                 : 2.336e-02
+  embedded stars        : 7.100e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=74, finite=1, trap_bound=23, errors=50
+  Trap-bound mass       : 1.046128e+03 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0004.json
+Repeat 6/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.969e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 2.264e+15 to 4.038e+18 cm
+eccentricity range is 1.208e-02 to 1.000e+00
+inclination range is 1.749e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.361e+01 to 1.732e+02 Msun
+formation time range is 2.315e+00 to 1.170e+01 Myr
+sma range is 2.264e+15 to 4.006e+18 cm
+eccentricity range is 6.345e-01 to 1.000e+00
+inclination range is 1.763e-01 to 2.934e+00 rad
+Geometry selection: 107/4557 objects selected (f_geo=2.348e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.781e+01 Myr
+Running 107 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.557e+03
+  disk-crossing objects : 1.070e+02
+  f_geo                 : 2.348e-02
+  embedded stars        : 6.900e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.500e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=72, finite=4, trap_bound=21, errors=47
+  Trap-bound mass       : 1.218594e+03 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0005.json
+Repeat 7/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.970e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 2.384e+15 to 4.038e+18 cm
+eccentricity range is 6.896e-03 to 9.997e-01
+inclination range is 1.763e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.396e+01 to 1.943e+02 Msun
+formation time range is 2.257e+00 to 1.134e+01 Myr
+sma range is 2.384e+15 to 4.024e+18 cm
+eccentricity range is 2.519e-01 to 9.997e-01
+inclination range is 1.806e-01 to 2.908e+00 rad
+Geometry selection: 77/4513 objects selected (f_geo=1.706e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.173e+01 Myr
+Running 77 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.513e+03
+  disk-crossing objects : 7.700e+01
+  f_geo                 : 1.706e-02
+  embedded stars        : 5.100e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.200e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=54, finite=2, trap_bound=10, errors=42
+  Trap-bound mass       : 3.965659e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0006.json
+Repeat 8/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.963e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 6.403e+15 to 4.038e+18 cm
+eccentricity range is 4.249e-03 to 9.998e-01
+inclination range is 1.746e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.364e+01 to 1.886e+02 Msun
+formation time range is 2.271e+00 to 1.167e+01 Myr
+sma range is 6.403e+15 to 4.037e+18 cm
+eccentricity range is 6.047e-01 to 9.998e-01
+inclination range is 1.767e-01 to 2.902e+00 rad
+Geometry selection: 96/4611 objects selected (f_geo=2.082e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.817e+01 Myr
+Running 96 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.611e+03
+  disk-crossing objects : 9.600e+01
+  f_geo                 : 2.082e-02
+  embedded stars        : 6.800e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.300e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=70, finite=1, trap_bound=22, errors=47
+  Trap-bound mass       : 9.916043e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0007.json
+Repeat 9/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 1.451e+15 to 4.036e+18 cm
+eccentricity range is 9.351e-03 to 9.998e-01
+inclination range is 1.748e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.382e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.148e+01 Myr
+sma range is 1.451e+15 to 3.905e+18 cm
+eccentricity range is 3.162e-01 to 9.998e-01
+inclination range is 2.222e-01 to 2.895e+00 rad
+Geometry selection: 96/4457 objects selected (f_geo=2.154e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.302e+01 Myr
+Running 96 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.457e+03
+  disk-crossing objects : 9.600e+01
+  f_geo                 : 2.154e-02
+  embedded stars        : 5.400e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.800e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=57, finite=3, trap_bound=15, errors=39
+  Trap-bound mass       : 8.048997e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0008.json
+Repeat 10/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.586e+16 cm = 5.139e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.170e+01 Myr
+sma range is 3.685e+15 to 4.038e+18 cm
+eccentricity range is 1.181e-02 to 9.999e-01
+inclination range is 1.749e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.375e+01 to 1.779e+02 Msun
+formation time range is 2.301e+00 to 1.156e+01 Myr
+sma range is 3.685e+15 to 3.896e+18 cm
+eccentricity range is 5.107e-01 to 9.999e-01
+inclination range is 2.522e-01 to 2.934e+00 rad
+Geometry selection: 89/4418 objects selected (f_geo=2.014e-02)
+Relaxation times initialized, mean_trel_myr_geo = 3.201e+01 Myr
+Running 89 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.418e+03
+  disk-crossing objects : 8.900e+01
+  f_geo                 : 2.014e-02
+  embedded stars        : 5.500e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.800e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=57, finite=2, trap_bound=16, errors=39
+  Trap-bound mass       : 7.887972e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e04_nsc_2.000000e05_repeat_0009.json
+
+------------------------------------------------------------------------
+    Grid Point 3/4: smbh_mass_msun=1.00e+05, nsc_mass_msun=2.00e+05     
+------------------------------------------------------------------------
+Repeat 1/10
+AGN initialized done.
+  cached pAGN disk profile for damping and torque work at smbh_mass_msun=1.000e+05
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 2.614e+15 to 4.039e+18 cm
+eccentricity range is 1.365e-02 to 1.000e+00
+inclination range is 1.771e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.374e+01 to 1.876e+02 Msun
+formation time range is 2.274e+00 to 1.157e+01 Myr
+sma range is 2.614e+15 to 3.596e+18 cm
+eccentricity range is 2.997e-01 to 1.000e+00
+inclination range is 1.847e-01 to 2.785e+00 rad
+Geometry selection: 69/4565 objects selected (f_geo=1.512e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.278e+02 Myr
+Running 69 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.565e+03
+  disk-crossing objects : 6.900e+01
+  f_geo                 : 1.512e-02
+  embedded stars        : 3.100e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=32, finite=0, trap_bound=14, errors=18
+  Trap-bound mass       : 6.813199e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0000.json
+Repeat 2/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.969e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 5.320e+15 to 4.038e+18 cm
+eccentricity range is 1.246e-02 to 9.999e-01
+inclination range is 1.748e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.404e+01 to 1.927e+02 Msun
+formation time range is 2.261e+00 to 1.125e+01 Myr
+sma range is 5.320e+15 to 3.880e+18 cm
+eccentricity range is 3.687e-01 to 9.999e-01
+inclination range is 2.138e-01 to 2.911e+00 rad
+Geometry selection: 68/4486 objects selected (f_geo=1.516e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.129e+02 Myr
+Running 68 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.486e+03
+  disk-crossing objects : 6.800e+01
+  f_geo                 : 1.516e-02
+  embedded stars        : 3.800e+01
+  embedded BHs          : 4.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.800e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=42, finite=4, trap_bound=14, errors=24
+  Trap-bound mass       : 5.643636e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0001.json
+Repeat 3/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 4.481e+15 to 4.038e+18 cm
+eccentricity range is 1.807e-02 to 9.996e-01
+inclination range is 1.758e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.375e+01 to 1.902e+02 Msun
+formation time range is 2.267e+00 to 1.156e+01 Myr
+sma range is 4.481e+15 to 3.742e+18 cm
+eccentricity range is 3.981e-01 to 9.996e-01
+inclination range is 2.131e-01 to 2.940e+00 rad
+Geometry selection: 59/4521 objects selected (f_geo=1.305e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.634e+02 Myr
+Running 59 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.521e+03
+  disk-crossing objects : 5.900e+01
+  f_geo                 : 1.305e-02
+  embedded stars        : 2.400e+01
+  embedded BHs          : 4.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 6.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=28, finite=1, trap_bound=5, errors=22
+  Trap-bound mass       : 2.155675e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0002.json
+Repeat 4/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.962e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 5.655e+15 to 4.038e+18 cm
+eccentricity range is 3.262e-03 to 9.999e-01
+inclination range is 1.746e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.384e+01 to 1.716e+02 Msun
+formation time range is 2.320e+00 to 1.146e+01 Myr
+sma range is 5.655e+15 to 3.677e+18 cm
+eccentricity range is 5.497e-01 to 9.999e-01
+inclination range is 1.852e-01 to 2.958e+00 rad
+Geometry selection: 60/4504 objects selected (f_geo=1.332e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.581e+02 Myr
+Running 60 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.504e+03
+  disk-crossing objects : 6.000e+01
+  f_geo                 : 1.332e-02
+  embedded stars        : 3.000e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.100e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=31, finite=2, trap_bound=9, errors=20
+  Trap-bound mass       : 2.944628e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0003.json
+Repeat 5/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.963e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 5.308e+15 to 4.038e+18 cm
+eccentricity range is 1.394e-02 to 9.998e-01
+inclination range is 1.746e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.391e+01 to 1.842e+02 Msun
+formation time range is 2.283e+00 to 1.139e+01 Myr
+sma range is 5.308e+15 to 3.974e+18 cm
+eccentricity range is 7.544e-01 to 9.998e-01
+inclination range is 2.883e-01 to 2.963e+00 rad
+Geometry selection: 68/4358 objects selected (f_geo=1.560e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.932e+02 Myr
+Running 68 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.358e+03
+  disk-crossing objects : 6.800e+01
+  f_geo                 : 1.560e-02
+  embedded stars        : 2.900e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.100e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=31, finite=2, trap_bound=9, errors=20
+  Trap-bound mass       : 5.078814e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0004.json
+Repeat 6/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.965e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 4.935e+15 to 4.038e+18 cm
+eccentricity range is 1.502e-02 to 9.997e-01
+inclination range is 1.763e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.397e+01 to 1.692e+02 Msun
+formation time range is 2.327e+00 to 1.132e+01 Myr
+sma range is 4.935e+15 to 4.004e+18 cm
+eccentricity range is 5.925e-01 to 9.997e-01
+inclination range is 2.680e-01 to 2.940e+00 rad
+Geometry selection: 64/4503 objects selected (f_geo=1.421e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.423e+02 Myr
+Running 64 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.503e+03
+  disk-crossing objects : 6.400e+01
+  f_geo                 : 1.421e-02
+  embedded stars        : 3.400e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=35, finite=4, trap_bound=10, errors=21
+  Trap-bound mass       : 4.733453e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0005.json
+Repeat 7/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.969e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 7.678e+15 to 4.039e+18 cm
+eccentricity range is 9.657e-03 to 9.996e-01
+inclination range is 1.752e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.397e+01 to 1.869e+02 Msun
+formation time range is 2.276e+00 to 1.132e+01 Myr
+sma range is 7.678e+15 to 3.911e+18 cm
+eccentricity range is 6.004e-01 to 9.996e-01
+inclination range is 1.973e-01 to 2.907e+00 rad
+Geometry selection: 61/4472 objects selected (f_geo=1.364e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.660e+02 Myr
+Running 61 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.472e+03
+  disk-crossing objects : 6.100e+01
+  f_geo                 : 1.364e-02
+  embedded stars        : 2.700e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 7.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=27, finite=2, trap_bound=5, errors=20
+  Trap-bound mass       : 1.714060e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0006.json
+Repeat 8/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 9.399e+15 to 4.038e+18 cm
+eccentricity range is 1.409e-02 to 1.000e+00
+inclination range is 1.747e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.413e+01 to 1.775e+02 Msun
+formation time range is 2.302e+00 to 1.117e+01 Myr
+sma range is 9.399e+15 to 3.909e+18 cm
+eccentricity range is 3.074e-01 to 1.000e+00
+inclination range is 1.879e-01 to 2.916e+00 rad
+Geometry selection: 61/4406 objects selected (f_geo=1.384e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.382e+02 Myr
+Running 61 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.406e+03
+  disk-crossing objects : 6.100e+01
+  f_geo                 : 1.384e-02
+  embedded stars        : 3.400e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 9.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=37, finite=1, trap_bound=8, errors=28
+  Trap-bound mass       : 3.635961e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0007.json
+Repeat 9/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.961e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 2.654e+15 to 4.038e+18 cm
+eccentricity range is 5.150e-03 to 9.999e-01
+inclination range is 1.750e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.366e+01 to 1.827e+02 Msun
+formation time range is 2.287e+00 to 1.164e+01 Myr
+sma range is 2.654e+15 to 3.740e+18 cm
+eccentricity range is 4.079e-01 to 9.999e-01
+inclination range is 1.873e-01 to 2.953e+00 rad
+Geometry selection: 66/4490 objects selected (f_geo=1.470e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.289e+02 Myr
+Running 66 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.490e+03
+  disk-crossing objects : 6.600e+01
+  f_geo                 : 1.470e-02
+  embedded stars        : 3.400e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.600e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=35, finite=4, trap_bound=12, errors=19
+  Trap-bound mass       : 6.973372e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0008.json
+Repeat 10/10
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 8.366e+15 to 4.037e+18 cm
+eccentricity range is 1.533e-02 to 9.998e-01
+inclination range is 1.750e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.363e+01 to 1.838e+02 Msun
+formation time range is 2.284e+00 to 1.168e+01 Myr
+sma range is 8.366e+15 to 3.937e+18 cm
+eccentricity range is 6.016e-01 to 9.998e-01
+inclination range is 1.818e-01 to 2.912e+00 rad
+Geometry selection: 75/4475 objects selected (f_geo=1.676e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.566e+02 Myr
+Running 75 damping tasks with cpus=7, chunksize=2
+  total sampled objects : 4.475e+03
+  disk-crossing objects : 7.500e+01
+  f_geo                 : 1.676e-02
+  embedded stars        : 3.400e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 1.400e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=34, finite=6, trap_bound=8, errors=20
+  Trap-bound mass       : 3.390020e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e05_nsc_2.000000e05_repeat_0009.json
+
+------------------------------------------------------------------------
+    Grid Point 4/4: smbh_mass_msun=1.00e+06, nsc_mass_msun=2.00e+05     
+------------------------------------------------------------------------
+Repeat 1/10
+AGN initialized done.
+  cached pAGN disk profile for damping and torque work at smbh_mass_msun=1.000e+06
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.970e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 1.331e+16 to 4.039e+18 cm
+eccentricity range is 1.659e-02 to 9.999e-01
+inclination range is 1.746e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.376e+01 to 1.970e+02 Msun
+formation time range is 2.250e+00 to 1.155e+01 Myr
+sma range is 1.331e+16 to 3.873e+18 cm
+eccentricity range is 2.080e-01 to 9.999e-01
+inclination range is 2.213e-01 to 2.949e+00 rad
+Geometry selection: 108/4517 objects selected (f_geo=2.391e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.918e+02 Myr
+Running 108 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.517e+03
+  disk-crossing objects : 1.080e+02
+  f_geo                 : 2.391e-02
+  embedded stars        : 4.100e+01
+  embedded BHs          : 5.000e+00
+  migration-formed BHs  : 2.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 2.000e+00
+  no-IMRI objects       : 2.700e+01
+  detectable IMRIs      : 2.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=46, finite=16, trap_bound=13, errors=17
+  Trap-bound mass       : 6.996142e+02 Msun
+  IMRI candidate rate   : 2.000e-01 /Myr
+  detectable IMRI rate  : 2.000e-01 /Myr
+  candidate mass rate   : 5.129e+00 Msun/Myr
+  detectable mass rate  : 5.129e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0000.json
+Repeat 2/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.969e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 1.397e+15 to 4.038e+18 cm
+eccentricity range is 1.006e-02 to 1.000e+00
+inclination range is 1.746e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.369e+01 to 1.907e+02 Msun
+formation time range is 2.266e+00 to 1.161e+01 Myr
+sma range is 1.397e+15 to 3.866e+18 cm
+eccentricity range is 1.495e-01 to 1.000e+00
+inclination range is 1.860e-01 to 2.961e+00 rad
+Geometry selection: 105/4493 objects selected (f_geo=2.337e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.343e+02 Myr
+Running 105 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.493e+03
+  disk-crossing objects : 1.050e+02
+  f_geo                 : 2.337e-02
+  embedded stars        : 3.900e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 2.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 2.000e+00
+  no-IMRI objects       : 2.200e+01
+  detectable IMRIs      : 2.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=40, finite=14, trap_bound=10, errors=16
+  Trap-bound mass       : 5.528427e+02 Msun
+  IMRI candidate rate   : 2.000e-01 /Myr
+  detectable IMRI rate  : 2.000e-01 /Myr
+  candidate mass rate   : 4.351e+00 Msun/Myr
+  detectable mass rate  : 4.351e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0001.json
+Repeat 3/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 7.688e+14 to 4.038e+18 cm
+eccentricity range is 2.493e-02 to 9.998e-01
+inclination range is 1.747e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.374e+01 to 1.838e+02 Msun
+formation time range is 2.284e+00 to 1.156e+01 Myr
+sma range is 7.688e+14 to 4.025e+18 cm
+eccentricity range is 5.763e-01 to 9.998e-01
+inclination range is 2.970e-01 to 2.910e+00 rad
+Geometry selection: 120/4491 objects selected (f_geo=2.672e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.223e+02 Myr
+Running 120 damping tasks with cpus=7, chunksize=4
+  total sampled objects : 4.491e+03
+  disk-crossing objects : 1.200e+02
+  f_geo                 : 2.672e-02
+  embedded stars        : 4.400e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.600e+01
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=45, finite=17, trap_bound=9, errors=19
+  Trap-bound mass       : 5.318266e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0002.json
+Repeat 4/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.962e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 3.734e+15 to 4.039e+18 cm
+eccentricity range is 1.444e-02 to 9.999e-01
+inclination range is 1.747e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.395e+01 to 1.751e+02 Msun
+formation time range is 2.309e+00 to 1.134e+01 Myr
+sma range is 3.734e+15 to 3.929e+18 cm
+eccentricity range is 1.404e-01 to 9.999e-01
+inclination range is 2.337e-01 to 2.942e+00 rad
+Geometry selection: 99/4424 objects selected (f_geo=2.238e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.157e+02 Myr
+Running 99 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.424e+03
+  disk-crossing objects : 9.900e+01
+  f_geo                 : 2.238e-02
+  embedded stars        : 4.000e+01
+  embedded BHs          : 3.000e+00
+  migration-formed BHs  : 1.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 2.500e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=43, finite=16, trap_bound=10, errors=17
+  Trap-bound mass       : 5.261249e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 9.270e+00 Msun/Myr
+  detectable mass rate  : 9.270e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0003.json
+Repeat 5/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.965e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 2.230e+15 to 4.038e+18 cm
+eccentricity range is 1.561e-02 to 9.999e-01
+inclination range is 1.746e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.386e+01 to 1.843e+02 Msun
+formation time range is 2.283e+00 to 1.144e+01 Myr
+sma range is 2.230e+15 to 3.980e+18 cm
+eccentricity range is 1.561e-02 to 9.999e-01
+inclination range is 1.875e-01 to 2.930e+00 rad
+Geometry selection: 117/4560 objects selected (f_geo=2.566e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.501e+02 Myr
+Running 117 damping tasks with cpus=7, chunksize=4
+  total sampled objects : 4.560e+03
+  disk-crossing objects : 1.170e+02
+  f_geo                 : 2.566e-02
+  embedded stars        : 4.700e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 4.000e+00
+  BH candidates         : 4.000e+00
+  IMRI candidates       : 3.000e+00
+  no-IMRI objects       : 3.200e+01
+  detectable IMRIs      : 3.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=47, finite=21, trap_bound=14, errors=12
+  Trap-bound mass       : 1.108599e+03 Msun
+  IMRI candidate rate   : 3.000e-01 /Myr
+  detectable IMRI rate  : 3.000e-01 /Myr
+  candidate mass rate   : 1.263e+01 Msun/Myr
+  detectable mass rate  : 1.263e+01 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0004.json
+Repeat 6/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.966e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 6.648e+15 to 4.038e+18 cm
+eccentricity range is 1.701e-02 to 9.999e-01
+inclination range is 1.747e-01 to 2.965e+00 rad
+disk-crossing population 
+mass range is 1.363e+01 to 1.961e+02 Msun
+formation time range is 2.252e+00 to 1.168e+01 Myr
+sma range is 6.648e+15 to 3.982e+18 cm
+eccentricity range is 4.069e-01 to 9.999e-01
+inclination range is 1.945e-01 to 2.957e+00 rad
+Geometry selection: 107/4520 objects selected (f_geo=2.367e-02)
+Relaxation times initialized, mean_trel_myr_geo = 5.508e+02 Myr
+Running 107 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.520e+03
+  disk-crossing objects : 1.070e+02
+  f_geo                 : 2.367e-02
+  embedded stars        : 4.400e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 1.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 3.000e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=46, finite=17, trap_bound=14, errors=15
+  Trap-bound mass       : 7.420763e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 2.173e+00 Msun/Myr
+  detectable mass rate  : 2.173e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0005.json
+Repeat 7/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.969e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 5.493e+15 to 4.039e+18 cm
+eccentricity range is 2.576e-02 to 9.998e-01
+inclination range is 1.752e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.372e+01 to 1.888e+02 Msun
+formation time range is 2.271e+00 to 1.158e+01 Myr
+sma range is 5.493e+15 to 3.983e+18 cm
+eccentricity range is 3.700e-01 to 9.998e-01
+inclination range is 2.802e-01 to 2.934e+00 rad
+Geometry selection: 110/4490 objects selected (f_geo=2.450e-02)
+Relaxation times initialized, mean_trel_myr_geo = 6.090e+02 Myr
+Running 110 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.490e+03
+  disk-crossing objects : 1.100e+02
+  f_geo                 : 2.450e-02
+  embedded stars        : 3.900e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 1.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 2.500e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=40, finite=17, trap_bound=9, errors=14
+  Trap-bound mass       : 5.899857e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 4.044e+00 Msun/Myr
+  detectable mass rate  : 4.044e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0006.json
+Repeat 8/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.968e+02 Msun
+formation time range is 2.250e+00 to 1.171e+01 Myr
+sma range is 4.562e+15 to 4.039e+18 cm
+eccentricity range is 5.374e-03 to 1.000e+00
+inclination range is 1.754e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.361e+01 to 1.784e+02 Msun
+formation time range is 2.299e+00 to 1.170e+01 Myr
+sma range is 4.562e+15 to 3.988e+18 cm
+eccentricity range is 4.930e-01 to 1.000e+00
+inclination range is 1.956e-01 to 2.916e+00 rad
+Geometry selection: 110/4480 objects selected (f_geo=2.455e-02)
+Relaxation times initialized, mean_trel_myr_geo = 6.409e+02 Myr
+Running 110 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.480e+03
+  disk-crossing objects : 1.100e+02
+  f_geo                 : 2.455e-02
+  embedded stars        : 4.300e+01
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 2.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 2.000e+00
+  no-IMRI objects       : 3.000e+01
+  detectable IMRIs      : 2.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=43, finite=19, trap_bound=13, errors=11
+  Trap-bound mass       : 7.807195e+02 Msun
+  IMRI candidate rate   : 2.000e-01 /Myr
+  detectable IMRI rate  : 2.000e-01 /Myr
+  candidate mass rate   : 7.197e+00 Msun/Myr
+  detectable mass rate  : 7.197e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0007.json
+Repeat 9/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.967e+02 Msun
+formation time range is 2.251e+00 to 1.171e+01 Myr
+sma range is 5.021e+15 to 4.039e+18 cm
+eccentricity range is 2.572e-02 to 1.000e+00
+inclination range is 1.752e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.372e+01 to 1.641e+02 Msun
+formation time range is 2.344e+00 to 1.158e+01 Myr
+sma range is 5.021e+15 to 3.765e+18 cm
+eccentricity range is 3.506e-01 to 1.000e+00
+inclination range is 1.752e-01 to 2.956e+00 rad
+Geometry selection: 97/4495 objects selected (f_geo=2.158e-02)
+Relaxation times initialized, mean_trel_myr_geo = 6.419e+02 Myr
+Running 97 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.495e+03
+  disk-crossing objects : 9.700e+01
+  f_geo                 : 2.158e-02
+  embedded stars        : 4.200e+01
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 2.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 2.700e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=44, finite=17, trap_bound=11, errors=16
+  Trap-bound mass       : 4.482902e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 6.100e+00 Msun/Myr
+  detectable mass rate  : 6.100e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0008.json
+Repeat 10/10
+AGN initialized done.
+Disk profiles cached. r_out = 1.614e+16 cm = 5.230e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.964e+02 Msun
+formation time range is 2.252e+00 to 1.170e+01 Myr
+sma range is 3.378e+15 to 4.037e+18 cm
+eccentricity range is 7.882e-03 to 9.999e-01
+inclination range is 1.769e-01 to 2.966e+00 rad
+disk-crossing population 
+mass range is 1.363e+01 to 1.719e+02 Msun
+formation time range is 2.319e+00 to 1.168e+01 Myr
+sma range is 3.378e+15 to 3.938e+18 cm
+eccentricity range is 1.015e-01 to 9.999e-01
+inclination range is 2.674e-01 to 2.959e+00 rad
+Geometry selection: 109/4524 objects selected (f_geo=2.409e-02)
+Relaxation times initialized, mean_trel_myr_geo = 6.059e+02 Myr
+Running 109 damping tasks with cpus=7, chunksize=3
+  total sampled objects : 4.524e+03
+  disk-crossing objects : 1.090e+02
+  f_geo                 : 2.409e-02
+  embedded stars        : 5.100e+01
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 2.000e+00
+  BH candidates         : 3.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 4.100e+01
+  detectable IMRIs      : 1.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  Torque migration      : evaluated=52, finite=27, trap_bound=15, errors=10
+  Trap-bound mass       : 9.260431e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 1.000e-01 /Myr
+  candidate mass rate   : 9.244e+00 Msun/Myr
+  detectable mass rate  : 9.244e+00 Msun/Myr
+saved: imri_dyn_results/intermediate/migration_smbh_1.000000e06_nsc_2.000000e05_repeat_0009.json
+saved: imri_dyn_results/imri_averaged_results.csv
+saved: imri_dyn_results/imri_events.csv
+
+########################################################################
+                          SIMULATION COMPLETE                           
+########################################################################
+Total simulations: 40
+Runtime: 41.96 s (0.70 min)
+saved: imri_dyn_results/imri_averaged_results.csv
+saved: imri_dyn_results/imri_events.csv
+saved: imri_dyn_results/simulation_metadata.json
+Total runtime: 42.00 seconds = 0.70 minutes

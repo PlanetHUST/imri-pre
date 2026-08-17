@@ -29,14 +29,17 @@ class DampingResult(TypedDict):
     final_time_s: float
     final_time_myr: float
     final_semi_major_axis_cm: float
+    final_eccentricity: float
+    final_inclination_rad: float
+    final_cos_omega: float
     status: DampingStatus
     formation_time_myr: float
     state_time_myr: float
     damping_time_myr: float
     initial_semi_major_axis_cm: float
-    eccentricity: float
-    inclination_rad: float
-    cos_omega: float
+    initial_eccentricity: float
+    initial_inclination_rad: float
+    initial_cos_omega: float
     mass_g: float
     mass_msun: float
     error: NotRequired[str]
@@ -71,31 +74,6 @@ class GeometricPopulation(TypedDict):
     eccentricity: FloatArray
     inclination_rad: FloatArray
     cos_omega: FloatArray
-
-
-class IntermediatePopulation(TypedDict):
-    mass_msun: FloatArray
-    formation_time_myr: FloatArray
-    semi_major_axis_cm: FloatArray
-    eccentricity: FloatArray
-    inclination_rad: FloatArray
-
-
-def intermediate_population_from_arrays(
-    mass_msun: FloatArray,
-    formation_time_myr: FloatArray,
-    semi_major_axis_cm: FloatArray,
-    eccentricity: FloatArray,
-    inclination_rad: FloatArray,
-) -> IntermediatePopulation:
-    """Copy unit-explicit arrays into an intermediate population record."""
-    return {
-        "mass_msun": np.asarray(mass_msun, dtype=float),
-        "formation_time_myr": np.asarray(formation_time_myr, dtype=float),
-        "semi_major_axis_cm": np.asarray(semi_major_axis_cm, dtype=float),
-        "eccentricity": np.asarray(eccentricity, dtype=float),
-        "inclination_rad": np.asarray(inclination_rad, dtype=float),
-    }
 
 
 class IMRIEventRecord(TypedDict):
@@ -155,9 +133,7 @@ class TorqueErrorRecord(TypedDict):
 class IMRIDynSingleResult:
     """Results for one repeat at one grid point."""
 
-    def __init__(
-        self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int
-    ) -> None:
+    def __init__(self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int) -> None:
         self.m_smbh_msun = m_smbh_msun
         self.m_nsc_msun = m_nsc_msun
         self.repeat_idx = repeat_idx
@@ -191,8 +167,6 @@ class IMRIDynSingleResult:
         self.mean_relaxation_time_myr_geo = np.nan
         self.imri_events: list[IMRIEventRecord] = []
         self.torque_errors: list[TorqueErrorRecord] = []
-        self.intermediate_initial_population: IntermediatePopulation | None = None
-        self.intermediate_disk_crossing_population: IntermediatePopulation | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -219,9 +193,7 @@ class IMRIDynSingleResult:
             "detectable_imri_mass_rate_msun_per_myr": (
                 self.detectable_imri_mass_rate_msun_per_myr
             ),
-            "torque_migration_evaluated_count": (
-                self.torque_migration_evaluated_count
-            ),
+            "torque_migration_evaluated_count": (self.torque_migration_evaluated_count),
             "finite_torque_migration_count": self.finite_torque_migration_count,
             "trap_bound_migration_count": self.trap_bound_migration_count,
             "torque_migration_error_count": self.torque_migration_error_count,
@@ -272,9 +244,7 @@ class IMRIDynAveragedResult:
             "imri_candidate_count_mean": float(np.mean(values("imri_count"))),
             "imri_candidate_count_min": float(np.min(values("imri_count"))),
             "imri_candidate_count_max": float(np.max(values("imri_count"))),
-            "imri_candidate_mass_mean_msun": float(
-                np.mean(values("imri_mass_msun"))
-            ),
+            "imri_candidate_mass_mean_msun": float(np.mean(values("imri_mass_msun"))),
             "imri_candidate_rate_mean_per_myr": float(
                 np.mean(values("imri_rate_per_myr"))
             ),
@@ -284,12 +254,8 @@ class IMRIDynAveragedResult:
             "detectable_imri_count_mean": float(
                 np.mean(values("detectable_imri_count"))
             ),
-            "detectable_imri_count_min": float(
-                np.min(values("detectable_imri_count"))
-            ),
-            "detectable_imri_count_max": float(
-                np.max(values("detectable_imri_count"))
-            ),
+            "detectable_imri_count_min": float(np.min(values("detectable_imri_count"))),
+            "detectable_imri_count_max": float(np.max(values("detectable_imri_count"))),
             "detectable_imri_mass_mean_msun": float(
                 np.mean(values("detectable_imri_mass_msun"))
             ),
@@ -314,9 +280,7 @@ class IMRIDynAveragedResult:
             "torque_migration_error_count_mean": float(
                 np.mean(values("torque_migration_error_count"))
             ),
-            "trap_bound_mass_mean_msun": float(
-                np.mean(values("trap_bound_mass_msun"))
-            ),
+            "trap_bound_mass_mean_msun": float(np.mean(values("trap_bound_mass_msun"))),
             "mean_relaxation_time_geo_mean_myr": float(
                 np.mean(values("mean_relaxation_time_myr_geo"))
             ),

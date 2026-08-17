@@ -7,10 +7,6 @@ from typing import Any
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import IMRIDynConfig
-from .redshift_evolve import (
-    redshift_source_time_budget_myr,
-    redshift_transport_time_myr,
-)
 
 
 def build_metadata(
@@ -44,15 +40,6 @@ def build_metadata(
             "gap_opening_condition": config.gap_opening_condition,
             "redshift": config.redshift,
             "hubble_constant_per_myr": config.hubble_constant_per_myr,
-            "redshift_transport_time_myr": redshift_transport_time_myr(
-                config.redshift,
-                config.hubble_constant_per_myr,
-            ),
-            "source_frame_gw_time_budget_myr": redshift_source_time_budget_myr(
-                config.redshift,
-                config.hubble_constant_per_myr,
-                config.max_gw_time_myr,
-            ),
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
             "source_lisa_min_gw_frequency_hz": gw_helpers.source_frame_gw_frequency_hz(
                 config.lisa_min_gw_frequency_hz,

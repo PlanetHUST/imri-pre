@@ -8,7 +8,6 @@ from .engine import IMRIDynEngine
 from .event_work import IMRIEventEvaluator
 from .models import (
     IMRIDynSingleResult,
-    intermediate_population_from_arrays,
 )
 from .population import sample_disk_crossing_population
 from .reporting import vprint_population_ranges
@@ -45,9 +44,7 @@ class IMRISingleWorkflow:
         disk_data = self.engine.get_disk_profiles(m_smbh_msun)
         result.disk_inner_radius_cm = disk_data["inner_radius_cm"]
         result.disk_outer_radius_cm = disk_data["outer_radius_cm"]
-        result.gravitational_radius_cm = (
-            const.G * m_smbh_msun * const.msun / const.c**2
-        )
+        result.gravitational_radius_cm = const.G * m_smbh_msun * const.msun / const.c**2
         vprint(
             "Disk profiles cached. "
             f"r_out = {disk_data['outer_radius_cm']:.3e} cm = "
@@ -60,11 +57,7 @@ class IMRISingleWorkflow:
             disk_data,
             self.config,
         )
-        vprint(
-            "sampled progenitor mass range is "
-            f"{population.initial['mass_msun'].min():.3e} to "
-            f"{population.initial['mass_msun'].max():.3e} Msun"
-        )
+
         result.nsc_radius_cm = population.initial["nsc_radius_cm"]
         result.total_sampled_objects = population.total_count
         vprint_population_ranges(
@@ -75,13 +68,7 @@ class IMRISingleWorkflow:
             population.initial["eccentricity"],
             population.initial["inclination_rad"],
         )
-        result.intermediate_initial_population = intermediate_population_from_arrays(
-            population.initial["mass_msun"],
-            population.initial["formation_time_myr"],
-            population.initial["semi_major_axis_cm"],
-            population.initial["eccentricity"],
-            population.initial["inclination_rad"],
-        )
+
         result.disk_crossing_objects = population.disk_crossing_count
         result.f_geo = population.geometric_fraction
         vprint_population_ranges(
@@ -92,15 +79,7 @@ class IMRISingleWorkflow:
             population.disk_crossing["eccentricity"],
             population.disk_crossing["inclination_rad"],
         )
-        result.intermediate_disk_crossing_population = (
-            intermediate_population_from_arrays(
-                population.disk_crossing["mass_msun"],
-                population.disk_crossing["formation_time_myr"],
-                population.disk_crossing["semi_major_axis_cm"],
-                population.disk_crossing["eccentricity"],
-                population.disk_crossing["inclination_rad"],
-            )
-        )
+
         if population.disk_crossing_count == 0:
             return result
         vprint(
@@ -108,6 +87,7 @@ class IMRISingleWorkflow:
             f"{result.total_sampled_objects} objects selected "
             f"(f_geo={result.f_geo:.3e})"
         )
+
         result.mean_relaxation_time_myr_geo = population.mean_relaxation_time_myr
         vprint(
             "Relaxation times initialized, mean_trel_myr_geo = "
@@ -123,6 +103,9 @@ class IMRISingleWorkflow:
                 disk_data["radius_cm"],
                 disk_data["surface_density_g_cm2"],
                 disk_data["aspect_ratio"],
+                disk_data["inner_radius_cm"],
+                disk_data["outer_radius_cm"],
+                self.config.use_disk_inner_radius,
                 cpu_count,
             ),
             key=lambda item: item["idx"],

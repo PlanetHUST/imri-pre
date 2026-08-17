@@ -31,9 +31,7 @@ class PopulationSelection:
     @property
     def geometric_fraction(self) -> float:
         return (
-            self.disk_crossing_count / self.total_count
-            if self.total_count > 0
-            else 0.0
+            self.disk_crossing_count / self.total_count if self.total_count > 0 else 0.0
         )
 
 
@@ -98,14 +96,18 @@ def sample_disk_crossing_population(
     if selected_indices.size == 0:
         mean_relaxation_time_myr = np.nan
     else:
-        relaxation_time_myr = np.asarray(
-            [
-                nsc_orbital.t_relax(m_smbh_msun, orbit_radius_cm)
-                for orbit_radius_cm in disk_crossing["semi_major_axis_cm"]
-            ],
-            dtype=float,
-        ) / const.Myr
+        relaxation_time_myr = (
+            np.asarray(
+                [
+                    nsc_orbital.relaxaion_timescale_s(m_smbh_msun, orbit_radius_cm)
+                    for orbit_radius_cm in disk_crossing["semi_major_axis_cm"]
+                ],
+                dtype=float,
+            )
+            / const.Myr
+        )
         mean_relaxation_time_myr = float(np.mean(relaxation_time_myr))
+
     return PopulationSelection(
         initial=initial,
         disk_crossing=disk_crossing,

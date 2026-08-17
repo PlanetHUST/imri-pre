@@ -69,21 +69,21 @@ IMRI_EVENT_COLUMNS = [
     "r_gas_fin_rg",
     "r_entry_cm",
     "r_entry_rg",
-    "r_det_entry_cm",
-    "r_det_entry_rg",
-    "f_ini_src_hz",
-    "f_ini_obs_hz",
-    "f_gas_fin_src_hz",
-    "f_gas_fin_obs_hz",
-    "f_entry_src_hz",
-    "f_entry_obs_hz",
-    "gas_elapsed_time_myr",
-    "gas_final_time_myr",
-    "migration_time_to_entry_myr",
-    "migration_status",
-    "blocking_radius_rg",
-    "gw_time_to_entry_myr",
-    "gw_time_after_gas_myr",
+    # "r_det_entry_cm",
+    # "r_det_entry_rg",
+    # "f_ini_src_hz",
+    # "f_ini_obs_hz",
+    # "f_gas_fin_src_hz",
+    # "f_gas_fin_obs_hz",
+    # "f_entry_src_hz",
+    # "f_entry_obs_hz",
+    # "gas_elapsed_time_myr",
+    # "gas_final_time_myr",
+    # "migration_time_to_entry_myr",
+    # "migration_status",
+    # "blocking_radius_rg",
+    # "gw_time_to_entry_myr",
+    # "gw_time_after_gas_myr",
     "detection_time_myr",
     "final_smbh_mass_msun",
     "cosmic_merge_applied",
@@ -239,6 +239,7 @@ def save_migration_diagnostics(
     config: IMRIDynConfig,
 ) -> Path:
     """Save strict per-repeat torque migration diagnostics as JSON."""
+
     def json_float(value: float | None) -> float | None:
         if value is None or not np.isfinite(value):
             return None
@@ -266,6 +267,7 @@ def save_migration_diagnostics(
         for event in result.imri_events
         if event["migration_status"] == "trap_bound"
     ]
+
     if (
         result.torque_migration_evaluated_count
         != result.finite_torque_migration_count
@@ -284,9 +286,7 @@ def save_migration_diagnostics(
         "repeat": result.repeat_idx,
         "gap_opening_condition": config.gap_opening_condition,
         "consider_type_ii_migration": config.consider_type_ii_migration,
-        "torque_migration_evaluated_count": (
-            result.torque_migration_evaluated_count
-        ),
+        "torque_migration_evaluated_count": (result.torque_migration_evaluated_count),
         "finite_torque_migration_count": result.finite_torque_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,
         "torque_migration_error_count": result.torque_migration_error_count,

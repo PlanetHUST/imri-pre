@@ -17,7 +17,6 @@ from .outputs import (
     save_migration_diagnostics,
     save_results,
 )
-from .redshift_evolve import redshift_transport_time_myr
 from .reporting import debug_print_result, print_header, print_result_summary
 from .single_work import IMRISingleWorkflow
 
@@ -36,6 +35,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(f"gap_opening_condition: {config.gap_opening_condition}")
     print(f"Redshift: {config.redshift:.3e}")
+
     source_lisa_min_hz = gw_helpers.source_frame_gw_frequency_hz(
         config.lisa_min_gw_frequency_hz,
         config.redshift,
@@ -44,10 +44,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         config.lisa_max_gw_frequency_hz,
         config.redshift,
     )
-    transport_time_myr = redshift_transport_time_myr(
-        config.redshift,
-        config.hubble_constant_per_myr,
-    )
+
     print(
         "Observed LISA GW band: "
         f"{config.lisa_min_gw_frequency_hz:.3e} to "
@@ -58,14 +55,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         f"{source_lisa_min_hz:.3e} to "
         f"{source_lisa_max_hz:.3e} Hz"
     )
-    print(
-        "Redshift transport time: "
-        f"{transport_time_myr:.3e} Myr"
-    )
-    print(
-        "Cosmic merge time: "
-        f"{config.cosmic_merge_time_myr:.3e} Myr"
-    )
+    print("Cosmic merge time: " f"{config.cosmic_merge_time_myr:.3e} Myr")
     print(f"Output directory: {config.output_dir}")
     print(
         "Damping CPU count: "
@@ -97,6 +87,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
                 )
                 print_result_summary(result)
                 save_migration_diagnostics(result, config.output_dir, config)
+
                 if config.print_debug_results:
                     debug_print_result(result)
                 repeat_results.append(result)

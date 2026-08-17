@@ -75,9 +75,9 @@ def estimate_nsc_radius_cm(
     mass_slope: float,
 ) -> float:
     """Return the configured NSC mass-radius relation in centimeters."""
-    nsc_radius_pc = reference_radius_pc * (
-        nsc_mass_msun / reference_mass_msun
-    ) ** mass_slope
+    nsc_radius_pc = (
+        reference_radius_pc * (nsc_mass_msun / reference_mass_msun) ** mass_slope
+    )
     return float(nsc_radius_pc * const.parsec)
 
 
@@ -90,20 +90,69 @@ def disk_crossing_mask(
     use_disk_inner_radius: bool,
 ) -> npt.NDArray[np.bool_]:
     """Return objects whose orbital nodes intersect the selected disk annulus."""
-    inner_node_radius_cm = (
-        semi_major_axis_cm
-        * (1.0 - eccentricity**2)
-        / (1.0 + eccentricity * cos_omega)
+    node_radius_1_cm, node_radius_2_cm = orbital_node_radii_cm(
+        semi_major_axis_cm,
+        eccentricity,
+        cos_omega,
     )
-    if not use_disk_inner_radius:
-        return inner_node_radius_cm < disk_outer_radius_cm
-    outer_node_radius_cm = (
-        semi_major_axis_cm
-        * (1.0 - eccentricity**2)
-        / (1.0 - eccentricity * cos_omega)
+    node_1_in_disk, node_2_in_disk = orbital_nodes_in_disk_annulus(
+        node_radius_1_cm,
+        node_radius_2_cm,
+        disk_inner_radius_cm,
+        disk_outer_radius_cm,
+        use_disk_inner_radius,
     )
-    return (inner_node_radius_cm < disk_outer_radius_cm) & (
-        outer_node_radius_cm > disk_inner_radius_cm
+    return np.asarray(node_1_in_disk | node_2_in_disk, dtype=bool)
+
+
+def orbital_node_radii_cm(
+    semi_major_axis_cm: float | FloatArray,
+    eccentricity: float | FloatArray,
+    cos_omega: float | FloatArray,
+) -> tuple[FloatArray, FloatArray]:
+    """Return the two disk-plane orbital-node radii [cm]."""
+    semi_major_axis = np.asarray(semi_major_axis_cm, dtype=float)
+    eccentricity_values = np.asarray(eccentricity, dtype=float)
+    cos_omega_values = np.asarray(cos_omega, dtype=float)
+    semi_latus_rectum_cm = semi_major_axis * (1.0 - eccentricity_values**2)
+    return (
+        np.asarray(
+            semi_latus_rectum_cm / (1.0 - eccentricity_values * cos_omega_values),
+            dtype=float,
+        ),
+        np.asarray(
+            semi_latus_rectum_cm / (1.0 + eccentricity_values * cos_omega_values),
+            dtype=float,
+        ),
+    )
+
+
+def orbital_nodes_in_disk_annulus(
+    node_radius_1_cm: float | FloatArray,
+    node_radius_2_cm: float | FloatArray,
+    disk_inner_radius_cm: float,
+    disk_outer_radius_cm: float,
+    use_disk_inner_radius: bool,
+) -> tuple[npt.NDArray[np.bool_], npt.NDArray[np.bool_]]:
+    """Return per-node membership in the selected physical disk annulus."""
+    if disk_inner_radius_cm <= 0.0 or disk_outer_radius_cm <= 0.0:
+        raise ValueError("disk radii must be positive")
+    if disk_outer_radius_cm < disk_inner_radius_cm:
+        raise ValueError("disk outer radius must not be smaller than its inner radius")
+
+    def node_membership(radius_cm: float | FloatArray) -> npt.NDArray[np.bool_]:
+        radius = np.asarray(radius_cm, dtype=float)
+        within_outer_edge = np.isfinite(radius) & (radius <= disk_outer_radius_cm)
+        if not use_disk_inner_radius:
+            return np.asarray(within_outer_edge & (radius > 0.0), dtype=bool)
+        return np.asarray(
+            within_outer_edge & (radius >= disk_inner_radius_cm),
+            dtype=bool,
+        )
+
+    return (
+        node_membership(node_radius_1_cm),
+        node_membership(node_radius_2_cm),
     )
 
 
@@ -131,9 +180,7 @@ def number_R_MSC(
     if smbh_mass_msun <= 0.0 or stellar_mass_g <= 0.0 or radius_cm <= 0.0:
         raise ValueError("masses and radius must be positive")
     smbh_mass_g = smbh_mass_msun * const.msun
-    influence_radius_cm = (
-        const.G * smbh_mass_g / velocity_disp(smbh_mass_msun) ** 2
-    )
+    influence_radius_cm = const.G * smbh_mass_g / velocity_disp(smbh_mass_msun) ** 2
     return float(
         (3.0 - gamma)
         * smbh_mass_g
@@ -143,7 +190,7 @@ def number_R_MSC(
     )
 
 
-def t_relax(smbh_mass_msun: float, radius_cm: float) -> float:
+def relaxaion_timescale_s(smbh_mass_msun: float, radius_cm: float) -> float:
     """Return the two-body relaxation time [s] at radius ``radius_cm``."""
     number_density_cm3 = number_R_MSC(
         smbh_mass_msun,

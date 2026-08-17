@@ -62,6 +62,7 @@ class IMRIEventEvaluator:
         damping_results: Sequence[DampingResult],
     ) -> None:
         """Classify embedded BHs and delayed-BH embedded stars as IMRI candidates."""
+
         rg_cm = disk_data["gravitational_radius_cm"]
         for damping_result in damping_results:
             if damping_result["status"] is DampingStatus.EMBEDDED_STAR:
@@ -73,6 +74,7 @@ class IMRIEventEvaluator:
                 continue
 
             result.torque_migration_evaluated_count += 1
+
             try:
                 event = self._imri_event_record(
                     result,
@@ -81,6 +83,7 @@ class IMRIEventEvaluator:
                     damping_result,
                     rg_cm,
                 )
+
             except (disk_migration.TorqueMigrationError, TorqueProfileError) as exc:
                 r_entry_cm = gw_helpers.lisa_entry_radius_cm(
                     result.m_smbh_msun,
@@ -97,27 +100,28 @@ class IMRIEventEvaluator:
                 }
                 result.torque_errors.append(torque_error)
                 result.torque_migration_error_count += 1
-                vprint(
-                    "Torque migration error: "
-                    f"object_index={damping_result['idx']}, "
-                    f"mass_msun={damping_result['mass_msun']:.6e}, error={exc}"
-                )
+                # vprint(
+                #     "Torque migration error: "
+                #     f"object_index={damping_result['idx']}, "
+                #     f"mass_msun={damping_result['mass_msun']:.6e}, error={exc}"
+                # )
                 continue
 
             result.imri_events.append(event)
             if event["migration_status"] == "trap_bound":
                 result.trap_bound_migration_count += 1
                 result.trap_bound_mass_msun += event["mass_msun"]
-                vprint(
-                    "Trap-bound migration: "
-                    f"object_index={event['object_index']}, "
-                    f"mass_msun={event['mass_msun']:.6e}, "
-                    f"r_ini_rg={event['r_ini_rg']:.6e}, "
-                    f"r_entry_rg={event['r_entry_rg']:.6e}, "
-                    f"blocking_radius_rg={event['blocking_radius_rg']}"
-                )
+                # vprint(
+                #     "Trap-bound migration: "
+                #     f"object_index={event['object_index']}, "
+                #     f"mass_msun={event['mass_msun']:.6e}, "
+                #     f"r_ini_rg={event['r_ini_rg']:.6e}, "
+                #     f"r_entry_rg={event['r_entry_rg']:.6e}, "
+                #     f"blocking_radius_rg={event['blocking_radius_rg']}"
+                # )
             else:
                 result.finite_torque_migration_count += 1
+
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
             if event["bh_origin"] == BH_ORIGIN_MIGRATION_FORMED:
@@ -134,9 +138,7 @@ class IMRIEventEvaluator:
                 result.no_imri_count += 1
 
         result.imri_rate_per_myr = result.imri_count / self.duty_cycle_myr
-        result.imri_mass_rate_msun_per_myr = (
-            result.imri_mass_msun / self.duty_cycle_myr
-        )
+        result.imri_mass_rate_msun_per_myr = result.imri_mass_msun / self.duty_cycle_myr
         result.detectable_imri_rate_per_myr = (
             result.detectable_imri_count / self.duty_cycle_myr
         )
@@ -152,6 +154,7 @@ class IMRIEventEvaluator:
         damping_result: DampingResult,
         rg_cm: float,
     ) -> IMRIEventRecord:
+
         redshift = self.config.redshift
         migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
@@ -165,7 +168,6 @@ class IMRIEventEvaluator:
             self.config.lisa_min_gw_frequency_hz,
             redshift,
         )
-        vprint(f"r_ini is {r_ini_cm:.3e} cm, r_entry is {r_entry_cm:.3e} cm")
 
         migration_outcomes: dict[
             tuple[float, float], disk_migration.TorqueMigrationOutcome
@@ -214,28 +216,26 @@ class IMRIEventEvaluator:
             duty_cycle_myr=self.config.duty_cycle_myr,
             num_radius_samples=GAS_FINAL_RADIUS_SAMPLES,
         )
-        vprint(
-            "total_migration_time is "
-            f"{event_decision.migration_time_to_entry_myr:.3e} myr"
-        )
-        vprint(f"total_gw_time is {event_decision.gw_time_to_entry_myr:.3e} myr")
-        vprint(
-            f"stop reason is {event_decision.gas_stop_reason}, "
-            f"r_gas_fin is {event_decision.r_gas_fin_cm:.3e} cm"
-        )
+        # vprint(
+        #     "total_migration_time is "
+        #     f"{event_decision.migration_time_to_entry_myr:.3e} myr"
+        # )
+        # vprint(f"total_gw_time is {event_decision.gw_time_to_entry_myr:.3e} myr")
+        # vprint(
+        #     f"stop reason is {event_decision.gas_stop_reason}, "
+        #     f"r_gas_fin is {event_decision.r_gas_fin_cm:.3e} cm"
+        # )
 
         redshift_at_gas_fin = RedshiftEvolution(
             self.config.hubble_constant_per_myr
-        ).redshift_after_time(redshift, event_decision.gas_final_time_myr)
+        ).redshift_evlove_with_time(redshift, event_decision.gas_final_time_myr)
 
         f_ini_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_ini_cm)
         f_gas_fin_source_hz = _safe_gw_frequency_hz(
             total_mass_msun, event_decision.r_gas_fin_cm
         )
         f_entry_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_entry_cm)
-        f_ini_observed_hz = _safe_observed_gw_frequency_hz(
-            f_ini_source_hz, redshift
-        )
+        f_ini_observed_hz = _safe_observed_gw_frequency_hz(f_ini_source_hz, redshift)
         f_gas_fin_observed_hz = _safe_observed_gw_frequency_hz(
             f_gas_fin_source_hz, redshift_at_gas_fin
         )

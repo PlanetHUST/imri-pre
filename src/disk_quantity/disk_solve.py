@@ -1,10 +1,3 @@
-"""One-dimensional AGN disk structure model.
-
-Inputs use SMBH mass in solar masses and accretion rate in g/s. The solver
-uses cgs internally and returns radius [cm], temperature [K], surface density
-[g/cm^2], sound speed [cm/s], and density [g/cm^3].
-"""
-
 import numpy as np
 import numpy.typing as npt
 
