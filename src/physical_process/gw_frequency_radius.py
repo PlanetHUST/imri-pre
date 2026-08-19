@@ -23,7 +23,7 @@ def source_frame_gw_frequency_hz(
         raise ValueError("observed GW frequency must be positive")
     if not np.isfinite(redshift) or redshift < 0.0:
         raise ValueError("redshift must be nonnegative")
-    return float(observed_gw_frequency_hz / (1.0 + redshift))
+    return float(observed_gw_frequency_hz * (1.0 + redshift))
 
 
 def observed_frame_gw_frequency_hz(
@@ -36,7 +36,7 @@ def observed_frame_gw_frequency_hz(
         raise ValueError("source GW frequency must be positive")
     if not np.isfinite(redshift) or redshift < 0.0:
         raise ValueError("redshift must be nonnegative")
-    return float(source_gw_frequency_hz * (1.0 + redshift))
+    return float(source_gw_frequency_hz / (1.0 + redshift))
 
 
 def gw_frequency_hz(

@@ -61,9 +61,7 @@ def gap_opening_mask(
         gap_parameter = mass_ratio**2 / (alpha * local_aspect_ratio**2)
         return valid & (gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD)
 
-    hill_radius_over_scale_height = (
-        np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
-    )
+    hill_radius_over_scale_height = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
     crida_gap_parameter = (
         0.75 / hill_radius_over_scale_height
         + 50.0 * alpha * local_aspect_ratio**2 / mass_ratio
@@ -88,8 +86,7 @@ def select_migration_torque_si(
     """Compose the caller-selected migration torque in SI units [N m]."""
     type_i_thermal_torque_si = np.asarray(
         torque_profile.gamma_type_i_si
-        + (1.0 - torque_profile.gap_attenuation_factor)
-        * torque_profile.gamma_th_si,
+        + (1.0 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
         dtype=float,
     )
     if consider_type_ii_migration:
@@ -140,9 +137,9 @@ def _stable_blocking_radius_cm(
         if inner_torque > 0.0 and outer_torque < 0.0:
             inner_radius = radius_cm[index]
             outer_radius = radius_cm[index + 1]
-            root_cm = inner_radius - inner_torque * (
-                outer_radius - inner_radius
-            ) / (outer_torque - inner_torque)
+            root_cm = inner_radius - inner_torque * (outer_radius - inner_radius) / (
+                outer_torque - inner_torque
+            )
             stable_roots_cm.append(float(root_cm))
 
     zero_indices = np.where(torque_cgs == 0.0)[0]
@@ -242,9 +239,7 @@ def torque_migration_outcome(
         )
 
     smbh_mass_g = smbh_mass_msun * const.msun
-    orbital_frequency_rad_s = np.sqrt(
-        const.G * smbh_mass_g / segment_radius_cm**3
-    )
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / segment_radius_cm**3)
     integrand = (
         0.5
         * migrator_mass_g
@@ -255,9 +250,7 @@ def torque_migration_outcome(
     if not np.all(np.isfinite(integrand)):
         raise TorqueMigrationError("migration integrand contains nonfinite samples")
 
-    migration_time_s = float(
-        np.trapezoid(integrand[::-1], segment_radius_cm[::-1])
-    )
+    migration_time_s = float(np.trapezoid(integrand[::-1], segment_radius_cm[::-1]))
     if not np.isfinite(migration_time_s) or migration_time_s <= 0.0:
         raise TorqueMigrationError("signed torque integration returned an invalid time")
 
