@@ -1,5 +1,7 @@
 """Terminal reporting for the IMRI workflow."""
 
+import numpy as np
+
 from .models import FloatArray, IMRIDynSingleResult
 from .runtime import vprint
 
@@ -64,6 +66,10 @@ def debug_print_result(result: IMRIDynSingleResult) -> None:
 
 def print_result_summary(result: IMRIDynSingleResult) -> None:
     """Print the normal compact summary for one realization."""
+
+    def rate_text(value: float, unit: str) -> str:
+        return f"{value:.3e} {unit}" if np.isfinite(value) else "not evaluated"
+
     print(f"  total sampled objects : {result.total_sampled_objects:.3e}")
     print(f"  disk-crossing objects : {result.disk_crossing_objects:.3e}")
     print(f"  f_geo                 : {result.f_geo:.3e}")
@@ -76,6 +82,14 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
     print(f"  detectable IMRIs      : {result.detectable_imri_count:.3e}")
     print(f"  non-detectable IMRIs  : {result.no_detectable_imri_count:.3e}")
     print(
+        "  Band entry            : "
+        f"evaluated={result.band_entry_evaluated_count}, "
+        f"in_domain={result.entry_in_torque_domain_count}, "
+        f"handoff={result.entry_handoff_count}, "
+        f"inside_isco={result.band_entry_inside_isco_count}, "
+        f"profile_error={result.profile_error_count}"
+    )
+    print(
         "  Torque migration      : "
         f"evaluated={result.torque_migration_evaluated_count}, "
         f"finite={result.finite_torque_migration_count}, "
@@ -83,13 +97,16 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
         f"errors={result.torque_migration_error_count}"
     )
     print(f"  Trap-bound mass       : {result.trap_bound_mass_msun:.6e} Msun")
-    print(f"  IMRI candidate rate   : {result.imri_rate_per_myr:.3e} /Myr")
-    print(f"  detectable IMRI rate  : {result.detectable_imri_rate_per_myr:.3e} /Myr")
+    print("  IMRI candidate rate   : " f"{rate_text(result.imri_rate_per_myr, '/Myr')}")
     print(
-        f"  candidate mass rate   : "
-        f"{result.imri_mass_rate_msun_per_myr:.3e} Msun/Myr"
+        "  detectable IMRI rate  : "
+        f"{rate_text(result.detectable_imri_rate_per_myr, '/Myr')}"
     )
     print(
-        f"  detectable mass rate  : "
-        f"{result.detectable_imri_mass_rate_msun_per_myr:.3e} Msun/Myr"
+        "  candidate mass rate   : "
+        f"{rate_text(result.imri_mass_rate_msun_per_myr, 'Msun/Myr')}"
+    )
+    print(
+        "  detectable mass rate  : "
+        f"{rate_text(result.detectable_imri_mass_rate_msun_per_myr, 'Msun/Myr')}"
     )

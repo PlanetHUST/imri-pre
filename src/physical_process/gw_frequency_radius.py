@@ -1,5 +1,8 @@
 """GW frequency, radius, Peters-time, and redshift helpers."""
 
+from dataclasses import dataclass
+from typing import Literal
+
 import numpy as np
 
 try:
@@ -11,6 +14,17 @@ PETERS_ECCENTRICITY_SMALL = 1.0e-8
 PETERS_ECCENTRICITY_MAX = 1.0 - 1.0e-8
 PETERS_ECCENTRICITY_INTEGRATION_POINTS = 4096
 ISCO_RADIUS_RG = 6.0
+CircularBandStatus = Literal["entry_above_isco", "band_entry_inside_isco"]
+
+
+@dataclass(frozen=True)
+class CircularBandBoundary:
+    """Formal circular lower-band radius and its nonspinning ISCO validity."""
+
+    source_entry_frequency_hz: float
+    formal_entry_radius_cm: float
+    isco_radius_cm: float
+    status: CircularBandStatus
 
 
 def source_frame_gw_frequency_hz(
@@ -137,13 +151,13 @@ def peters_merger_time_myr(
     return float((12.0 / 19.0) * c0_cm**4 * integral / beta_cm4_s / const.Myr)
 
 
-def lisa_entry_radius_cm(
+def circular_band_boundary(
     primary_mass_msun: float,
     secondary_mass_msun: float,
     min_gw_frequency_hz: float,
     redshift: float,
-) -> float:
-    """Return the separation [cm] where a circular binary reaches LISA's lower band."""
+) -> CircularBandBoundary:
+    """Return the formal circular lower-band radius and Schwarzschild ISCO."""
 
     total_mass_msun = primary_mass_msun + secondary_mass_msun
     source_min_gw_frequency_hz = source_frame_gw_frequency_hz(
@@ -157,9 +171,35 @@ def lisa_entry_radius_cm(
     isco_radius_cm = (
         ISCO_RADIUS_RG * const.G * total_mass_msun * const.msun / const.c**2
     )
-    if entry_radius_cm <= isco_radius_cm:
+    return CircularBandBoundary(
+        source_entry_frequency_hz=source_min_gw_frequency_hz,
+        formal_entry_radius_cm=entry_radius_cm,
+        isco_radius_cm=isco_radius_cm,
+        status=(
+            "band_entry_inside_isco"
+            if entry_radius_cm <= isco_radius_cm
+            else "entry_above_isco"
+        ),
+    )
+
+
+def lisa_entry_radius_cm(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    min_gw_frequency_hz: float,
+    redshift: float,
+) -> float:
+    """Return a valid circular LISA-entry radius [cm], or infinity inside ISCO."""
+
+    boundary = circular_band_boundary(
+        primary_mass_msun,
+        secondary_mass_msun,
+        min_gw_frequency_hz,
+        redshift,
+    )
+    if boundary.status == "band_entry_inside_isco":
         return np.inf
-    return entry_radius_cm
+    return boundary.formal_entry_radius_cm
 
 
 def peters_time_to_lisa_band_myr(

@@ -13,6 +13,7 @@ BH_ORIGIN_NOT_FORMED = "no_bh"
 
 EVENT_RATE_IMRI_CANDIDATE = "imri candi"
 EVENT_RATE_NO_IMRI = "no-IMRI"
+EVENT_RATE_NOT_EVALUATED = "not evaluated"
 GAS_FINAL_RADIUS_SAMPLES = 96
 
 
@@ -22,12 +23,14 @@ class EventRateDecision:
 
     bh_origin: str
     bh_candidate: bool
-    is_imri_candidate: bool
+    is_imri_candidate: bool | None
     bh_embedding_time_myr: float
     gas_elapsed_time_myr: float
     gas_final_time_myr: float
     migration_time_to_entry_myr: float
+    migration_time_to_gas_target_myr: float
     gw_time_to_entry_myr: float
+    gw_time_gas_target_to_entry_myr: float
     r_gas_fin_cm: float
     gas_stop_reason: str
     event_rate_class: str
@@ -61,36 +64,57 @@ def _safe_gw_time_myr(
 def solve_gas_final_radius_cm(
     *,
     r_ini_cm: float,
+    r_gas_target_cm: float,
     r_entry_cm: float,
+    handoff_required: bool,
     available_gas_time_myr: float,
     migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr: GwTimeFunction,
     num_radius_samples: int,
-) -> tuple[float, float, float, float, str]:
+) -> tuple[float, float, float, float, float, str]:
     """Return the final gas-delivered radius before GW or duty-cycle stopping.
 
     The gas stage moves inward from ``r_ini_cm`` until one of three conditions is reached:
-    1. LISA-band entry;
+    1. its in-domain target, either LISA entry or a gas-to-GW handoff;
     2. exhaustion of the AGN duty-cycle time;
     3. available after damping, or the point where GW-only evolution to entry is faster than continued gas migration.
     """
     if (
         not np.isfinite(r_ini_cm)
+        or not np.isfinite(r_gas_target_cm)
         or not np.isfinite(r_entry_cm)
         or r_ini_cm <= 0.0
+        or r_gas_target_cm <= 0.0
         or r_entry_cm <= 0.0
     ):
-        return np.nan, np.inf, np.inf, np.inf, "invalid_radius"
+        return np.nan, np.inf, np.inf, np.inf, np.inf, "invalid_radius"
 
     total_migration_time_myr = _safe_migration_time_myr(
         migration_time_myr_call,
         r_ini_cm,
-        r_entry_cm,
+        r_gas_target_cm,
     )
     total_gw_time_myr = _safe_gw_time_myr(gw_time_to_entry_myr, r_ini_cm)
+    gw_time_gas_target_to_entry_myr = _safe_gw_time_myr(
+        gw_time_to_entry_myr,
+        r_gas_target_cm,
+    )
+    target_reached_reason = "gas_to_gw_handoff" if handoff_required else "entry_reached"
 
-    if r_ini_cm <= r_entry_cm:
-        return r_ini_cm, 0.0, 0.0, 0.0, "already_inside_lisa_entry"
+    if r_ini_cm <= r_gas_target_cm:
+        stop_reason = (
+            "already_inside_lisa_entry"
+            if r_ini_cm <= r_entry_cm
+            else target_reached_reason
+        )
+        return (
+            r_ini_cm,
+            0.0,
+            0.0,
+            total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
+            stop_reason,
+        )
 
     if not np.isfinite(available_gas_time_myr) or available_gas_time_myr <= 0.0:
         return (
@@ -98,6 +122,7 @@ def solve_gas_final_radius_cm(
             0.0,
             total_migration_time_myr,
             total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
             "damping_misses_duty_cycle",
         )
 
@@ -107,33 +132,38 @@ def solve_gas_final_radius_cm(
             0.0,
             total_migration_time_myr,
             total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
             "migration_trap_bound",
         )
 
-    # gw dominates at start
-    if total_migration_time_myr >= total_gw_time_myr:
+    gas_assisted_time_to_entry_myr = (
+        total_migration_time_myr + gw_time_gas_target_to_entry_myr
+    )
+    if gas_assisted_time_to_entry_myr >= total_gw_time_myr:
         return (
             r_ini_cm,
             0.0,
             total_migration_time_myr,
             total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
             "gw_dominates_at_start",
         )
 
-    # migration towards the r_entry
+    # migration towards the in-domain gas target
     if total_migration_time_myr <= available_gas_time_myr:
         return (
-            r_entry_cm,
+            r_gas_target_cm,
             total_migration_time_myr,
             total_migration_time_myr,
             total_gw_time_myr,
-            "entry_reached",
+            gw_time_gas_target_to_entry_myr,
+            target_reached_reason,
         )
 
     # total_migration_time_myr between available_gas_time_myr and total_gw_time_myr, the most common case
     # calculate details
     sample_count = int(num_radius_samples)
-    radius_samples_cm = np.geomspace(r_ini_cm, r_entry_cm, sample_count)
+    radius_samples_cm = np.geomspace(r_ini_cm, r_gas_target_cm, sample_count)
 
     # initilization parameters
     r_gas_fin_cm = r_ini_cm
@@ -149,7 +179,7 @@ def solve_gas_final_radius_cm(
         remaining_migration_myr = _safe_migration_time_myr(
             migration_time_myr_call,
             float(radius_sample_cm),
-            r_entry_cm,
+            r_gas_target_cm,
         )
         remaining_gw_myr = _safe_gw_time_myr(
             gw_time_to_entry_myr, float(radius_sample_cm)
@@ -170,12 +200,15 @@ def solve_gas_final_radius_cm(
             stop_reason = "migration_trap_bound"
             break
 
-        if remaining_migration_myr >= remaining_gw_myr:
+        remaining_gas_assisted_myr = (
+            remaining_migration_myr + gw_time_gas_target_to_entry_myr
+        )
+        if remaining_gas_assisted_myr >= remaining_gw_myr:
             stop_reason = "gw_dominates_after_gas"
             break
 
-        if radius_sample_cm <= r_entry_cm:
-            stop_reason = "entry_reached"
+        if radius_sample_cm <= r_gas_target_cm:
+            stop_reason = target_reached_reason
             break
 
     return (
@@ -183,6 +216,7 @@ def solve_gas_final_radius_cm(
         gas_elapsed_time_myr,
         total_migration_time_myr,
         total_gw_time_myr,
+        gw_time_gas_target_to_entry_myr,
         stop_reason,
     )
 
@@ -194,7 +228,9 @@ def classify_event_rate(
     damping_time_myr: float,
     embed_time_myr: float,
     r_ini_cm: float,
+    r_gas_target_cm: float,
     r_entry_cm: float,
+    handoff_required: bool,
     migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr_call: GwTimeFunction,
     duty_cycle_myr: float,
@@ -209,10 +245,13 @@ def classify_event_rate(
         gas_elapsed_time_myr,
         migration_time_to_entry_myr,
         gw_time_to_entry_myr_at_start,
+        gw_time_gas_target_to_entry_myr,
         gas_stop_reason,
     ) = solve_gas_final_radius_cm(
         r_ini_cm=r_ini_cm,
+        r_gas_target_cm=r_gas_target_cm,
         r_entry_cm=r_entry_cm,
+        handoff_required=handoff_required,
         available_gas_time_myr=available_gas_time_myr,
         migration_time_myr_call=migration_time_myr_call,
         gw_time_to_entry_myr=gw_time_to_entry_myr_call,
@@ -220,6 +259,9 @@ def classify_event_rate(
     )
 
     gas_final_time_myr = embed_time_myr + gas_elapsed_time_myr
+    migration_time_to_gas_target_myr = migration_time_to_entry_myr
+    if handoff_required:
+        migration_time_to_entry_myr = np.nan
     embedded_bh = object_status is DampingStatus.EMBEDDED_BH
 
     migration_formed_bh = bool(
@@ -250,7 +292,9 @@ def classify_event_rate(
             gas_elapsed_time_myr=gas_elapsed_time_myr,
             gas_final_time_myr=gas_final_time_myr,
             migration_time_to_entry_myr=migration_time_to_entry_myr,
+            migration_time_to_gas_target_myr=migration_time_to_gas_target_myr,
             gw_time_to_entry_myr=gw_time_to_entry_myr_at_start,
+            gw_time_gas_target_to_entry_myr=gw_time_gas_target_to_entry_myr,
             r_gas_fin_cm=r_gas_fin_cm,
             gas_stop_reason=gas_stop_reason,
             event_rate_class=EVENT_RATE_NO_IMRI,
@@ -262,6 +306,7 @@ def classify_event_rate(
         "entry_reached",
         "gw_dominates_at_start",
         "gw_dominates_after_gas",
+        "gas_to_gw_handoff",
     }
     is_imri_candidate = gas_stop_reason in candidate_reasons
 
@@ -273,11 +318,40 @@ def classify_event_rate(
         gas_elapsed_time_myr=gas_elapsed_time_myr,
         gas_final_time_myr=gas_final_time_myr,
         migration_time_to_entry_myr=migration_time_to_entry_myr,
+        migration_time_to_gas_target_myr=migration_time_to_gas_target_myr,
         gw_time_to_entry_myr=gw_time_to_entry_myr_at_start,
+        gw_time_gas_target_to_entry_myr=gw_time_gas_target_to_entry_myr,
         r_gas_fin_cm=r_gas_fin_cm,
         gas_stop_reason=gas_stop_reason,
         event_rate_class=(
             EVENT_RATE_IMRI_CANDIDATE if is_imri_candidate else EVENT_RATE_NO_IMRI
         ),
         event_rate_reason=gas_stop_reason,
+    )
+
+
+def classify_unsupported_band_entry(
+    *,
+    object_status: DampingStatus,
+    embed_time_myr: float,
+    r_ini_cm: float,
+) -> EventRateDecision:
+    """Retain formation bookkeeping when circular band entry is inside ISCO."""
+
+    embedded_bh = object_status is DampingStatus.EMBEDDED_BH
+    return EventRateDecision(
+        bh_origin=BH_ORIGIN_EMBEDDED if embedded_bh else BH_ORIGIN_NOT_FORMED,
+        bh_candidate=embedded_bh,
+        is_imri_candidate=None,
+        bh_embedding_time_myr=embed_time_myr if embedded_bh else np.nan,
+        gas_elapsed_time_myr=0.0,
+        gas_final_time_myr=embed_time_myr,
+        migration_time_to_entry_myr=np.nan,
+        migration_time_to_gas_target_myr=np.nan,
+        gw_time_to_entry_myr=np.nan,
+        gw_time_gas_target_to_entry_myr=np.nan,
+        r_gas_fin_cm=r_ini_cm,
+        gas_stop_reason="band_entry_inside_isco",
+        event_rate_class=EVENT_RATE_NOT_EVALUATED,
+        event_rate_reason="band_entry_inside_isco",
     )

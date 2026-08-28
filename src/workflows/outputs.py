@@ -20,6 +20,7 @@ IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
     ("m_nsc_msun", "m_nsc_msun"),
     ("num_repeats", "n_repeat"),
+    ("rate_evaluation_status", "rate_status"),
     ("gravitational_radius_cm", "rg_cm"),
     ("disk_outer_radius_mpc", "r_disk_out_mpc"),
     ("disk_outer_radius_rg", "r_disk_out_rg"),
@@ -39,6 +40,11 @@ IMRI_RESULT_COLUMN_MAP = [
     ("detectable_imri_count_mean", "n_det"),
     ("detectable_imri_count_min", "n_det_min"),
     ("detectable_imri_count_max", "n_det_max"),
+    ("band_entry_evaluated_count_mean", "n_band_eval"),
+    ("entry_in_torque_domain_count_mean", "n_entry_in_domain"),
+    ("entry_handoff_count_mean", "n_entry_handoff"),
+    ("band_entry_inside_isco_count_mean", "n_entry_in_ISCO"),
+    ("profile_error_count_mean", "n_profile_error"),
     ("torque_migration_evaluated_count_mean", "n_mig_eval"),
     ("finite_torque_migration_count_mean", "n_mig_finite"),
     ("trap_bound_migration_count_mean", "n_mig_trap"),
@@ -58,6 +64,7 @@ IMRI_EVENT_COLUMNS = [
     "object_index",
     "mass_msun",
     "bh_origin",
+    "band_entry_status",
     "event_rate_class",
     "detect_rate_class",
     "formation_time_myr",
@@ -69,6 +76,17 @@ IMRI_EVENT_COLUMNS = [
     "r_gas_fin_rg",
     "r_entry_cm",
     "r_entry_rg",
+    "r_entry_formal_cm",
+    "r_entry_formal_rg",
+    "r_isco_cm",
+    "r_isco_rg",
+    "r_disk_inner_cm",
+    "r_disk_inner_rg",
+    "r_torque_min_cm",
+    "r_torque_min_rg",
+    "r_handoff_cm",
+    "r_handoff_rg",
+    "source_entry_frequency_hz",
     # "r_det_entry_cm",
     # "r_det_entry_rg",
     # "f_ini_src_hz",
@@ -79,9 +97,13 @@ IMRI_EVENT_COLUMNS = [
     # "f_entry_obs_hz",
     # "gas_elapsed_time_myr",
     # "gas_final_time_myr",
-    # "migration_time_to_entry_myr",
-    # "migration_status",
-    # "blocking_radius_rg",
+    "migration_time_to_entry_myr",
+    "migration_time_to_handoff_myr",
+    "gw_time_handoff_to_entry_myr",
+    "gas_stop_reason",
+    "torque_evaluated",
+    "migration_status",
+    "blocking_radius_rg",
     # "gw_time_to_entry_myr",
     # "gw_time_after_gas_myr",
     "detection_time_myr",
@@ -94,12 +116,19 @@ IMRI_EVENT_COLUMNS = [
     "event_rate_reason",
     "detect_rate_reason",
 ]
+
 EVENT_HIDDEN_COLUMNS = {
     "r_ini_cm",
     "r_gas_fin_cm",
     "r_entry_cm",
+    "r_entry_formal_cm",
+    "r_isco_cm",
+    "r_disk_inner_cm",
+    "r_torque_min_cm",
+    "r_handoff_cm",
     "r_det_entry_cm",
 }
+
 EVENT_FREQUENCY_COLUMNS = {
     "f_ini_src_hz": "f_ini_src",
     "f_ini_obs_hz": "f_ini_obs",
@@ -108,6 +137,7 @@ EVENT_FREQUENCY_COLUMNS = {
     "f_entry_src_hz": "f_entry_src",
     "f_entry_obs_hz": "f_entry_obs",
 }
+
 FREQUENCY_UNITS_HZ = [
     ("hz", 1.0),
     ("milli_hz", 1.0e-3),
@@ -144,7 +174,7 @@ def _mean_disk_outer_radius_rg_pc(
 
 def _result_output_record(
     averaged_result: IMRIDynAveragedResult,
-) -> dict[str, float | int]:
+) -> dict[str, float | int | str]:
     record = dict(averaged_result.to_dict())
     rg_values = [
         result.gravitational_radius_cm
@@ -268,6 +298,44 @@ def save_migration_diagnostics(
         if event["migration_status"] == "trap_bound"
     ]
 
+    band_entry_objects = [
+        {
+            "object_index": event["object_index"],
+            "mass_msun": json_float(event["mass_msun"]),
+            "band_entry_status": event["band_entry_status"],
+            "source_entry_frequency_hz": json_float(event["source_entry_frequency_hz"]),
+            "r_entry_formal_rg": json_float(event["r_entry_formal_rg"]),
+            "r_isco_rg": json_float(event["r_isco_rg"]),
+            "r_disk_inner_rg": json_float(event["r_disk_inner_rg"]),
+            "r_torque_min_rg": json_float(event["r_torque_min_rg"]),
+            "r_handoff_rg": json_float(event["r_handoff_rg"]),
+            "migration_time_to_handoff_myr": json_float(
+                event["migration_time_to_handoff_myr"]
+            ),
+            "gw_time_handoff_to_entry_myr": json_float(
+                event["gw_time_handoff_to_entry_myr"]
+            ),
+            "gas_stop_reason": event["gas_stop_reason"],
+            "torque_evaluated": event["torque_evaluated"],
+        }
+        for event in result.imri_events
+    ]
+
+    recorded_band_status_count = (
+        result.entry_in_torque_domain_count
+        + result.entry_handoff_count
+        + result.band_entry_inside_isco_count
+        + result.profile_error_count
+    )
+    if result.band_entry_evaluated_count != recorded_band_status_count:
+        raise ValueError("band-entry counters do not conserve evaluated objects")
+    if result.torque_migration_evaluated_count != (
+        result.entry_in_torque_domain_count
+        + result.entry_handoff_count
+        + result.profile_error_count
+    ):
+        raise ValueError("torque-applicable counters do not sum to evaluated count")
+
     if (
         result.torque_migration_evaluated_count
         != result.finite_torque_migration_count
@@ -279,6 +347,40 @@ def save_migration_diagnostics(
         raise ValueError("trap-bound counter does not match event records")
     if result.torque_migration_error_count != len(result.torque_errors):
         raise ValueError("torque error counter does not match error records")
+    if result.profile_error_count != result.torque_migration_error_count:
+        raise ValueError("profile-error counter does not match torque errors")
+
+    event_status_counts = {
+        status: sum(
+            event["band_entry_status"] == status for event in result.imri_events
+        )
+        for status in (
+            "entry_in_torque_domain",
+            "entry_below_torque_domain_but_above_isco",
+            "band_entry_inside_isco",
+        )
+    }
+    if event_status_counts["entry_in_torque_domain"] != (
+        result.entry_in_torque_domain_count
+    ):
+        raise ValueError("in-domain counter does not match event records")
+    if event_status_counts["entry_below_torque_domain_but_above_isco"] != (
+        result.entry_handoff_count
+    ):
+        raise ValueError("handoff counter does not match event records")
+    if event_status_counts["band_entry_inside_isco"] != (
+        result.band_entry_inside_isco_count
+    ):
+        raise ValueError("inside-ISCO counter does not match event records")
+
+    if result.band_entry_inside_isco_count and result.profile_error_count:
+        rate_evaluation_status = "not_evaluated_band_entry_and_profile_error"
+    elif result.band_entry_inside_isco_count:
+        rate_evaluation_status = "not_evaluated_band_entry_inside_isco"
+    elif result.profile_error_count:
+        rate_evaluation_status = "incomplete_profile_error"
+    else:
+        rate_evaluation_status = "complete"
 
     payload = {
         "m_smbh_msun": json_float(result.m_smbh_msun),
@@ -286,11 +388,20 @@ def save_migration_diagnostics(
         "repeat": result.repeat_idx,
         "gap_opening_condition": config.gap_opening_condition,
         "consider_type_ii_migration": config.consider_type_ii_migration,
+        "rate_evaluation_status": rate_evaluation_status,
+        "band_entry_evaluated_count": result.band_entry_evaluated_count,
+        "entry_in_torque_domain_count": result.entry_in_torque_domain_count,
+        "entry_handoff_count": result.entry_handoff_count,
+        "band_entry_inside_isco_count": result.band_entry_inside_isco_count,
+        "profile_error_count": result.profile_error_count,
         "torque_migration_evaluated_count": (result.torque_migration_evaluated_count),
         "finite_torque_migration_count": result.finite_torque_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,
         "torque_migration_error_count": result.torque_migration_error_count,
         "trap_bound_mass_msun": json_float(result.trap_bound_mass_msun),
+        "imri_rate_per_myr": json_float(result.imri_rate_per_myr),
+        "detectable_imri_rate_per_myr": json_float(result.detectable_imri_rate_per_myr),
+        "band_entry_objects": band_entry_objects,
         "trap_bound_objects": trap_bound_objects,
         "torque_errors": [
             {
@@ -298,6 +409,8 @@ def save_migration_diagnostics(
                 "mass_msun": json_float(error["mass_msun"]),
                 "r_ini_rg": json_float(error["r_ini_rg"]),
                 "r_entry_rg": json_float(error["r_entry_rg"]),
+                "r_isco_rg": json_float(error["r_isco_rg"]),
+                "band_entry_status": error["band_entry_status"],
                 "error": error["error"],
             }
             for error in result.torque_errors

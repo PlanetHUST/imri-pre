@@ -14,18 +14,28 @@ def main(events_csv: Path = DEFAULT_EVENTS_CSV) -> None:
         print("No IMRI event rows found")
         return
 
-    candidates = frame[frame["is_imri_candidate"].astype(bool)]
+    unsupported_count = 0
+    if "band_entry_status" in frame:
+        unsupported_count = int(
+            frame["band_entry_status"].eq("band_entry_inside_isco").sum()
+        )
+
+    candidates = frame[frame["is_imri_candidate"].eq(True)]
     if candidates.empty:
-        print("No IMRI candidates found")
+        print("No classified IMRI candidates found")
+        if unsupported_count:
+            print(f"Unsupported circular band-entry rows = {unsupported_count}")
         return
 
     detected_count = 0
     if "is_lisa_detectable" in frame:
-        detected_count = int(frame["is_lisa_detectable"].astype(bool).sum())
+        detected_count = int(frame["is_lisa_detectable"].eq(True).sum())
 
     mass = candidates["mass_msun"]
     print(f"IMRI candidate count = {len(candidates)}")
     print(f"Detectable IMRI count = {detected_count}")
+    if unsupported_count:
+        print(f"Unsupported circular band-entry rows = {unsupported_count}")
     print(
         f"max mass = {mass.max():.3f} Msun\n"
         f"min mass = {mass.min():.3f} Msun\n"

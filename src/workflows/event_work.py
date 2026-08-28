@@ -1,5 +1,6 @@
 """Evaluate damped objects and assemble their IMRI event records."""
 
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -12,12 +13,13 @@ from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
 from .config import IMRIDynConfig
-from .detect_rate import classify_detectability
+from .detect_rate import classify_detectability, unsupported_band_entry_decision
 from .engine import IMRIDynEngine, TorqueProfileError
 from .event_rate import (
     BH_ORIGIN_MIGRATION_FORMED,
     GAS_FINAL_RADIUS_SAMPLES,
     classify_event_rate,
+    classify_unsupported_band_entry,
 )
 from .models import (
     DampingResult,
@@ -29,6 +31,63 @@ from .models import (
 )
 from .redshift_evolve import RedshiftEvolution
 from .runtime import vprint
+
+BAND_ENTRY_IN_TORQUE_DOMAIN = "entry_in_torque_domain"
+BAND_ENTRY_HANDOFF = "entry_below_torque_domain_but_above_isco"
+BAND_ENTRY_INSIDE_ISCO = "band_entry_inside_isco"
+BAND_ENTRY_PROFILE_ERROR = "profile_error"
+
+
+@dataclass(frozen=True)
+class BandEntryRoute:
+    """Resolved gas target for a valid circular entry outside ISCO."""
+
+    status: str
+    disk_inner_radius_cm: float
+    torque_min_radius_cm: float
+    handoff_radius_cm: float
+
+
+def resolve_band_entry_route(
+    boundary: gw_helpers.CircularBandBoundary,
+    disk_inner_radius_cm: float,
+    torque_radius_cm: FloatArray,
+) -> BandEntryRoute:
+    """Resolve an in-domain entry or lower-bound gas-to-GW handoff."""
+
+    radius_cm = np.asarray(torque_radius_cm, dtype=float)
+    if (
+        radius_cm.ndim != 1
+        or radius_cm.size < 2
+        or not np.all(np.isfinite(radius_cm) & (radius_cm > 0.0))
+    ):
+        raise TorqueProfileError(
+            "torque profile has no valid one-dimensional radius domain"
+        )
+    if not np.isfinite(disk_inner_radius_cm) or disk_inner_radius_cm <= 0.0:
+        raise TorqueProfileError("disk profile has no finite positive inner radius")
+    if boundary.status == BAND_ENTRY_INSIDE_ISCO:
+        raise ValueError("inside-ISCO entry must be handled before torque routing")
+
+    torque_min_radius_cm = float(np.min(radius_cm))
+    lower_domain_radius_cm = max(disk_inner_radius_cm, torque_min_radius_cm)
+    lower_tolerance_cm = max(
+        np.spacing(lower_domain_radius_cm),
+        lower_domain_radius_cm * 1.0e-12,
+    )
+    if boundary.formal_entry_radius_cm < lower_domain_radius_cm - lower_tolerance_cm:
+        return BandEntryRoute(
+            status=BAND_ENTRY_HANDOFF,
+            disk_inner_radius_cm=disk_inner_radius_cm,
+            torque_min_radius_cm=torque_min_radius_cm,
+            handoff_radius_cm=lower_domain_radius_cm,
+        )
+    return BandEntryRoute(
+        status=BAND_ENTRY_IN_TORQUE_DOMAIN,
+        disk_inner_radius_cm=disk_inner_radius_cm,
+        torque_min_radius_cm=torque_min_radius_cm,
+        handoff_radius_cm=boundary.formal_entry_radius_cm,
+    )
 
 
 def _safe_gw_frequency_hz(total_mass_msun: float, radius_cm: float) -> float:
@@ -73,7 +132,13 @@ class IMRIEventEvaluator:
                 result.outside_or_failed_count += 1
                 continue
 
-            result.torque_migration_evaluated_count += 1
+            result.band_entry_evaluated_count += 1
+            boundary = gw_helpers.circular_band_boundary(
+                result.m_smbh_msun,
+                damping_result["mass_msun"],
+                self.config.lisa_min_gw_frequency_hz,
+                self.config.redshift,
+            )
 
             try:
                 event = self._imri_event_record(
@@ -82,24 +147,23 @@ class IMRIEventEvaluator:
                     disk_data,
                     damping_result,
                     rg_cm,
+                    boundary,
                 )
 
             except (disk_migration.TorqueMigrationError, TorqueProfileError) as exc:
-                r_entry_cm = gw_helpers.lisa_entry_radius_cm(
-                    result.m_smbh_msun,
-                    damping_result["mass_msun"],
-                    self.config.lisa_min_gw_frequency_hz,
-                    self.config.redshift,
-                )
                 torque_error: TorqueErrorRecord = {
                     "object_index": damping_result["idx"],
                     "mass_msun": damping_result["mass_msun"],
                     "r_ini_rg": damping_result["final_semi_major_axis_cm"] / rg_cm,
-                    "r_entry_rg": r_entry_cm / rg_cm,
+                    "r_entry_rg": boundary.formal_entry_radius_cm / rg_cm,
+                    "r_isco_rg": boundary.isco_radius_cm / rg_cm,
+                    "band_entry_status": BAND_ENTRY_PROFILE_ERROR,
                     "error": str(exc),
                 }
                 result.torque_errors.append(torque_error)
+                result.torque_migration_evaluated_count += 1
                 result.torque_migration_error_count += 1
+                result.profile_error_count += 1
                 # vprint(
                 #     "Torque migration error: "
                 #     f"object_index={damping_result['idx']}, "
@@ -108,9 +172,18 @@ class IMRIEventEvaluator:
                 continue
 
             result.imri_events.append(event)
-            if event["migration_status"] == "trap_bound":
-                result.trap_bound_migration_count += 1
-                result.trap_bound_mass_msun += event["mass_msun"]
+            if event["band_entry_status"] == BAND_ENTRY_INSIDE_ISCO:
+                result.band_entry_inside_isco_count += 1
+            else:
+                result.torque_migration_evaluated_count += 1
+                if event["band_entry_status"] == BAND_ENTRY_HANDOFF:
+                    result.entry_handoff_count += 1
+                else:
+                    result.entry_in_torque_domain_count += 1
+
+                if event["migration_status"] == "trap_bound":
+                    result.trap_bound_migration_count += 1
+                    result.trap_bound_mass_msun += event["mass_msun"]
                 # vprint(
                 #     "Trap-bound migration: "
                 #     f"object_index={event['object_index']}, "
@@ -119,32 +192,40 @@ class IMRIEventEvaluator:
                 #     f"r_entry_rg={event['r_entry_rg']:.6e}, "
                 #     f"blocking_radius_rg={event['blocking_radius_rg']}"
                 # )
-            else:
-                result.finite_torque_migration_count += 1
+                else:
+                    result.finite_torque_migration_count += 1
 
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
             if event["bh_origin"] == BH_ORIGIN_MIGRATION_FORMED:
                 result.migration_formed_bh_count += 1
-            if event["is_imri_candidate"]:
+            if event["is_imri_candidate"] is True:
                 result.imri_count += 1
                 result.imri_mass_msun += event["mass_msun"]
-                if event["is_lisa_detectable"]:
+                if event["is_lisa_detectable"] is True:
                     result.detectable_imri_count += 1
                     result.detectable_imri_mass_msun += event["mass_msun"]
-                else:
+                elif event["is_lisa_detectable"] is False:
                     result.no_detectable_imri_count += 1
-            else:
+            elif event["is_imri_candidate"] is False:
                 result.no_imri_count += 1
 
-        result.imri_rate_per_myr = result.imri_count / self.duty_cycle_myr
-        result.imri_mass_rate_msun_per_myr = result.imri_mass_msun / self.duty_cycle_myr
-        result.detectable_imri_rate_per_myr = (
-            result.detectable_imri_count / self.duty_cycle_myr
-        )
-        result.detectable_imri_mass_rate_msun_per_myr = (
-            result.detectable_imri_mass_msun / self.duty_cycle_myr
-        )
+        if result.band_entry_inside_isco_count > 0 or result.profile_error_count > 0:
+            result.imri_rate_per_myr = np.nan
+            result.imri_mass_rate_msun_per_myr = np.nan
+            result.detectable_imri_rate_per_myr = np.nan
+            result.detectable_imri_mass_rate_msun_per_myr = np.nan
+        else:
+            result.imri_rate_per_myr = result.imri_count / self.duty_cycle_myr
+            result.imri_mass_rate_msun_per_myr = (
+                result.imri_mass_msun / self.duty_cycle_myr
+            )
+            result.detectable_imri_rate_per_myr = (
+                result.detectable_imri_count / self.duty_cycle_myr
+            )
+            result.detectable_imri_mass_rate_msun_per_myr = (
+                result.detectable_imri_mass_msun / self.duty_cycle_myr
+            )
 
     def _imri_event_record(
         self,
@@ -153,69 +234,129 @@ class IMRIEventEvaluator:
         disk_data: DiskProfiles,
         damping_result: DampingResult,
         rg_cm: float,
+        boundary: gw_helpers.CircularBandBoundary,
     ) -> IMRIEventRecord:
-
         redshift = self.config.redshift
         migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + migrator_mass_msun
         formation_time_myr = damping_result["formation_time_myr"]
         damping_time_myr = damping_result["damping_time_myr"]
+        r_entry_formal_cm = boundary.formal_entry_radius_cm
+        r_isco_cm = boundary.isco_radius_cm
+        disk_inner_radius_cm = float(disk_data["inner_radius_cm"])
+        torque_min_radius_cm = np.nan
+        handoff_radius_cm = np.nan
+        r_entry_cm = np.nan
+        torque_evaluated = False
+        migration_status = "not_applicable"
+        blocking_radius_cm: float | None = None
 
-        r_entry_cm = gw_helpers.lisa_entry_radius_cm(
-            result.m_smbh_msun,
-            migrator_mass_msun,
-            self.config.lisa_min_gw_frequency_hz,
-            redshift,
-        )
-
-        migration_outcomes: dict[
-            tuple[float, float], disk_migration.TorqueMigrationOutcome
-        ] = {}
-
-        def migration_outcome_call(
-            start_radius_cm: float, target_radius_cm: float
-        ) -> disk_migration.TorqueMigrationOutcome:
-            key = (float(start_radius_cm), float(target_radius_cm))
-            if key not in migration_outcomes:
-                migration_outcomes[key] = self.torque_migration_outcome_to_radius(
-                    agn_properties,
-                    disk_data,
-                    damping_result["mass_g"],
-                    start_radius_cm,
-                    target_radius_cm,
-                )
-            return migration_outcomes[key]
-
-        def migration_time_myr_call(
-            start_radius_cm: float, target_radius_cm: float
-        ) -> float:
-            return migration_outcome_call(start_radius_cm, target_radius_cm).time_myr
-
-        initial_migration_outcome = migration_outcome_call(r_ini_cm, r_entry_cm)
-
-        def gw_time_to_entry_myr_call(radius_cm: float) -> float:
-            return gw_helpers.peters_time_to_lisa_band_myr(
-                result.m_smbh_msun,
-                migrator_mass_msun,
-                radius_cm,
-                self.config.lisa_min_gw_frequency_hz,
-                self.config.gw_eccentricity,
-                redshift,
+        if boundary.status == BAND_ENTRY_INSIDE_ISCO:
+            band_entry_status = BAND_ENTRY_INSIDE_ISCO
+            event_decision = classify_unsupported_band_entry(
+                object_status=damping_result["status"],
+                embed_time_myr=damping_result["final_time_myr"],
+                r_ini_cm=r_ini_cm,
             )
+            detect_decision = unsupported_band_entry_decision(
+                primary_mass_msun=result.m_smbh_msun,
+                current_radius_cm=r_ini_cm,
+            )
+        else:
+            torque_profile = self.engine.get_torque_profile(
+                disk_data,
+                agn_properties.smbh_mass_msun,
+                migrator_mass_msun,
+            )
+            route = resolve_band_entry_route(
+                boundary,
+                disk_inner_radius_cm,
+                np.asarray(torque_profile.radius_cm, dtype=float),
+            )
+            band_entry_status = route.status
+            torque_min_radius_cm = route.torque_min_radius_cm
+            handoff_radius_cm = route.handoff_radius_cm
+            r_entry_cm = r_entry_formal_cm
+            torque_evaluated = True
 
-        event_decision = classify_event_rate(
-            object_status=damping_result["status"],
-            formation_time_myr=formation_time_myr,
-            damping_time_myr=damping_time_myr,
-            embed_time_myr=damping_result["final_time_myr"],
-            r_ini_cm=r_ini_cm,
-            r_entry_cm=r_entry_cm,
-            migration_time_myr_call=migration_time_myr_call,
-            gw_time_to_entry_myr_call=gw_time_to_entry_myr_call,
-            duty_cycle_myr=self.config.duty_cycle_myr,
-            num_radius_samples=GAS_FINAL_RADIUS_SAMPLES,
-        )
+            migration_outcomes: dict[
+                tuple[float, float], disk_migration.TorqueMigrationOutcome
+            ] = {}
+
+            def migration_outcome_call(
+                start_radius_cm: float, target_radius_cm: float
+            ) -> disk_migration.TorqueMigrationOutcome:
+                key = (float(start_radius_cm), float(target_radius_cm))
+                if key not in migration_outcomes:
+                    migration_outcomes[key] = self.torque_migration_outcome_to_radius(
+                        agn_properties,
+                        disk_data,
+                        damping_result["mass_g"],
+                        start_radius_cm,
+                        target_radius_cm,
+                        torque_profile=torque_profile,
+                    )
+                return migration_outcomes[key]
+
+            def migration_time_myr_call(
+                start_radius_cm: float, target_radius_cm: float
+            ) -> float:
+                return migration_outcome_call(
+                    start_radius_cm, target_radius_cm
+                ).time_myr
+
+            initial_migration_outcome = migration_outcome_call(
+                r_ini_cm,
+                handoff_radius_cm,
+            )
+            migration_status = initial_migration_outcome.status
+            blocking_radius_cm = initial_migration_outcome.blocking_radius_cm
+
+            def gw_time_to_entry_myr_call(radius_cm: float) -> float:
+                return gw_helpers.peters_time_to_lisa_band_myr(
+                    result.m_smbh_msun,
+                    migrator_mass_msun,
+                    radius_cm,
+                    self.config.lisa_min_gw_frequency_hz,
+                    self.config.gw_eccentricity,
+                    redshift,
+                )
+
+            event_decision = classify_event_rate(
+                object_status=damping_result["status"],
+                formation_time_myr=formation_time_myr,
+                damping_time_myr=damping_time_myr,
+                embed_time_myr=damping_result["final_time_myr"],
+                r_ini_cm=r_ini_cm,
+                r_gas_target_cm=handoff_radius_cm,
+                r_entry_cm=r_entry_cm,
+                handoff_required=band_entry_status == BAND_ENTRY_HANDOFF,
+                migration_time_myr_call=migration_time_myr_call,
+                gw_time_to_entry_myr_call=gw_time_to_entry_myr_call,
+                duty_cycle_myr=self.config.duty_cycle_myr,
+                num_radius_samples=GAS_FINAL_RADIUS_SAMPLES,
+            )
+            if event_decision.is_imri_candidate is None:
+                raise RuntimeError("valid band entry was not classified")
+            detect_decision = classify_detectability(
+                is_imri_candidate=event_decision.is_imri_candidate,
+                primary_mass_msun=result.m_smbh_msun,
+                secondary_mass_msun=migrator_mass_msun,
+                r_gas_fin_cm=event_decision.r_gas_fin_cm,
+                gas_final_time_myr=event_decision.gas_final_time_myr,
+                initial_redshift=redshift,
+                hubble_constant_per_myr=self.config.hubble_constant_per_myr,
+                min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
+                max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
+                eccentricity=self.config.gw_eccentricity,
+                cosmic_merge_time_myr=self.config.cosmic_merge_time_myr,
+                cosmic_merge_smbh_mass_factor=(
+                    self.config.cosmic_merge_smbh_mass_factor
+                ),
+                cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
+                snr_threshold=self.config.snr_threshold,
+            )
         # vprint(
         #     "total_migration_time is "
         #     f"{event_decision.migration_time_to_entry_myr:.3e} myr"
@@ -240,23 +381,6 @@ class IMRIEventEvaluator:
             f_gas_fin_source_hz, redshift_at_gas_fin
         )
 
-        detect_decision = classify_detectability(
-            is_imri_candidate=event_decision.is_imri_candidate,
-            primary_mass_msun=result.m_smbh_msun,
-            secondary_mass_msun=migrator_mass_msun,
-            r_gas_fin_cm=event_decision.r_gas_fin_cm,
-            gas_final_time_myr=event_decision.gas_final_time_myr,
-            initial_redshift=redshift,
-            hubble_constant_per_myr=self.config.hubble_constant_per_myr,
-            min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
-            max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
-            eccentricity=self.config.gw_eccentricity,
-            cosmic_merge_time_myr=self.config.cosmic_merge_time_myr,
-            cosmic_merge_smbh_mass_factor=self.config.cosmic_merge_smbh_mass_factor,
-            cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
-            snr_threshold=self.config.snr_threshold,
-        )
-
         f_entry_output_source_hz = (
             detect_decision.source_frequency_hz
             if np.isfinite(detect_decision.source_frequency_hz)
@@ -277,6 +401,7 @@ class IMRIEventEvaluator:
             "object_index": damping_result["idx"],
             "mass_msun": migrator_mass_msun,
             "bh_origin": event_decision.bh_origin,
+            "band_entry_status": band_entry_status,
             "event_rate_class": event_decision.event_rate_class,
             "detect_rate_class": detect_decision.detect_rate_class,
             "formation_time_myr": formation_time_myr,
@@ -288,8 +413,19 @@ class IMRIEventEvaluator:
             "r_gas_fin_rg": event_decision.r_gas_fin_cm / rg_cm,
             "r_entry_cm": r_entry_cm,
             "r_entry_rg": r_entry_cm / rg_cm,
+            "r_entry_formal_cm": r_entry_formal_cm,
+            "r_entry_formal_rg": r_entry_formal_cm / rg_cm,
+            "r_isco_cm": r_isco_cm,
+            "r_isco_rg": r_isco_cm / rg_cm,
+            "r_disk_inner_cm": disk_inner_radius_cm,
+            "r_disk_inner_rg": disk_inner_radius_cm / rg_cm,
+            "r_torque_min_cm": torque_min_radius_cm,
+            "r_torque_min_rg": torque_min_radius_cm / rg_cm,
+            "r_handoff_cm": handoff_radius_cm,
+            "r_handoff_rg": handoff_radius_cm / rg_cm,
             "r_det_entry_cm": detect_decision.final_entry_radius_cm,
             "r_det_entry_rg": detect_decision.final_entry_radius_cm / rg_cm,
+            "source_entry_frequency_hz": boundary.source_entry_frequency_hz,
             "f_ini_src_hz": f_ini_source_hz,
             "f_ini_obs_hz": f_ini_observed_hz,
             "f_gas_fin_src_hz": f_gas_fin_source_hz,
@@ -299,11 +435,17 @@ class IMRIEventEvaluator:
             "gas_elapsed_time_myr": event_decision.gas_elapsed_time_myr,
             "gas_final_time_myr": event_decision.gas_final_time_myr,
             "migration_time_to_entry_myr": event_decision.migration_time_to_entry_myr,
-            "migration_status": initial_migration_outcome.status,
+            "migration_time_to_handoff_myr": (
+                event_decision.migration_time_to_gas_target_myr
+            ),
+            "gw_time_handoff_to_entry_myr": (
+                event_decision.gw_time_gas_target_to_entry_myr
+            ),
+            "gas_stop_reason": event_decision.gas_stop_reason,
+            "torque_evaluated": torque_evaluated,
+            "migration_status": migration_status,
             "blocking_radius_rg": (
-                initial_migration_outcome.blocking_radius_cm / rg_cm
-                if initial_migration_outcome.blocking_radius_cm is not None
-                else None
+                blocking_radius_cm / rg_cm if blocking_radius_cm is not None else None
             ),
             "gw_time_to_entry_myr": event_decision.gw_time_to_entry_myr,
             "gw_time_after_gas_myr": detect_decision.gw_time_after_gas_myr,
@@ -325,6 +467,7 @@ class IMRIEventEvaluator:
         mass_g: float,
         start_radius_cm: float,
         target_radius_cm: float,
+        torque_profile: TorqueProfile | None = None,
     ) -> disk_migration.TorqueMigrationOutcome:
         """Return the signed torque migration outcome for one radial path."""
         if start_radius_cm <= target_radius_cm:
@@ -338,11 +481,12 @@ class IMRIEventEvaluator:
             )
 
         migrator_mass_msun = mass_g / const.msun
-        torque_profile = self.engine.get_torque_profile(
-            disk_data,
-            agn_properties.smbh_mass_msun,
-            migrator_mass_msun,
-        )
+        if torque_profile is None:
+            torque_profile = self.engine.get_torque_profile(
+                disk_data,
+                agn_properties.smbh_mass_msun,
+                migrator_mass_msun,
+            )
         torque_cgs = self._migration_torque_cgs(
             torque_profile,
             agn_properties,

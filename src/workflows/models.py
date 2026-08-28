@@ -85,6 +85,7 @@ class IMRIEventRecord(TypedDict):
     object_index: int
     mass_msun: float
     bh_origin: str
+    band_entry_status: str
     event_rate_class: str
     detect_rate_class: str
     formation_time_myr: float
@@ -96,8 +97,19 @@ class IMRIEventRecord(TypedDict):
     r_gas_fin_rg: float
     r_entry_cm: float
     r_entry_rg: float
+    r_entry_formal_cm: float
+    r_entry_formal_rg: float
+    r_isco_cm: float
+    r_isco_rg: float
+    r_disk_inner_cm: float
+    r_disk_inner_rg: float
+    r_torque_min_cm: float
+    r_torque_min_rg: float
+    r_handoff_cm: float
+    r_handoff_rg: float
     r_det_entry_cm: float
     r_det_entry_rg: float
+    source_entry_frequency_hz: float
     f_ini_src_hz: float
     f_ini_obs_hz: float
     f_gas_fin_src_hz: float
@@ -107,6 +119,10 @@ class IMRIEventRecord(TypedDict):
     gas_elapsed_time_myr: float
     gas_final_time_myr: float
     migration_time_to_entry_myr: float
+    migration_time_to_handoff_myr: float
+    gw_time_handoff_to_entry_myr: float
+    gas_stop_reason: str
+    torque_evaluated: bool
     migration_status: str
     blocking_radius_rg: float | None
     gw_time_to_entry_myr: float
@@ -115,8 +131,8 @@ class IMRIEventRecord(TypedDict):
     final_smbh_mass_msun: float
     cosmic_merge_applied: bool
     bh_candidate: bool
-    is_imri_candidate: bool
-    is_lisa_detectable: bool
+    is_imri_candidate: bool | None
+    is_lisa_detectable: bool | None
     snr_proxy: float
     event_rate_reason: str
     detect_rate_reason: str
@@ -127,6 +143,8 @@ class TorqueErrorRecord(TypedDict):
     mass_msun: float
     r_ini_rg: float
     r_entry_rg: float
+    r_isco_rg: float
+    band_entry_status: str
     error: str
 
 
@@ -155,6 +173,11 @@ class IMRIDynSingleResult:
         self.detectable_imri_mass_msun = 0.0
         self.detectable_imri_rate_per_myr = 0.0
         self.detectable_imri_mass_rate_msun_per_myr = 0.0
+        self.band_entry_evaluated_count = 0
+        self.entry_in_torque_domain_count = 0
+        self.entry_handoff_count = 0
+        self.band_entry_inside_isco_count = 0
+        self.profile_error_count = 0
         self.torque_migration_evaluated_count = 0
         self.finite_torque_migration_count = 0
         self.trap_bound_migration_count = 0
@@ -193,6 +216,11 @@ class IMRIDynSingleResult:
             "detectable_imri_mass_rate_msun_per_myr": (
                 self.detectable_imri_mass_rate_msun_per_myr
             ),
+            "band_entry_evaluated_count": self.band_entry_evaluated_count,
+            "entry_in_torque_domain_count": self.entry_in_torque_domain_count,
+            "entry_handoff_count": self.entry_handoff_count,
+            "band_entry_inside_isco_count": self.band_entry_inside_isco_count,
+            "profile_error_count": self.profile_error_count,
             "torque_migration_evaluated_count": (self.torque_migration_evaluated_count),
             "finite_torque_migration_count": self.finite_torque_migration_count,
             "trap_bound_migration_count": self.trap_bound_migration_count,
@@ -219,17 +247,42 @@ class IMRIDynAveragedResult:
         self.m_nsc_msun = m_nsc_msun
         self.results = results
 
-    def to_dict(self) -> dict[str, float | int]:
+    def to_dict(self) -> dict[str, float | int | str]:
         def values(name: str) -> FloatArray:
             return np.asarray(
                 [getattr(result, name) for result in self.results],
                 dtype=float,
             )
 
+        inside_isco_count = float(np.sum(values("band_entry_inside_isco_count")))
+        profile_error_count = float(np.sum(values("profile_error_count")))
+        rate_evaluation_complete = (
+            inside_isco_count == 0.0 and profile_error_count == 0.0
+        )
+        if inside_isco_count > 0.0 and profile_error_count > 0.0:
+            rate_evaluation_status = "not_evaluated_band_entry_and_profile_error"
+        elif inside_isco_count > 0.0:
+            rate_evaluation_status = "not_evaluated_band_entry_inside_isco"
+        elif profile_error_count > 0.0:
+            rate_evaluation_status = "incomplete_profile_error"
+        else:
+            rate_evaluation_status = "complete"
+
+        def classified_stat(name: str, reducer: str = "mean") -> float:
+            if not rate_evaluation_complete:
+                return np.nan
+            data = values(name)
+            if reducer == "min":
+                return float(np.min(data))
+            if reducer == "max":
+                return float(np.max(data))
+            return float(np.mean(data))
+
         return {
             "m_smbh_msun": self.m_smbh_msun,
             "m_nsc_msun": self.m_nsc_msun,
             "num_repeats": len(self.results),
+            "rate_evaluation_status": rate_evaluation_status,
             "f_geo_mean": float(np.mean(values("f_geo"))),
             "disk_crossing_objects_mean": float(
                 np.mean(values("disk_crossing_objects"))
@@ -241,33 +294,44 @@ class IMRIDynAveragedResult:
             ),
             "bh_candidate_count_mean": float(np.mean(values("bh_candidate_count"))),
             "no_imri_count_mean": float(np.mean(values("no_imri_count"))),
-            "imri_candidate_count_mean": float(np.mean(values("imri_count"))),
-            "imri_candidate_count_min": float(np.min(values("imri_count"))),
-            "imri_candidate_count_max": float(np.max(values("imri_count"))),
-            "imri_candidate_mass_mean_msun": float(np.mean(values("imri_mass_msun"))),
-            "imri_candidate_rate_mean_per_myr": float(
-                np.mean(values("imri_rate_per_myr"))
+            "imri_candidate_count_mean": classified_stat("imri_count"),
+            "imri_candidate_count_min": classified_stat("imri_count", "min"),
+            "imri_candidate_count_max": classified_stat("imri_count", "max"),
+            "imri_candidate_mass_mean_msun": classified_stat("imri_mass_msun"),
+            "imri_candidate_rate_mean_per_myr": classified_stat("imri_rate_per_myr"),
+            "imri_candidate_mass_rate_mean_msun_per_myr": classified_stat(
+                "imri_mass_rate_msun_per_myr"
             ),
-            "imri_candidate_mass_rate_mean_msun_per_myr": float(
-                np.mean(values("imri_mass_rate_msun_per_myr"))
+            "detectable_imri_count_mean": classified_stat("detectable_imri_count"),
+            "detectable_imri_count_min": classified_stat(
+                "detectable_imri_count", "min"
             ),
-            "detectable_imri_count_mean": float(
-                np.mean(values("detectable_imri_count"))
+            "detectable_imri_count_max": classified_stat(
+                "detectable_imri_count", "max"
             ),
-            "detectable_imri_count_min": float(np.min(values("detectable_imri_count"))),
-            "detectable_imri_count_max": float(np.max(values("detectable_imri_count"))),
-            "detectable_imri_mass_mean_msun": float(
-                np.mean(values("detectable_imri_mass_msun"))
+            "detectable_imri_mass_mean_msun": classified_stat(
+                "detectable_imri_mass_msun"
             ),
-            "detectable_imri_rate_mean_per_myr": float(
-                np.mean(values("detectable_imri_rate_per_myr"))
+            "detectable_imri_rate_mean_per_myr": classified_stat(
+                "detectable_imri_rate_per_myr"
             ),
-            "detectable_imri_mass_rate_mean_msun_per_myr": float(
-                np.mean(values("detectable_imri_mass_rate_msun_per_myr"))
+            "detectable_imri_mass_rate_mean_msun_per_myr": classified_stat(
+                "detectable_imri_mass_rate_msun_per_myr"
             ),
-            "no_detectable_imri_count_mean": float(
-                np.mean(values("no_detectable_imri_count"))
+            "no_detectable_imri_count_mean": classified_stat(
+                "no_detectable_imri_count"
             ),
+            "band_entry_evaluated_count_mean": float(
+                np.mean(values("band_entry_evaluated_count"))
+            ),
+            "entry_in_torque_domain_count_mean": float(
+                np.mean(values("entry_in_torque_domain_count"))
+            ),
+            "entry_handoff_count_mean": float(np.mean(values("entry_handoff_count"))),
+            "band_entry_inside_isco_count_mean": float(
+                np.mean(values("band_entry_inside_isco_count"))
+            ),
+            "profile_error_count_mean": float(np.mean(values("profile_error_count"))),
             "torque_migration_evaluated_count_mean": float(
                 np.mean(values("torque_migration_evaluated_count"))
             ),

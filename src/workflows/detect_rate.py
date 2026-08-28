@@ -11,6 +11,7 @@ from .redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
 DETECTION_CLASS_NOT_DETECTABLE = "non-detectable"
+DETECTION_CLASS_NOT_EVALUATED = "not evaluated"
 
 
 @dataclass(frozen=True)
@@ -18,7 +19,7 @@ class DetectRateDecision:
     """Classification result for the simplified detectability stage."""
 
     detect_rate_class: str
-    is_lisa_detectable: bool
+    is_lisa_detectable: bool | None
     snr_proxy: float
     source_frequency_hz: float
     observed_frequency_hz: float
@@ -30,6 +31,30 @@ class DetectRateDecision:
     gw_time_after_gas_myr: float
     cosmic_merge_applied: bool
     detect_rate_reason: str
+
+
+def unsupported_band_entry_decision(
+    *,
+    primary_mass_msun: float,
+    current_radius_cm: float,
+) -> DetectRateDecision:
+    """Return an explicit unevaluated detector result for entry inside ISCO."""
+
+    return DetectRateDecision(
+        detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
+        is_lisa_detectable=None,
+        snr_proxy=np.nan,
+        source_frequency_hz=np.nan,
+        observed_frequency_hz=np.nan,
+        detection_time_myr=np.nan,
+        detection_redshift=np.nan,
+        final_smbh_mass_msun=primary_mass_msun,
+        final_radius_cm=current_radius_cm,
+        final_entry_radius_cm=np.nan,
+        gw_time_after_gas_myr=np.nan,
+        cosmic_merge_applied=False,
+        detect_rate_reason="band_entry_inside_isco",
+    )
 
 
 def single_frequency_snr_proxy(
