@@ -29,10 +29,20 @@ class IMRISingleWorkflow:
         self.event_evaluator = IMRIEventEvaluator(engine)
 
     def run_single_simulation(
-        self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int
+        self,
+        m_smbh_msun: float,
+        m_nsc_msun: float,
+        repeat_idx: int,
+        task_seed: int | None = None,
     ) -> IMRIDynSingleResult:
         """Run one Monte Carlo realization and classify IMRI candidates."""
-        result = IMRIDynSingleResult(m_smbh_msun, m_nsc_msun, repeat_idx)
+        result = IMRIDynSingleResult(
+            m_smbh_msun,
+            m_nsc_msun,
+            repeat_idx,
+            self.config.disk_model,
+            task_seed,
+        )
         cpu_count = (
             self.config.damping_cpu_count
             if self.config.damping_cpu_count is not None

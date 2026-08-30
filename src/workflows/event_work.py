@@ -12,9 +12,9 @@ from physical_process import gw_frequency_radius as gw_helpers
 from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
-from .config import IMRIDynConfig
+from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
 from .detect_rate import classify_detectability, unsupported_band_entry_decision
-from .engine import IMRIDynEngine, TorqueProfileError
+from .engine import IMRIDynEngine, MigrationProfileError, TorqueProfileError
 from .event_rate import (
     BH_ORIGIN_MIGRATION_FORMED,
     GAS_FINAL_RADIUS_SAMPLES,
@@ -27,13 +27,13 @@ from .models import (
     FloatArray,
     IMRIEventRecord,
     IMRIDynSingleResult,
-    TorqueErrorRecord,
+    MigrationErrorRecord,
 )
 from .redshift_evolve import RedshiftEvolution
 from .runtime import vprint
 
-BAND_ENTRY_IN_TORQUE_DOMAIN = "entry_in_torque_domain"
-BAND_ENTRY_HANDOFF = "entry_below_torque_domain_but_above_isco"
+BAND_ENTRY_IN_MIGRATION_DOMAIN = "entry_in_migration_domain"
+BAND_ENTRY_HANDOFF = "entry_below_migration_domain_but_above_isco"
 BAND_ENTRY_INSIDE_ISCO = "band_entry_inside_isco"
 BAND_ENTRY_PROFILE_ERROR = "profile_error"
 
@@ -44,33 +44,33 @@ class BandEntryRoute:
 
     status: str
     disk_inner_radius_cm: float
-    torque_min_radius_cm: float
+    migration_min_radius_cm: float
     handoff_radius_cm: float
 
 
 def resolve_band_entry_route(
     boundary: gw_helpers.CircularBandBoundary,
     disk_inner_radius_cm: float,
-    torque_radius_cm: FloatArray,
+    migration_radius_cm: FloatArray,
 ) -> BandEntryRoute:
     """Resolve an in-domain entry or lower-bound gas-to-GW handoff."""
 
-    radius_cm = np.asarray(torque_radius_cm, dtype=float)
+    radius_cm = np.asarray(migration_radius_cm, dtype=float)
     if (
         radius_cm.ndim != 1
         or radius_cm.size < 2
         or not np.all(np.isfinite(radius_cm) & (radius_cm > 0.0))
     ):
-        raise TorqueProfileError(
-            "torque profile has no valid one-dimensional radius domain"
+        raise MigrationProfileError(
+            "migration profile has no valid one-dimensional radius domain"
         )
     if not np.isfinite(disk_inner_radius_cm) or disk_inner_radius_cm <= 0.0:
-        raise TorqueProfileError("disk profile has no finite positive inner radius")
+        raise MigrationProfileError("disk profile has no finite positive inner radius")
     if boundary.status == BAND_ENTRY_INSIDE_ISCO:
-        raise ValueError("inside-ISCO entry must be handled before torque routing")
+        raise ValueError("inside-ISCO entry must be handled before migration routing")
 
-    torque_min_radius_cm = float(np.min(radius_cm))
-    lower_domain_radius_cm = max(disk_inner_radius_cm, torque_min_radius_cm)
+    migration_min_radius_cm = float(np.min(radius_cm))
+    lower_domain_radius_cm = max(disk_inner_radius_cm, migration_min_radius_cm)
     lower_tolerance_cm = max(
         np.spacing(lower_domain_radius_cm),
         lower_domain_radius_cm * 1.0e-12,
@@ -79,13 +79,13 @@ def resolve_band_entry_route(
         return BandEntryRoute(
             status=BAND_ENTRY_HANDOFF,
             disk_inner_radius_cm=disk_inner_radius_cm,
-            torque_min_radius_cm=torque_min_radius_cm,
+            migration_min_radius_cm=migration_min_radius_cm,
             handoff_radius_cm=lower_domain_radius_cm,
         )
     return BandEntryRoute(
-        status=BAND_ENTRY_IN_TORQUE_DOMAIN,
+        status=BAND_ENTRY_IN_MIGRATION_DOMAIN,
         disk_inner_radius_cm=disk_inner_radius_cm,
-        torque_min_radius_cm=torque_min_radius_cm,
+        migration_min_radius_cm=migration_min_radius_cm,
         handoff_radius_cm=boundary.formal_entry_radius_cm,
     )
 
@@ -150,8 +150,8 @@ class IMRIEventEvaluator:
                     boundary,
                 )
 
-            except (disk_migration.TorqueMigrationError, TorqueProfileError) as exc:
-                torque_error: TorqueErrorRecord = {
+            except (disk_migration.MigrationError, MigrationProfileError) as exc:
+                migration_error: MigrationErrorRecord = {
                     "object_index": damping_result["idx"],
                     "mass_msun": damping_result["mass_msun"],
                     "r_ini_rg": damping_result["final_semi_major_axis_cm"] / rg_cm,
@@ -160,12 +160,12 @@ class IMRIEventEvaluator:
                     "band_entry_status": BAND_ENTRY_PROFILE_ERROR,
                     "error": str(exc),
                 }
-                result.torque_errors.append(torque_error)
-                result.torque_migration_evaluated_count += 1
-                result.torque_migration_error_count += 1
+                result.migration_errors.append(migration_error)
+                result.migration_evaluated_count += 1
+                result.migration_error_count += 1
                 result.profile_error_count += 1
                 # vprint(
-                #     "Torque migration error: "
+                #     "Migration error: "
                 #     f"object_index={damping_result['idx']}, "
                 #     f"mass_msun={damping_result['mass_msun']:.6e}, error={exc}"
                 # )
@@ -175,11 +175,11 @@ class IMRIEventEvaluator:
             if event["band_entry_status"] == BAND_ENTRY_INSIDE_ISCO:
                 result.band_entry_inside_isco_count += 1
             else:
-                result.torque_migration_evaluated_count += 1
+                result.migration_evaluated_count += 1
                 if event["band_entry_status"] == BAND_ENTRY_HANDOFF:
                     result.entry_handoff_count += 1
                 else:
-                    result.entry_in_torque_domain_count += 1
+                    result.entry_in_migration_domain_count += 1
 
                 if event["migration_status"] == "trap_bound":
                     result.trap_bound_migration_count += 1
@@ -193,7 +193,7 @@ class IMRIEventEvaluator:
                 #     f"blocking_radius_rg={event['blocking_radius_rg']}"
                 # )
                 else:
-                    result.finite_torque_migration_count += 1
+                    result.finite_migration_count += 1
 
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
@@ -245,10 +245,10 @@ class IMRIEventEvaluator:
         r_entry_formal_cm = boundary.formal_entry_radius_cm
         r_isco_cm = boundary.isco_radius_cm
         disk_inner_radius_cm = float(disk_data["inner_radius_cm"])
-        torque_min_radius_cm = np.nan
+        migration_min_radius_cm = np.nan
         handoff_radius_cm = np.nan
         r_entry_cm = np.nan
-        torque_evaluated = False
+        migration_evaluated = False
         migration_status = "not_applicable"
         blocking_radius_cm: float | None = None
 
@@ -264,39 +264,66 @@ class IMRIEventEvaluator:
                 current_radius_cm=r_ini_cm,
             )
         else:
-            torque_profile = self.engine.get_torque_profile(
-                disk_data,
-                agn_properties.smbh_mass_msun,
-                migrator_mass_msun,
-            )
+            torque_profile: TorqueProfile | None = None
+            if self.config.disk_model == TORQUE_WITH_TRAP:
+                torque_profile = self.engine.get_torque_profile(
+                    disk_data,
+                    agn_properties.smbh_mass_msun,
+                    migrator_mass_msun,
+                )
+                migration_radius_cm = np.asarray(
+                    torque_profile.radius_cm,
+                    dtype=float,
+                )
+            elif self.config.disk_model == SEMI_WITHOUT_TRAP:
+                migration_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
+            else:
+                raise RuntimeError(
+                    f"unsupported disk migration model: {self.config.disk_model}"
+                )
             route = resolve_band_entry_route(
                 boundary,
                 disk_inner_radius_cm,
-                np.asarray(torque_profile.radius_cm, dtype=float),
+                migration_radius_cm,
             )
             band_entry_status = route.status
-            torque_min_radius_cm = route.torque_min_radius_cm
+            migration_min_radius_cm = route.migration_min_radius_cm
             handoff_radius_cm = route.handoff_radius_cm
             r_entry_cm = r_entry_formal_cm
-            torque_evaluated = True
+            migration_evaluated = True
 
             migration_outcomes: dict[
-                tuple[float, float], disk_migration.TorqueMigrationOutcome
+                tuple[float, float], disk_migration.MigrationOutcome
             ] = {}
 
             def migration_outcome_call(
                 start_radius_cm: float, target_radius_cm: float
-            ) -> disk_migration.TorqueMigrationOutcome:
+            ) -> disk_migration.MigrationOutcome:
                 key = (float(start_radius_cm), float(target_radius_cm))
                 if key not in migration_outcomes:
-                    migration_outcomes[key] = self.torque_migration_outcome_to_radius(
-                        agn_properties,
-                        disk_data,
-                        damping_result["mass_g"],
-                        start_radius_cm,
-                        target_radius_cm,
-                        torque_profile=torque_profile,
-                    )
+                    if self.config.disk_model == TORQUE_WITH_TRAP:
+                        if torque_profile is None:
+                            raise RuntimeError("torque migration profile was not built")
+                        migration_outcomes[key] = (
+                            self.torque_migration_outcome_to_radius(
+                                agn_properties,
+                                disk_data,
+                                damping_result["mass_g"],
+                                start_radius_cm,
+                                target_radius_cm,
+                                torque_profile=torque_profile,
+                            )
+                        )
+                    else:
+                        migration_outcomes[key] = (
+                            self.semi_analytic_migration_outcome_to_radius(
+                                agn_properties,
+                                disk_data,
+                                damping_result["mass_g"],
+                                start_radius_cm,
+                                target_radius_cm,
+                            )
+                        )
                 return migration_outcomes[key]
 
             def migration_time_myr_call(
@@ -396,6 +423,7 @@ class IMRIEventEvaluator:
             "m_smbh_msun": result.m_smbh_msun,
             "m_nsc_msun": result.m_nsc_msun,
             "repeat": result.repeat_idx,
+            "disk_model": self.config.disk_model,
             "redshift": redshift,
             "detection_redshift": detect_decision.detection_redshift,
             "object_index": damping_result["idx"],
@@ -419,8 +447,8 @@ class IMRIEventEvaluator:
             "r_isco_rg": r_isco_cm / rg_cm,
             "r_disk_inner_cm": disk_inner_radius_cm,
             "r_disk_inner_rg": disk_inner_radius_cm / rg_cm,
-            "r_torque_min_cm": torque_min_radius_cm,
-            "r_torque_min_rg": torque_min_radius_cm / rg_cm,
+            "r_migration_min_cm": migration_min_radius_cm,
+            "r_migration_min_rg": migration_min_radius_cm / rg_cm,
             "r_handoff_cm": handoff_radius_cm,
             "r_handoff_rg": handoff_radius_cm / rg_cm,
             "r_det_entry_cm": detect_decision.final_entry_radius_cm,
@@ -442,7 +470,7 @@ class IMRIEventEvaluator:
                 event_decision.gw_time_gas_target_to_entry_myr
             ),
             "gas_stop_reason": event_decision.gas_stop_reason,
-            "torque_evaluated": torque_evaluated,
+            "migration_evaluated": migration_evaluated,
             "migration_status": migration_status,
             "blocking_radius_rg": (
                 blocking_radius_cm / rg_cm if blocking_radius_cm is not None else None
@@ -468,7 +496,7 @@ class IMRIEventEvaluator:
         start_radius_cm: float,
         target_radius_cm: float,
         torque_profile: TorqueProfile | None = None,
-    ) -> disk_migration.TorqueMigrationOutcome:
+    ) -> disk_migration.MigrationOutcome:
         """Return the signed torque migration outcome for one radial path."""
         if start_radius_cm <= target_radius_cm:
             return disk_migration.torque_migration_outcome(
@@ -500,6 +528,30 @@ class IMRIEventEvaluator:
             start_radius_cm,
             target_radius_cm,
             agn_properties.smbh_mass_msun,
+        )
+
+    def semi_analytic_migration_outcome_to_radius(
+        self,
+        agn_properties: AGNProperties,
+        disk_data: DiskProfiles,
+        mass_g: float,
+        start_radius_cm: float,
+        target_radius_cm: float,
+    ) -> disk_migration.MigrationOutcome:
+        """Return the integrated semi-analytic outcome for one radial path."""
+        if "torque_alpha" not in disk_data:
+            raise MigrationProfileError("cached pAGN disk has no migration alpha")
+        return disk_migration.semi_analytic_migration_outcome(
+            np.asarray(disk_data["radius_cm"], dtype=float),
+            np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
+            np.asarray(disk_data["aspect_ratio"], dtype=float),
+            mass_g,
+            start_radius_cm,
+            target_radius_cm,
+            agn_properties.smbh_mass_msun,
+            float(disk_data["torque_alpha"]),
+            self.config.gap_opening_condition,
+            self.config.consider_type_ii_migration,
         )
 
     def _migration_torque_cgs(

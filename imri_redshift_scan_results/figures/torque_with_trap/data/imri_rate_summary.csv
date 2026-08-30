@@ -1,0 +1,16 @@
+disk_model,redshift,m_smbh_msun,m_nsc_msun,duty_cycle_myr,n_repeats_total,n_repeats_valid,mean_imri_count,imri_rate_mean_per_myr,imri_rate_p16_per_myr,imri_rate_p84_per_myr,proxy_detectable_rate_mean_per_myr,result_state
+torque_with_trap,10,1000,200000,10,10,10,1.3,0.13,0,0.256,0.13,valid
+torque_with_trap,10,5000,200000,10,10,10,0.2,0.02,0,0.056,0.02,valid
+torque_with_trap,10,10000,200000,10,10,10,0.1,0.01,0,0,0.01,valid
+torque_with_trap,10,50000,200000,10,10,10,0,0,0,0,0,valid
+torque_with_trap,10,100000,200000,10,10,10,0,0,0,0,0,valid
+torque_with_trap,13,1000,200000,10,10,10,1.3,0.13,0,0.256,0.13,valid
+torque_with_trap,13,5000,200000,10,10,10,0.2,0.02,0,0.056,0.02,valid
+torque_with_trap,13,10000,200000,10,10,10,0.1,0.01,0,0,0.01,valid
+torque_with_trap,13,50000,200000,10,10,10,0,0,0,0,0,valid
+torque_with_trap,13,100000,200000,10,10,10,0,0,0,0,0,valid
+torque_with_trap,15,1000,200000,10,10,10,1.3,0.13,0,0.256,0.13,valid
+torque_with_trap,15,5000,200000,10,10,10,0.2,0.02,0,0.056,0.02,valid
+torque_with_trap,15,10000,200000,10,10,10,0.1,0.01,0,0,0.01,valid
+torque_with_trap,15,50000,200000,10,10,10,0,0,0,0,0,valid
+torque_with_trap,15,100000,200000,10,10,10,0,0,0,0,0,valid

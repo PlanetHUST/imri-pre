@@ -21,7 +21,11 @@ from .models import DiskProfiles
 from .runtime import vprint
 
 
-class TorqueProfileError(RuntimeError):
+class MigrationProfileError(RuntimeError):
+    """Raised when a required numerical migration profile cannot be constructed."""
+
+
+class TorqueProfileError(MigrationProfileError):
     """Raised when the required pAGN torque profile cannot be constructed."""
 
 
@@ -62,7 +66,7 @@ class IMRIDynEngine:
             self.disk_cache[m_smbh_msun]["torque_disk"] = pagn_disk.disk
             self.disk_cache[m_smbh_msun]["torque_alpha"] = pagn_alpha
             vprint(
-                f"  cached pAGN disk profile for damping and torque work at "
+                f"  cached pAGN disk profile for damping and migration work at "
                 f"smbh_mass_msun={m_smbh_msun:.3e}"
             )
 

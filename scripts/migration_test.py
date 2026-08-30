@@ -34,6 +34,7 @@ from src.physical_process.disk_migration import (
     GAP_OPENING_CONDITIONS,
     TYPE_II_GAP_PARAMETER_THRESHOLD,
     gap_opening_mask,
+    migration_time_from_semi_analytic,
     migration_time_from_torque,
     select_migration_torque_si,
 )
@@ -133,10 +134,6 @@ def _migration_series(
     )
     torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
     local_aspect_ratio = np.interp(torque_radius_cm, disk.radius_cm, disk.aspect_ratio)
-    local_surface_density_g_cm2 = np.interp(
-        torque_radius_cm, disk.radius_cm, disk.surface_density_g_cm2
-    )
-
     gap_parameter = migrator_mass_g**2 / (
         PAGN_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
     )
@@ -152,43 +149,23 @@ def _migration_series(
         gap_opening_condition,
         consider_type_ii_migration=True,
     )
-    selected_gap_mask = selection.type_ii_mask
     torque_si = selection.torque_si
     torque_cgs = torque_si_to_cgs(torque_si)
-
-    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / torque_radius_cm**3)
-    semi_type_i_time_s = (
-        smbh_mass_g**2
-        * local_aspect_ratio**2
-        / 2.0
-        / migrator_mass_g
-        / local_surface_density_g_cm2
-        / torque_radius_cm**2
-        / orbital_frequency_rad_s
-    )
-    semi_type_i_torque_cgs = (
-        -0.5
-        * migrator_mass_g
-        * torque_radius_cm**2
-        * orbital_frequency_rad_s
-        / semi_type_i_time_s
-    )
-    semi_torque_cgs = np.where(
-        selected_gap_mask,
-        torque_si_to_cgs(torque_profile.gamma_type_ii_si),
-        semi_type_i_torque_cgs,
-    )
 
     target_radius_cm = TARGET_RADIUS_RG * disk.rg_cm
     integrated_semi_times_myr = np.asarray(
         [
-            migration_time_from_torque(
-                torque_radius_cm,
-                semi_torque_cgs,
+            migration_time_from_semi_analytic(
+                disk.radius_cm,
+                disk.surface_density_g_cm2,
+                disk.aspect_ratio,
                 migrator_mass_g,
                 float(start_radius_cm),
                 target_radius_cm,
                 SMBH_MASS_MSUN,
+                PAGN_ALPHA,
+                gap_opening_condition,
+                True,
             )
             for start_radius_cm in sample_radii_cm
         ],

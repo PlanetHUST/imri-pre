@@ -20,6 +20,7 @@ DISK_ACCRETION_RATE_G_S_PER_MSUN = 1.44e18
 
 IMRI_AVERAGED_RESULTS_FILENAME = "imri_averaged_results.csv"
 IMRI_EVENTS_FILENAME = "imri_events.csv"
+IMRI_REPEAT_RESULTS_FILENAME = "imri_repeat_results.csv"
 METADATA_FILENAME = "simulation_metadata.json"
 IMRI_LISA_MIN_GW_FREQUENCY_HZ = 1.0e-3
 IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
@@ -32,6 +33,10 @@ IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
 DEFAULT_GAP_OPENING_CONDITION = "kii"
+TORQUE_WITH_TRAP = "torque_with_trap"
+SEMI_WITHOUT_TRAP = "semi_without_trap"
+DISK_MODELS = (TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
+DEFAULT_DISK_MODEL = TORQUE_WITH_TRAP
 
 
 class IMRIDynConfig:
@@ -58,6 +63,7 @@ class IMRIDynConfig:
         # Disk-crossing and migration controls
         use_disk_inner_radius: bool,
         consider_type_ii_migration: bool,
+        disk_model: str,
         # Simplified IMRI controls
         lisa_min_gw_frequency_hz: float,
         lisa_max_gw_frequency_hz: float,
@@ -73,6 +79,7 @@ class IMRIDynConfig:
         damping_cpu_count: int | None,
         checkpoint_grid_interval: int,
         print_debug_results: bool,
+        base_seed: int | None = None,
         # Internal NSC model parameters
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
@@ -91,6 +98,13 @@ class IMRIDynConfig:
             raise ValueError("initial stellar density gamma must satisfy 0 < gamma < 3")
         if checkpoint_grid_interval <= 0:
             raise ValueError("checkpoint interval must be positive")
+        if base_seed is not None:
+            if isinstance(base_seed, bool) or not isinstance(
+                base_seed, (int, np.integer)
+            ):
+                raise TypeError("base seed must be an integer or None")
+            if base_seed < 0:
+                raise ValueError("base seed must be nonnegative")
         if not 0.0 < lisa_min_gw_frequency_hz < lisa_max_gw_frequency_hz:
             raise ValueError("LISA frequencies must satisfy 0 < f_min < f_max")
         if max_gw_time_myr <= 0.0:
@@ -121,6 +135,8 @@ class IMRIDynConfig:
             raise ValueError(
                 f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
             )
+        if disk_model not in DISK_MODELS:
+            raise ValueError(f"disk model must be one of {DISK_MODELS}")
 
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
@@ -136,6 +152,7 @@ class IMRIDynConfig:
 
         self.use_disk_inner_radius = use_disk_inner_radius
         self.consider_type_ii_migration = consider_type_ii_migration
+        self.disk_model = disk_model
         self.gap_opening_condition = gap_opening_condition
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
@@ -151,6 +168,7 @@ class IMRIDynConfig:
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval
         self.print_debug_results = print_debug_results
+        self.base_seed = int(base_seed) if base_seed is not None else None
 
     def get_param_grid(self) -> tuple[FloatArray, FloatArray]:
         """Return the explicitly selected SMBH and NSC masses [Msun]."""

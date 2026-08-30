@@ -8,7 +8,9 @@ from typing import Sequence
 from physical_process.disk_migration import GAP_OPENING_CONDITIONS
 
 from .config import (
+    DEFAULT_DISK_MODEL,
     DEFAULT_GAP_OPENING_CONDITION,
+    DISK_MODELS,
     IMRI_GW_ECCENTRICITY,
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
@@ -116,7 +118,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--gap-open-condition",
         choices=GAP_OPENING_CONDITIONS,
         default=DEFAULT_GAP_OPENING_CONDITION,
-        help="gap-opening condition used to select the Type-II torque branch",
+        help="gap-opening condition used to select the Type-II migration branch",
+    )
+    parser.add_argument(
+        "--disk-model",
+        choices=DISK_MODELS,
+        default=DEFAULT_DISK_MODEL,
+        help=(
+            "gas-migration scenario; this does not select the underlying "
+            "Sirko/Thompson disk structure"
+        ),
     )
     parser.add_argument(
         "--lisa-min-gw-frequency-hz",
@@ -191,6 +202,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print detailed per-realization counters",
     )
+    parser.add_argument(
+        "--base-seed",
+        type=int,
+        default=None,
+        help="optional root seed for reproducible, paired Monte Carlo tasks",
+    )
     return parser
 
 
@@ -207,6 +224,7 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         initial_stellar_density_gamma=arguments.initial_stellar_density_gamma,
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
         consider_type_ii_migration=not arguments.no_type_ii_migration,
+        disk_model=arguments.disk_model,
         gap_opening_condition=arguments.gap_open_condition,
         lisa_min_gw_frequency_hz=arguments.lisa_min_gw_frequency_hz,
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
@@ -221,6 +239,7 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,
+        base_seed=arguments.base_seed,
     )
     start_time_s = time.time()
     run_simulation(config)

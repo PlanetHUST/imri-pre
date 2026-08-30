@@ -1,0 +1,55 @@
+{
+  "simulation_info": {
+    "date": "2026-08-30T21:40:32.093421",
+    "timestamp_s_since_epoch": 1788097232.093434,
+    "description": "Dynamical IMRI rate simulation with parallel damping"
+  },
+  "parameters": {
+    "smbh_masses_msun": [
+      1000.0,
+      5000.0,
+      10000.0,
+      50000.0,
+      100000.0
+    ],
+    "nsc_masses_msun": [
+      200000.0
+    ],
+    "num_repeats": 10,
+    "total_simulations": 50,
+    "duty_cycle_myr": 10.0,
+    "metallicity": 1e-05,
+    "initial_stellar_density_gamma": 1.75,
+    "nsc_radius_pc_at_reference_mass": 3.31,
+    "nsc_radius_reference_mass_msun": 3600000.0,
+    "nsc_radius_mass_slope": 0.321,
+    "use_disk_inner_radius": true,
+    "disk_model": "semi_without_trap",
+    "consider_type_ii_migration": true,
+    "gap_opening_condition": "kii",
+    "redshift": 13.0,
+    "hubble_constant_per_myr": 7.352941176470588e-05,
+    "lisa_min_gw_frequency_hz": 0.001,
+    "source_lisa_min_gw_frequency_hz": 0.014,
+    "lisa_max_gw_frequency_hz": 0.1,
+    "source_lisa_max_gw_frequency_hz": 1.4000000000000001,
+    "snr_threshold": 20.0,
+    "cosmic_merge_time_myr": 1000.0,
+    "cosmic_merge_smbh_mass_factor": 2.0,
+    "cosmic_merge_radius_factor": 2.0,
+    "max_gw_time_myr": 13600.0,
+    "gw_eccentricity": 0.0,
+    "damping_cpu_count": null,
+    "checkpoint_grid_interval": 5,
+    "print_debug_results": false,
+    "base_seed": 12345,
+    "task_seed_policy": "numpy_seed_sequence(base_seed,smbh_index,nsc_index,repeat_index);redshift_excluded"
+  },
+  "runtime_statistics": {
+    "workflow": "imri",
+    "total_simulations": 50,
+    "total_runtime_seconds": 77.02303266525269,
+    "total_runtime_minutes": 1.2837172110875448,
+    "average_time_per_simulation_seconds": 1.5404606533050538
+  }
+}

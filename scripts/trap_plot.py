@@ -36,7 +36,7 @@ from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
 from src.workflows.config import PAGN_ALPHA
 
 SMBH_MIN_MSUN = 1.0e3
-SMBH_MAX_MSUN = 1.0e8
+SMBH_MAX_MSUN = 1.0e7
 SMBH_COUNT = 50
 MIGRATOR_MASS_MSUN = 10.0
 OUTPUT_DIR = Path("figs")
@@ -44,8 +44,28 @@ OUTPUT_STEM = "trap_radius_2d"
 
 TORQUE_MAX_RADIUS_RG = 1e7
 MIN_TRAP_SEPARATION_CELLS = 1.0
-LISA_MIN_GW_FREQUENCY_HZ = 1e-3
+LISA_MIN_GW_FREQUENCY_HZ = 1e-4
 REDSHIFT = 10
+
+plt.rcParams.update(
+    {
+        "font.size": 20,  # default text
+        "axes.titlesize": 18,  # title
+        "axes.labelsize": 18,  # x/y labels
+        "xtick.labelsize": 16,  # x tick numbers
+        "ytick.labelsize": 16,  # y tick numbers
+        "legend.fontsize": 12,  # legend
+        "figure.titlesize": 18,  # suptitle
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
+        "xtick.minor.size": 3,
+        "ytick.minor.size": 3,
+        "xtick.major.width": 1.2,
+        "ytick.major.width": 1.2,
+    }
+)
 
 
 @dataclass
@@ -242,13 +262,16 @@ def _plot_results(results: TrapResults) -> Path:
     if positive_radii.size == 0:
         raise RuntimeError("no positive finite radii were computed")
 
-    fig, (ax, gap_ax) = plt.subplots(
-        2,
-        1,
+    # fig, (ax, gap_ax) = plt.subplots(
+    #     2,
+    #     1,
+    #     figsize=(10, 8.5),
+    #     sharex=True,
+    #     constrained_layout=True,
+    #     gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
+    # )
+    fig, ax = plt.subplots(
         figsize=(10, 8.5),
-        sharex=True,
-        constrained_layout=True,
-        gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
     )
     migrator_mass_msun = float(MIGRATOR_MASS_MSUN)
     _plot_branches(
@@ -295,7 +318,8 @@ def _plot_results(results: TrapResults) -> Path:
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.tick_params(labelbottom=False)
+    # ax.tick_params(labelbottom=False)
+    ax.set_xlabel(r"$M_\bullet\;(M_\odot)$")
     ax.set_ylabel(r"Radius $R/r_g$")
     ax.set_ylim(float(positive_radii[0]) / 1.6, float(positive_radii[-1]) * 1.6)
     ax.grid(True, which="both", alpha=0.25, linestyle="--")
@@ -305,35 +329,35 @@ def _plot_results(results: TrapResults) -> Path:
         rf"$m={migrator_mass_msun:g}\,M_\odot$, $z={REDSHIFT:g}$"
     )
 
-    for values, color, linestyle, label in (
-        (results.max_gap_parameter, "#1f77b4", "-", r"$\max K_\mathrm{II}$"),
-        (
-            results.min_crida_parameter,
-            "#D55E00",
-            "-.",
-            r"$\min P_\mathrm{Crida}$",
-        ),
-        (results.max_hill_ratio, "#2A7F62", ":", r"$\max(R_H/H)$"),
-    ):
-        mask = np.isfinite(values) & (values > 0.0)
-        if np.any(mask):
-            gap_ax.plot(
-                results.smbh_masses_msun[mask],
-                values[mask],
-                color=color,
-                lw=2.2,
-                ls=linestyle,
-                marker="." if linestyle == "-" else None,
-                label=label,
-            )
-    gap_ax.set(
-        xscale="log",
-        yscale="log",
-        xlabel=r"$M_\bullet\;(M_\odot)$",
-        ylabel="Dimensionless value",
-    )
-    gap_ax.grid(True, which="both", alpha=0.25, linestyle="--")
-    gap_ax.legend(loc="best", framealpha=0.88)
+    # for values, color, linestyle, label in (
+    #     (results.max_gap_parameter, "#1f77b4", "-", r"$\max K_\mathrm{II}$"),
+    #     (
+    #         results.min_crida_parameter,
+    #         "#D55E00",
+    #         "-.",
+    #         r"$\min P_\mathrm{Crida}$",
+    #     ),
+    #     (results.max_hill_ratio, "#2A7F62", ":", r"$\max(R_H/H)$"),
+    # ):
+    #     mask = np.isfinite(values) & (values > 0.0)
+    #     if np.any(mask):
+    #         gap_ax.plot(
+    #             results.smbh_masses_msun[mask],
+    #             values[mask],
+    #             color=color,
+    #             lw=2.2,
+    #             ls=linestyle,
+    #             marker="." if linestyle == "-" else None,
+    #             label=label,
+    #         )
+    # gap_ax.set(
+    #     xscale="log",
+    #     yscale="log",
+    #     xlabel=r"$M_\bullet\;(M_\odot)$",
+    #     ylabel="Dimensionless value",
+    # )
+    # gap_ax.grid(True, which="both", alpha=0.25, linestyle="--")
+    # gap_ax.legend(loc="best", framealpha=0.88)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     figure_path = OUTPUT_DIR / f"{OUTPUT_STEM}.png"

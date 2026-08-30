@@ -15,10 +15,25 @@ from .outputs import (
     save_events,
     save_metadata,
     save_migration_diagnostics,
+    save_repeat_results,
     save_results,
 )
 from .reporting import debug_print_result, print_header, print_result_summary
 from .single_work import IMRISingleWorkflow
+
+
+def derive_task_seed(
+    base_seed: int,
+    smbh_index: int,
+    nsc_index: int,
+    repeat_index: int,
+) -> int:
+    """Derive a stable task seed; redshift is intentionally not an input."""
+    indices = (smbh_index, nsc_index, repeat_index)
+    if base_seed < 0 or any(index < 0 for index in indices):
+        raise ValueError("seed inputs must be nonnegative")
+    sequence = np.random.SeedSequence([base_seed, *indices])
+    return int(sequence.generate_state(1, dtype=np.uint32)[0])
 
 
 def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
@@ -32,6 +47,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Repeats per point: {config.num_repeats}")
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
+    print(f"Disk migration model: {config.disk_model}")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(f"gap_opening_condition: {config.gap_opening_condition}")
     print(f"Redshift: {config.redshift:.3e}")
@@ -80,10 +96,23 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
             repeat_results: list[IMRIDynSingleResult] = []
             for repeat_index in range(config.num_repeats):
                 print(f"Repeat {repeat_index + 1}/{config.num_repeats}")
+                task_seed = (
+                    derive_task_seed(
+                        config.base_seed,
+                        smbh_index,
+                        nsc_index,
+                        repeat_index,
+                    )
+                    if config.base_seed is not None
+                    else None
+                )
+                if task_seed is not None:
+                    np.random.seed(task_seed)
                 result = single_work.run_single_simulation(
                     float(smbh_mass_msun),
                     float(nsc_mass_msun),
                     repeat_index,
+                    task_seed,
                 )
                 print_result_summary(result)
                 save_migration_diagnostics(result, config.output_dir, config)
@@ -96,6 +125,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
             averaged_result = IMRIDynAveragedResult(
                 float(smbh_mass_msun),
                 float(nsc_mass_msun),
+                config.disk_model,
                 repeat_results,
             )
             averaged_results.append(averaged_result)
@@ -105,6 +135,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
             ):
                 save_results(averaged_results, config.output_dir)
                 save_events(averaged_results, config.output_dir)
+                save_repeat_results(averaged_results, config.output_dir, config)
 
     runtime_s = time.time() - start_time_s
     print_header("SIMULATION COMPLETE", 72, "#")
@@ -112,6 +143,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Runtime: {runtime_s:.2f} s " f"({runtime_s/SECONDS_PER_MINUTE:.2f} min)")
     frame = save_results(averaged_results, config.output_dir)
     save_events(averaged_results, config.output_dir)
+    save_repeat_results(averaged_results, config.output_dir, config)
     save_metadata(
         config.output_dir,
         build_metadata(

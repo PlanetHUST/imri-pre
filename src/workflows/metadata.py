@@ -36,6 +36,7 @@ def build_metadata(
             "nsc_radius_reference_mass_msun": config.nsc_radius_reference_mass_msun,
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
+            "disk_model": config.disk_model,
             "consider_type_ii_migration": config.consider_type_ii_migration,
             "gap_opening_condition": config.gap_opening_condition,
             "redshift": config.redshift,
@@ -59,6 +60,13 @@ def build_metadata(
             "damping_cpu_count": config.damping_cpu_count,
             "checkpoint_grid_interval": config.checkpoint_grid_interval,
             "print_debug_results": config.print_debug_results,
+            "base_seed": config.base_seed,
+            "task_seed_policy": (
+                "numpy_seed_sequence(base_seed,smbh_index,nsc_index,repeat_index);"
+                "redshift_excluded"
+                if config.base_seed is not None
+                else None
+            ),
         },
         "runtime_statistics": runtime_stats,
     }

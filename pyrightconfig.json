@@ -1,0 +1,19 @@
+{
+  "include": [
+    "src",
+    "scripts"
+  ],
+  "exclude": [
+    "src/disk_quantity/opacity.py"
+  ],
+  "extraPaths": [
+    ".",
+    "src",
+    "src/physical_process",
+    "src/disk_quantity"
+  ],
+  "venvPath": "/home/planet/miniconda3/envs",
+  "venv": "sevnpy_env",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}

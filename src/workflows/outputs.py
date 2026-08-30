@@ -11,7 +11,9 @@ import physical_process.constants as const
 from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
+    IMRI_REPEAT_RESULTS_FILENAME,
     METADATA_FILENAME,
+    SEMI_WITHOUT_TRAP,
     IMRIDynConfig,
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
@@ -19,6 +21,7 @@ from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
 IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
     ("m_nsc_msun", "m_nsc_msun"),
+    ("disk_model", "disk_model"),
     ("num_repeats", "n_repeat"),
     ("rate_evaluation_status", "rate_status"),
     ("gravitational_radius_cm", "rg_cm"),
@@ -41,14 +44,14 @@ IMRI_RESULT_COLUMN_MAP = [
     ("detectable_imri_count_min", "n_det_min"),
     ("detectable_imri_count_max", "n_det_max"),
     ("band_entry_evaluated_count_mean", "n_band_eval"),
-    ("entry_in_torque_domain_count_mean", "n_entry_in_domain"),
+    ("entry_in_migration_domain_count_mean", "n_entry_in_domain"),
     ("entry_handoff_count_mean", "n_entry_handoff"),
     ("band_entry_inside_isco_count_mean", "n_entry_in_ISCO"),
     ("profile_error_count_mean", "n_profile_error"),
-    ("torque_migration_evaluated_count_mean", "n_mig_eval"),
-    ("finite_torque_migration_count_mean", "n_mig_finite"),
+    ("migration_evaluated_count_mean", "n_mig_eval"),
+    ("finite_migration_count_mean", "n_mig_finite"),
     ("trap_bound_migration_count_mean", "n_mig_trap"),
-    ("torque_migration_error_count_mean", "n_mig_error"),
+    ("migration_error_count_mean", "n_mig_error"),
     ("trap_bound_mass_mean_msun", "m_mig_trap_msun"),
 ]
 IMRI_RESULT_COLUMNS = [
@@ -59,6 +62,7 @@ IMRI_EVENT_COLUMNS = [
     "m_smbh_msun",
     "m_nsc_msun",
     "repeat",
+    "disk_model",
     "redshift",
     "detection_redshift",
     "object_index",
@@ -82,8 +86,8 @@ IMRI_EVENT_COLUMNS = [
     "r_isco_rg",
     "r_disk_inner_cm",
     "r_disk_inner_rg",
-    "r_torque_min_cm",
-    "r_torque_min_rg",
+    "r_migration_min_cm",
+    "r_migration_min_rg",
     "r_handoff_cm",
     "r_handoff_rg",
     "source_entry_frequency_hz",
@@ -95,17 +99,17 @@ IMRI_EVENT_COLUMNS = [
     # "f_gas_fin_obs_hz",
     # "f_entry_src_hz",
     # "f_entry_obs_hz",
-    # "gas_elapsed_time_myr",
-    # "gas_final_time_myr",
+    "gas_elapsed_time_myr",
+    "gas_final_time_myr",
     "migration_time_to_entry_myr",
     "migration_time_to_handoff_myr",
     "gw_time_handoff_to_entry_myr",
     "gas_stop_reason",
-    "torque_evaluated",
+    "migration_evaluated",
     "migration_status",
     "blocking_radius_rg",
-    # "gw_time_to_entry_myr",
-    # "gw_time_after_gas_myr",
+    "gw_time_to_entry_myr",
+    "gw_time_after_gas_myr",
     "detection_time_myr",
     "final_smbh_mass_msun",
     "cosmic_merge_applied",
@@ -117,6 +121,42 @@ IMRI_EVENT_COLUMNS = [
     "detect_rate_reason",
 ]
 
+IMRI_REPEAT_RESULT_COLUMNS = [
+    "redshift",
+    "disk_model",
+    "m_smbh_msun",
+    "m_nsc_msun",
+    "repeat",
+    "base_seed",
+    "task_seed",
+    "rate_status",
+    "duty_cycle_myr",
+    "n_sampled",
+    "n_disk_cross",
+    "f_geo",
+    "n_emb_star",
+    "n_emb_bh",
+    "n_mfbh",
+    "n_outside_or_failed",
+    "n_bh_candi",
+    "n_no_imri",
+    "n_imri",
+    "rate_imri_per_myr",
+    "n_det",
+    "n_nondet",
+    "rate_det_per_myr",
+    "n_band_eval",
+    "n_entry_in_domain",
+    "n_entry_handoff",
+    "n_entry_inside_isco",
+    "n_profile_error",
+    "n_unavailable",
+    "n_mig_eval",
+    "n_mig_finite",
+    "n_mig_trap",
+    "n_mig_error",
+]
+
 EVENT_HIDDEN_COLUMNS = {
     "r_ini_cm",
     "r_gas_fin_cm",
@@ -124,7 +164,7 @@ EVENT_HIDDEN_COLUMNS = {
     "r_entry_formal_cm",
     "r_isco_cm",
     "r_disk_inner_cm",
-    "r_torque_min_cm",
+    "r_migration_min_cm",
     "r_handoff_cm",
     "r_det_entry_cm",
 }
@@ -263,12 +303,91 @@ def save_events(
     return frame
 
 
+def _rate_evaluation_status(result: IMRIDynSingleResult) -> str:
+    if result.band_entry_inside_isco_count and result.profile_error_count:
+        return "not_evaluated_band_entry_and_profile_error"
+    if result.band_entry_inside_isco_count:
+        return "not_evaluated_band_entry_inside_isco"
+    if result.profile_error_count:
+        return "incomplete_profile_error"
+    return "complete"
+
+
+def _repeat_output_record(
+    result: IMRIDynSingleResult,
+    config: IMRIDynConfig,
+) -> dict[str, float | int | str | None]:
+    return {
+        "redshift": config.redshift,
+        "disk_model": result.disk_model,
+        "m_smbh_msun": result.m_smbh_msun,
+        "m_nsc_msun": result.m_nsc_msun,
+        "repeat": result.repeat_idx,
+        "base_seed": config.base_seed,
+        "task_seed": result.task_seed,
+        "rate_status": _rate_evaluation_status(result),
+        "duty_cycle_myr": config.duty_cycle_myr,
+        "n_sampled": result.total_sampled_objects,
+        "n_disk_cross": result.disk_crossing_objects,
+        "f_geo": result.f_geo,
+        "n_emb_star": result.embedded_star_count,
+        "n_emb_bh": result.embedded_bh_count,
+        "n_mfbh": result.migration_formed_bh_count,
+        "n_outside_or_failed": result.outside_or_failed_count,
+        "n_bh_candi": result.bh_candidate_count,
+        "n_no_imri": result.no_imri_count,
+        "n_imri": result.imri_count,
+        "rate_imri_per_myr": result.imri_rate_per_myr,
+        "n_det": result.detectable_imri_count,
+        "n_nondet": result.no_detectable_imri_count,
+        "rate_det_per_myr": result.detectable_imri_rate_per_myr,
+        "n_band_eval": result.band_entry_evaluated_count,
+        "n_entry_in_domain": result.entry_in_migration_domain_count,
+        "n_entry_handoff": result.entry_handoff_count,
+        "n_entry_inside_isco": result.band_entry_inside_isco_count,
+        "n_profile_error": result.profile_error_count,
+        "n_unavailable": (
+            result.band_entry_inside_isco_count + result.profile_error_count
+        ),
+        "n_mig_eval": result.migration_evaluated_count,
+        "n_mig_finite": result.finite_migration_count,
+        "n_mig_trap": result.trap_bound_migration_count,
+        "n_mig_error": result.migration_error_count,
+    }
+
+
+def save_repeat_results(
+    averaged_results: Sequence[IMRIDynAveragedResult],
+    output_dir: Path,
+    config: IMRIDynConfig,
+) -> pd.DataFrame:
+    """Save one row for every normally collected Monte Carlo repeat."""
+    records = [
+        _repeat_output_record(result, config)
+        for averaged_result in averaged_results
+        for result in averaged_result.results
+    ]
+    frame = pd.DataFrame.from_records(records, columns=IMRI_REPEAT_RESULT_COLUMNS)
+    for column in ("base_seed", "task_seed"):
+        frame[column] = pd.array(
+            cast(pd.Series, frame[column]),
+            dtype="Int64",
+        )
+    path = output_dir / IMRI_REPEAT_RESULTS_FILENAME
+    frame.to_csv(path, index=False, float_format="%.6e")
+    print(f"saved: {path}")
+    return frame
+
+
 def save_migration_diagnostics(
     result: IMRIDynSingleResult,
     output_dir: Path,
     config: IMRIDynConfig,
 ) -> Path:
-    """Save strict per-repeat torque migration diagnostics as JSON."""
+    """Save strict per-repeat migration diagnostics as JSON."""
+
+    if result.disk_model != config.disk_model:
+        raise ValueError("result disk model disagrees with workflow configuration")
 
     def json_float(value: float | None) -> float | None:
         if value is None or not np.isfinite(value):
@@ -307,7 +426,7 @@ def save_migration_diagnostics(
             "r_entry_formal_rg": json_float(event["r_entry_formal_rg"]),
             "r_isco_rg": json_float(event["r_isco_rg"]),
             "r_disk_inner_rg": json_float(event["r_disk_inner_rg"]),
-            "r_torque_min_rg": json_float(event["r_torque_min_rg"]),
+            "r_migration_min_rg": json_float(event["r_migration_min_rg"]),
             "r_handoff_rg": json_float(event["r_handoff_rg"]),
             "migration_time_to_handoff_myr": json_float(
                 event["migration_time_to_handoff_myr"]
@@ -316,55 +435,60 @@ def save_migration_diagnostics(
                 event["gw_time_handoff_to_entry_myr"]
             ),
             "gas_stop_reason": event["gas_stop_reason"],
-            "torque_evaluated": event["torque_evaluated"],
+            "migration_evaluated": event["migration_evaluated"],
         }
         for event in result.imri_events
     ]
 
     recorded_band_status_count = (
-        result.entry_in_torque_domain_count
+        result.entry_in_migration_domain_count
         + result.entry_handoff_count
         + result.band_entry_inside_isco_count
         + result.profile_error_count
     )
     if result.band_entry_evaluated_count != recorded_band_status_count:
         raise ValueError("band-entry counters do not conserve evaluated objects")
-    if result.torque_migration_evaluated_count != (
-        result.entry_in_torque_domain_count
+    if result.migration_evaluated_count != (
+        result.entry_in_migration_domain_count
         + result.entry_handoff_count
         + result.profile_error_count
     ):
-        raise ValueError("torque-applicable counters do not sum to evaluated count")
+        raise ValueError("migration-applicable counters do not sum to evaluated count")
 
     if (
-        result.torque_migration_evaluated_count
-        != result.finite_torque_migration_count
+        result.migration_evaluated_count
+        != result.finite_migration_count
         + result.trap_bound_migration_count
-        + result.torque_migration_error_count
+        + result.migration_error_count
     ):
-        raise ValueError("torque migration counters do not sum to evaluated count")
+        raise ValueError("migration counters do not sum to evaluated count")
     if result.trap_bound_migration_count != len(trap_bound_objects):
         raise ValueError("trap-bound counter does not match event records")
-    if result.torque_migration_error_count != len(result.torque_errors):
-        raise ValueError("torque error counter does not match error records")
-    if result.profile_error_count != result.torque_migration_error_count:
-        raise ValueError("profile-error counter does not match torque errors")
+    if (
+        result.disk_model == SEMI_WITHOUT_TRAP
+        and result.trap_bound_migration_count != 0
+    ):
+        raise ValueError("semi-analytic migration cannot produce trap-bound outcomes")
+    if result.migration_error_count != len(result.migration_errors):
+        raise ValueError("migration error counter does not match error records")
+    if result.profile_error_count != result.migration_error_count:
+        raise ValueError("profile-error counter does not match migration errors")
 
     event_status_counts = {
         status: sum(
             event["band_entry_status"] == status for event in result.imri_events
         )
         for status in (
-            "entry_in_torque_domain",
-            "entry_below_torque_domain_but_above_isco",
+            "entry_in_migration_domain",
+            "entry_below_migration_domain_but_above_isco",
             "band_entry_inside_isco",
         )
     }
-    if event_status_counts["entry_in_torque_domain"] != (
-        result.entry_in_torque_domain_count
+    if event_status_counts["entry_in_migration_domain"] != (
+        result.entry_in_migration_domain_count
     ):
         raise ValueError("in-domain counter does not match event records")
-    if event_status_counts["entry_below_torque_domain_but_above_isco"] != (
+    if event_status_counts["entry_below_migration_domain_but_above_isco"] != (
         result.entry_handoff_count
     ):
         raise ValueError("handoff counter does not match event records")
@@ -373,37 +497,33 @@ def save_migration_diagnostics(
     ):
         raise ValueError("inside-ISCO counter does not match event records")
 
-    if result.band_entry_inside_isco_count and result.profile_error_count:
-        rate_evaluation_status = "not_evaluated_band_entry_and_profile_error"
-    elif result.band_entry_inside_isco_count:
-        rate_evaluation_status = "not_evaluated_band_entry_inside_isco"
-    elif result.profile_error_count:
-        rate_evaluation_status = "incomplete_profile_error"
-    else:
-        rate_evaluation_status = "complete"
-
     payload = {
         "m_smbh_msun": json_float(result.m_smbh_msun),
         "m_nsc_msun": json_float(result.m_nsc_msun),
         "repeat": result.repeat_idx,
+        "disk_model": result.disk_model,
+        "redshift": json_float(config.redshift),
+        "base_seed": config.base_seed,
+        "task_seed": result.task_seed,
+        "duty_cycle_myr": json_float(config.duty_cycle_myr),
         "gap_opening_condition": config.gap_opening_condition,
         "consider_type_ii_migration": config.consider_type_ii_migration,
-        "rate_evaluation_status": rate_evaluation_status,
+        "rate_evaluation_status": _rate_evaluation_status(result),
         "band_entry_evaluated_count": result.band_entry_evaluated_count,
-        "entry_in_torque_domain_count": result.entry_in_torque_domain_count,
+        "entry_in_migration_domain_count": result.entry_in_migration_domain_count,
         "entry_handoff_count": result.entry_handoff_count,
         "band_entry_inside_isco_count": result.band_entry_inside_isco_count,
         "profile_error_count": result.profile_error_count,
-        "torque_migration_evaluated_count": (result.torque_migration_evaluated_count),
-        "finite_torque_migration_count": result.finite_torque_migration_count,
+        "migration_evaluated_count": result.migration_evaluated_count,
+        "finite_migration_count": result.finite_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,
-        "torque_migration_error_count": result.torque_migration_error_count,
+        "migration_error_count": result.migration_error_count,
         "trap_bound_mass_msun": json_float(result.trap_bound_mass_msun),
         "imri_rate_per_myr": json_float(result.imri_rate_per_myr),
         "detectable_imri_rate_per_myr": json_float(result.detectable_imri_rate_per_myr),
         "band_entry_objects": band_entry_objects,
         "trap_bound_objects": trap_bound_objects,
-        "torque_errors": [
+        "migration_errors": [
             {
                 "object_index": error["object_index"],
                 "mass_msun": json_float(error["mass_msun"]),
@@ -413,7 +533,7 @@ def save_migration_diagnostics(
                 "band_entry_status": error["band_entry_status"],
                 "error": error["error"],
             }
-            for error in result.torque_errors
+            for error in result.migration_errors
         ],
     }
     with path.open("w") as diagnostics_file:
@@ -427,7 +547,21 @@ def save_metadata(
     metadata: dict[str, Any],
 ) -> None:
     """Persist an assembled metadata payload as JSON."""
+
+    def json_safe(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {str(key): json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [json_safe(item) for item in value]
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, np.generic):
+            return json_safe(value.item())
+        if isinstance(value, float) and not np.isfinite(value):
+            return None
+        return value
+
     path = output_dir / METADATA_FILENAME
     with path.open("w") as metadata_file:
-        json.dump(metadata, metadata_file, indent=2, default=str)
+        json.dump(json_safe(metadata), metadata_file, indent=2, allow_nan=False)
     print(f"saved: {path}")

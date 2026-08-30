@@ -7,7 +7,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.disk_quantity.disk_plot_utils import plot_agn_disk_torque_profiles
+from src.disk_quantity.disk_plot_utils import (
+    plot_agn_disk_torque_profiles,
+    plot_agn_disk_parameter_profiles,
+)
 from src.physical_process.disk_migration import GAP_OPENING_CONDITIONS
 
 DISK_OUTPUT_DIR = Path("figs")
@@ -37,6 +40,9 @@ def main(gap_opening_condition: str) -> None:
         migrator_mass_msun=MIGRATOR_MASS_MSUN,
         min_trap_separation_cells=MIN_TRAP_SEPARATION_CELLS,
         gap_opening_condition=gap_opening_condition,
+    )
+    plot_agn_disk_parameter_profiles(
+        output_dir=str(DISK_OUTPUT_DIR), alpha=DISK_ALPHA, smbh_masses=SMBH_MASSES
     )
     print(f"gap_opening_condition: {gap_opening_condition}")
     print("gap_open_torque: type_ii_only")

@@ -84,17 +84,17 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
     print(
         "  Band entry            : "
         f"evaluated={result.band_entry_evaluated_count}, "
-        f"in_domain={result.entry_in_torque_domain_count}, "
+        f"in_domain={result.entry_in_migration_domain_count}, "
         f"handoff={result.entry_handoff_count}, "
         f"inside_isco={result.band_entry_inside_isco_count}, "
         f"profile_error={result.profile_error_count}"
     )
     print(
-        "  Torque migration      : "
-        f"evaluated={result.torque_migration_evaluated_count}, "
-        f"finite={result.finite_torque_migration_count}, "
+        "  Migration             : "
+        f"evaluated={result.migration_evaluated_count}, "
+        f"finite={result.finite_migration_count}, "
         f"trap_bound={result.trap_bound_migration_count}, "
-        f"errors={result.torque_migration_error_count}"
+        f"errors={result.migration_error_count}"
     )
     print(f"  Trap-bound mass       : {result.trap_bound_mass_msun:.6e} Msun")
     print("  IMRI candidate rate   : " f"{rate_text(result.imri_rate_per_myr, '/Myr')}")

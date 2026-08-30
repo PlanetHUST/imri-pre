@@ -80,6 +80,7 @@ class IMRIEventRecord(TypedDict):
     m_smbh_msun: float
     m_nsc_msun: float
     repeat: int
+    disk_model: str
     redshift: float
     detection_redshift: float
     object_index: int
@@ -103,8 +104,8 @@ class IMRIEventRecord(TypedDict):
     r_isco_rg: float
     r_disk_inner_cm: float
     r_disk_inner_rg: float
-    r_torque_min_cm: float
-    r_torque_min_rg: float
+    r_migration_min_cm: float
+    r_migration_min_rg: float
     r_handoff_cm: float
     r_handoff_rg: float
     r_det_entry_cm: float
@@ -122,7 +123,7 @@ class IMRIEventRecord(TypedDict):
     migration_time_to_handoff_myr: float
     gw_time_handoff_to_entry_myr: float
     gas_stop_reason: str
-    torque_evaluated: bool
+    migration_evaluated: bool
     migration_status: str
     blocking_radius_rg: float | None
     gw_time_to_entry_myr: float
@@ -138,7 +139,7 @@ class IMRIEventRecord(TypedDict):
     detect_rate_reason: str
 
 
-class TorqueErrorRecord(TypedDict):
+class MigrationErrorRecord(TypedDict):
     object_index: int
     mass_msun: float
     r_ini_rg: float
@@ -148,13 +149,25 @@ class TorqueErrorRecord(TypedDict):
     error: str
 
 
+TorqueErrorRecord = MigrationErrorRecord
+
+
 class IMRIDynSingleResult:
     """Results for one repeat at one grid point."""
 
-    def __init__(self, m_smbh_msun: float, m_nsc_msun: float, repeat_idx: int) -> None:
+    def __init__(
+        self,
+        m_smbh_msun: float,
+        m_nsc_msun: float,
+        repeat_idx: int,
+        disk_model: str,
+        task_seed: int | None = None,
+    ) -> None:
         self.m_smbh_msun = m_smbh_msun
         self.m_nsc_msun = m_nsc_msun
         self.repeat_idx = repeat_idx
+        self.disk_model = disk_model
+        self.task_seed = task_seed
         self.total_sampled_objects = 0
         self.disk_crossing_objects = 0
         self.f_geo = 0.0
@@ -174,14 +187,14 @@ class IMRIDynSingleResult:
         self.detectable_imri_rate_per_myr = 0.0
         self.detectable_imri_mass_rate_msun_per_myr = 0.0
         self.band_entry_evaluated_count = 0
-        self.entry_in_torque_domain_count = 0
+        self.entry_in_migration_domain_count = 0
         self.entry_handoff_count = 0
         self.band_entry_inside_isco_count = 0
         self.profile_error_count = 0
-        self.torque_migration_evaluated_count = 0
-        self.finite_torque_migration_count = 0
+        self.migration_evaluated_count = 0
+        self.finite_migration_count = 0
         self.trap_bound_migration_count = 0
-        self.torque_migration_error_count = 0
+        self.migration_error_count = 0
         self.trap_bound_mass_msun = 0.0
         self.disk_inner_radius_cm: float | None = None
         self.disk_outer_radius_cm: float | None = None
@@ -189,13 +202,15 @@ class IMRIDynSingleResult:
         self.nsc_radius_cm: float | None = None
         self.mean_relaxation_time_myr_geo = np.nan
         self.imri_events: list[IMRIEventRecord] = []
-        self.torque_errors: list[TorqueErrorRecord] = []
+        self.migration_errors: list[MigrationErrorRecord] = []
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "m_smbh_msun": self.m_smbh_msun,
             "m_nsc_msun": self.m_nsc_msun,
             "repeat": self.repeat_idx,
+            "disk_model": self.disk_model,
+            "task_seed": self.task_seed,
             "total_sampled_objects": self.total_sampled_objects,
             "disk_crossing_objects": self.disk_crossing_objects,
             "f_geo": self.f_geo,
@@ -217,14 +232,14 @@ class IMRIDynSingleResult:
                 self.detectable_imri_mass_rate_msun_per_myr
             ),
             "band_entry_evaluated_count": self.band_entry_evaluated_count,
-            "entry_in_torque_domain_count": self.entry_in_torque_domain_count,
+            "entry_in_migration_domain_count": (self.entry_in_migration_domain_count),
             "entry_handoff_count": self.entry_handoff_count,
             "band_entry_inside_isco_count": self.band_entry_inside_isco_count,
             "profile_error_count": self.profile_error_count,
-            "torque_migration_evaluated_count": (self.torque_migration_evaluated_count),
-            "finite_torque_migration_count": self.finite_torque_migration_count,
+            "migration_evaluated_count": self.migration_evaluated_count,
+            "finite_migration_count": self.finite_migration_count,
             "trap_bound_migration_count": self.trap_bound_migration_count,
-            "torque_migration_error_count": self.torque_migration_error_count,
+            "migration_error_count": self.migration_error_count,
             "trap_bound_mass_msun": self.trap_bound_mass_msun,
             "disk_inner_radius_cm": self.disk_inner_radius_cm,
             "disk_outer_radius_cm": self.disk_outer_radius_cm,
@@ -241,10 +256,12 @@ class IMRIDynAveragedResult:
         self,
         m_smbh_msun: float,
         m_nsc_msun: float,
+        disk_model: str,
         results: Sequence[IMRIDynSingleResult],
     ) -> None:
         self.m_smbh_msun = m_smbh_msun
         self.m_nsc_msun = m_nsc_msun
+        self.disk_model = disk_model
         self.results = results
 
     def to_dict(self) -> dict[str, float | int | str]:
@@ -281,6 +298,7 @@ class IMRIDynAveragedResult:
         return {
             "m_smbh_msun": self.m_smbh_msun,
             "m_nsc_msun": self.m_nsc_msun,
+            "disk_model": self.disk_model,
             "num_repeats": len(self.results),
             "rate_evaluation_status": rate_evaluation_status,
             "f_geo_mean": float(np.mean(values("f_geo"))),
@@ -324,25 +342,25 @@ class IMRIDynAveragedResult:
             "band_entry_evaluated_count_mean": float(
                 np.mean(values("band_entry_evaluated_count"))
             ),
-            "entry_in_torque_domain_count_mean": float(
-                np.mean(values("entry_in_torque_domain_count"))
+            "entry_in_migration_domain_count_mean": float(
+                np.mean(values("entry_in_migration_domain_count"))
             ),
             "entry_handoff_count_mean": float(np.mean(values("entry_handoff_count"))),
             "band_entry_inside_isco_count_mean": float(
                 np.mean(values("band_entry_inside_isco_count"))
             ),
             "profile_error_count_mean": float(np.mean(values("profile_error_count"))),
-            "torque_migration_evaluated_count_mean": float(
-                np.mean(values("torque_migration_evaluated_count"))
+            "migration_evaluated_count_mean": float(
+                np.mean(values("migration_evaluated_count"))
             ),
-            "finite_torque_migration_count_mean": float(
-                np.mean(values("finite_torque_migration_count"))
+            "finite_migration_count_mean": float(
+                np.mean(values("finite_migration_count"))
             ),
             "trap_bound_migration_count_mean": float(
                 np.mean(values("trap_bound_migration_count"))
             ),
-            "torque_migration_error_count_mean": float(
-                np.mean(values("torque_migration_error_count"))
+            "migration_error_count_mean": float(
+                np.mean(values("migration_error_count"))
             ),
             "trap_bound_mass_mean_msun": float(np.mean(values("trap_bound_mass_msun"))),
             "mean_relaxation_time_geo_mean_myr": float(
