@@ -1,7 +1,7 @@
 {
   "simulation_info": {
-    "date": "2026-08-30T21:37:58.575505",
-    "timestamp_s_since_epoch": 1788097078.575521,
+    "date": "2026-08-31T08:52:37.105863",
+    "timestamp_s_since_epoch": 1788137557.1058772,
     "description": "Dynamical IMRI rate simulation with parallel damping"
   },
   "parameters": {
@@ -48,8 +48,8 @@
   "runtime_statistics": {
     "workflow": "imri",
     "total_simulations": 50,
-    "total_runtime_seconds": 81.24093222618103,
-    "total_runtime_minutes": 1.3540155371030171,
-    "average_time_per_simulation_seconds": 1.6248186445236206
+    "total_runtime_seconds": 84.06835389137268,
+    "total_runtime_minutes": 1.4011392315228781,
+    "average_time_per_simulation_seconds": 1.6813670778274536
   }
 }

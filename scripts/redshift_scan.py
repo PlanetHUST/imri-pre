@@ -61,10 +61,15 @@ from workflows.config import (
     IMRIDynConfig,
 )
 from workflows.rate_plots import (
+    STATUS_VARIABLE_ORDER,
     RunResults,
     build_rate_summary_data,
+    build_status_fraction_by_smbh_mass_data,
+    build_status_fraction_data,
     generate_scan_figures,
     load_run_results,
+    plot_status_fractions,
+    plot_status_fractions_vs_smbh_mass,
     save_plot_data,
     shared_rate_axis_limits,
 )
@@ -349,6 +354,7 @@ def run_scan(
 
     template = load_config_template(config_json)
     repeat_frames: list[pd.DataFrame] = []
+    event_frames: list[pd.DataFrame] = []
     run_records: list[dict[str, Any]] = []
     reference_runs: dict[str, RunResults] = {}
     for disk_model in model_values:
@@ -369,6 +375,7 @@ def run_scan(
             repeat_frame = run.repeats.copy()
             repeat_frame["run_output_dir"] = str(run_dir)
             repeat_frames.append(repeat_frame)
+            event_frames.append(run.events.copy())
             run_records.append(
                 {
                     "disk_model": disk_model,
@@ -389,6 +396,32 @@ def run_scan(
     comparison_path = output_dir / "disk_model_rate_comparison.csv"
     comparison.to_csv(comparison_path, index=False, float_format="%.17g")
     rate_ylim = shared_rate_axis_limits(rate_summary)
+    combined_events = pd.concat(event_frames, ignore_index=True)
+    status_fractions = build_status_fraction_data(combined_events, combined_repeats)
+    status_fraction_path = save_plot_data(
+        status_fractions,
+        output_dir / "figures" / "data" / "imri_status_fraction_summary.csv",
+    )
+    status_fraction_figures = plot_status_fractions(
+        status_fractions,
+        output_dir / "figures" / "imri_status_fractions_vs_redshift",
+        selected_nsc_mass_msun,
+    )
+    mass_status_fractions = build_status_fraction_by_smbh_mass_data(
+        combined_events, combined_repeats
+    )
+    mass_status_fraction_path = save_plot_data(
+        mass_status_fractions,
+        output_dir
+        / "figures"
+        / "data"
+        / "imri_status_fraction_by_smbh_mass_summary.csv",
+    )
+    mass_status_fraction_figures = plot_status_fractions_vs_smbh_mass(
+        mass_status_fractions,
+        output_dir / "figures" / "imri_status_fractions_vs_smbh_mass",
+        selected_nsc_mass_msun,
+    )
 
     scan_figures: dict[str, Any] = {}
     for disk_model in model_values:
@@ -422,6 +455,23 @@ def run_scan(
         "disk_model_scan_summary": summary_path,
         "disk_model_rate_summary": rate_summary_path,
         "disk_model_rate_comparison": comparison_path,
+        "status_fraction_summary": status_fraction_path,
+        "status_fraction_figures": status_fraction_figures,
+        "status_fraction_smbh_mass_summary": mass_status_fraction_path,
+        "status_fraction_smbh_mass_figures": mass_status_fraction_figures,
+        "status_fraction_semantics": {
+            "variables": list(STATUS_VARIABLE_ORDER),
+            "redshift_aggregation": (
+                "each redshift bar aggregates the configured SMBH-mass grid"
+            ),
+            "smbh_mass_aggregation": (
+                "each SMBH-mass bar aggregates the requested redshift grid"
+            ),
+            "rate_completeness": (
+                "diagnostic status fractions may include evaluations from repeats "
+                "excluded from rate estimation"
+            ),
+        },
         "scan_figures": scan_figures,
     }
     metadata_path = output_dir / "disk_model_scan_metadata.json"
@@ -450,6 +500,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     )
     print(f"saved scan summary: {outputs['disk_model_scan_summary']}")
     print(f"saved comparison: {outputs['disk_model_rate_comparison']}")
+    print(f"saved status fractions: {outputs['status_fraction_summary']}")
+    print(
+        "saved SMBH-mass status fractions: "
+        f"{outputs['status_fraction_smbh_mass_summary']}"
+    )
     print(f"saved scan metadata: {outputs['disk_model_scan_metadata']}")
 
 

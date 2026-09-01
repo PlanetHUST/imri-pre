@@ -57,6 +57,26 @@ MIN_TRAP_SEPARATION_CELLS = 1.0
 
 COLORS = ("#1f77b4", "#BE9A62", "#2A7F62", "#8A5CA8", "#D55E00")
 
+plt.rcParams.update(
+    {
+        "font.size": 20,  # default text
+        "axes.titlesize": 18,  # title
+        "axes.labelsize": 18,  # x/y labels
+        "xtick.labelsize": 16,  # x tick numbers
+        "ytick.labelsize": 16,  # y tick numbers
+        "legend.fontsize": 12,  # legend
+        "figure.titlesize": 18,  # suptitle
+        "xtick.direction": "in",
+        "ytick.direction": "in",
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
+        "xtick.minor.size": 3,
+        "ytick.minor.size": 3,
+        "xtick.major.width": 1.2,
+        "ytick.major.width": 1.2,
+    }
+)
+
 
 @dataclass
 class MigrationDisk:
@@ -228,15 +248,20 @@ def _plot_results(
     sample_radii_rg: np.ndarray,
     series: list[MigrationSeries],
 ) -> Path:
-    fig, (ax, gap_ax) = plt.subplots(
-        2,
-        1,
-        figsize=(11, 9),
-        sharex=True,
-        constrained_layout=True,
-        gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
+    # fig, (ax, gap_ax) = plt.subplots(
+    #     2,
+    #     1,
+    #     figsize=(11, 9),
+    #     sharex=True,
+    #     constrained_layout=True,
+    #     gridspec_kw={"height_ratios": (3.0, 1.0), "hspace": 0.06},
+    # )
+    fig, ax = plt.subplots(
+        figsize=(10, 8.5),
     )
+
     has_visible_trap = False
+
     for index, result in enumerate(series):
         color = COLORS[index % len(COLORS)]
         semi_mask = np.isfinite(result.integrated_semi_times_myr) & (
@@ -265,27 +290,27 @@ def _plot_results(
             ax.axvline(trap_radius_rg, color=color, lw=1.3, ls=":", alpha=0.5)
         has_visible_trap |= result.stable_trap_radii_rg.size > 0
 
-        gap_ax.plot(
-            sample_radii_rg,
-            result.gap_parameter / TYPE_II_GAP_PARAMETER_THRESHOLD,
-            color=color,
-            lw=2.2,
-            ls="-",
-        )
-        gap_ax.plot(
-            sample_radii_rg,
-            result.crida_parameter,
-            color=color,
-            lw=2.2,
-            ls="-.",
-        )
-        gap_ax.plot(
-            sample_radii_rg,
-            result.hill_radius_over_scale_height,
-            color=color,
-            lw=2.2,
-            ls=":",
-        )
+        # gap_ax.plot(
+        #     sample_radii_rg,
+        #     result.gap_parameter / TYPE_II_GAP_PARAMETER_THRESHOLD,
+        #     color=color,
+        #     lw=2.2,
+        #     ls="-",
+        # )
+        # gap_ax.plot(
+        #     sample_radii_rg,
+        #     result.crida_parameter,
+        #     color=color,
+        #     lw=2.2,
+        #     ls="-.",
+        # )
+        # gap_ax.plot(
+        #     sample_radii_rg,
+        #     result.hill_radius_over_scale_height,
+        #     color=color,
+        #     lw=2.2,
+        #     ls=":",
+        # )
 
     ax.axvline(TARGET_RADIUS_RG, color="0.35", lw=1.5, ls=":", alpha=0.8)
     ax.axvline(START_RADIUS_RG, color="0.35", lw=1.5, ls="-.", alpha=0.8)
@@ -318,22 +343,23 @@ def _plot_results(
         )
     ax.legend(handles=mass_handles + method_handles, loc="best", framealpha=0.88)
 
-    gap_ax.set(
-        xscale="log",
-        yscale="log",
-        xlabel=r"Starting radius $R/r_g$",
-        ylabel="Dimensionless value",
-    )
-    gap_ax.grid(True, alpha=0.25, linestyle="--", which="both")
-    gap_ax.legend(
-        handles=[
-            Line2D([0], [0], color="0.2", lw=2.2, ls="-", label=r"$K_\mathrm{II}/11$"),
-            Line2D([0], [0], color="0.2", lw=2.2, ls="-.", label=r"$P_\mathrm{Crida}$"),
-            Line2D([0], [0], color="0.2", lw=2.2, ls=":", label=r"$R_H/H$"),
-        ],
-        loc="best",
-        framealpha=0.88,
-    )
+    ax.set_xlabel(r"Starting radius $R/r_g$")
+    # gap_ax.set(
+    #     xscale="log",
+    #     yscale="log",
+    #     xlabel=r"Starting radius $R/r_g$",
+    #     ylabel="Dimensionless value",
+    # )
+    # gap_ax.grid(True, alpha=0.25, linestyle="--", which="both")
+    # gap_ax.legend(
+    #     handles=[
+    #         Line2D([0], [0], color="0.2", lw=2.2, ls="-", label=r"$K_\mathrm{II}/11$"),
+    #         Line2D([0], [0], color="0.2", lw=2.2, ls="-.", label=r"$P_\mathrm{Crida}$"),
+    #         Line2D([0], [0], color="0.2", lw=2.2, ls=":", label=r"$R_H/H$"),
+    #     ],
+    #     loc="best",
+    #     framealpha=0.88,
+    # )
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     figure_path = OUTPUT_DIR / f"{OUTPUT_STEM}.png"

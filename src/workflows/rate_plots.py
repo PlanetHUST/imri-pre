@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .config import (
+    DISK_MODELS,
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
     IMRI_REPEAT_RESULTS_FILENAME,
@@ -55,11 +56,143 @@ RATE_SUMMARY_COLUMNS = [
     "proxy_detectable_rate_mean_per_myr",
     "result_state",
 ]
+STATUS_FRACTION_COLUMNS = [
+    "disk_model",
+    "redshift",
+    "m_nsc_msun",
+    "variable",
+    "category",
+    "count",
+    "denominator",
+    "fraction",
+    "result_state",
+]
+STATUS_FRACTION_SMBH_MASS_COLUMNS = [
+    "disk_model",
+    "m_smbh_msun",
+    "m_nsc_msun",
+    "variable",
+    "category",
+    "count",
+    "denominator",
+    "fraction",
+    "result_state",
+]
+BAND_ENTRY_COUNTER_CATEGORIES = {
+    "n_entry_in_domain": "entry_in_migration_domain",
+    "n_entry_handoff": "entry_below_migration_domain_but_above_isco",
+    "n_entry_inside_isco": "band_entry_inside_isco",
+    "n_profile_error": "profile_error",
+}
+STATUS_VARIABLE_ORDER = (
+    "band_entry_status",
+    "transport_status",
+    "event_outcome",
+    "detectability_outcome",
+)
+BAND_ENTRY_ORDER = tuple(BAND_ENTRY_COUNTER_CATEGORIES.values())
+TRANSPORT_ORDER = (
+    "already_inside_lisa_entry",
+    "entry_reached",
+    "gas_to_gw_handoff",
+    "gw_dominates_at_start",
+    "gw_dominates_after_gas",
+    "duty_cycle_limited",
+    "damping_misses_duty_cycle",
+    "migration_trap_bound",
+    "invalid_radius",
+)
+EVENT_OUTCOME_ORDER = ("imri candi", "no-IMRI", "not evaluated")
+DETECTABILITY_ORDER = ("imri data", "non-detectable", "not evaluated")
+STATUS_CATEGORY_ORDER = {
+    "band_entry_status": BAND_ENTRY_ORDER,
+    "transport_status": TRANSPORT_ORDER,
+    "event_outcome": EVENT_OUTCOME_ORDER,
+    "detectability_outcome": DETECTABILITY_ORDER,
+}
+TRANSPORT_STATUS_BY_GAS_STOP_REASON = {
+    category: category for category in TRANSPORT_ORDER
+}
+# Keep invalid-radius evaluations visible in this denominator as an explicit
+# not-evaluable outcome; inside-ISCO and blank/null reasons remain excluded.
+TRANSPORT_EXCLUDED_REASONS = {"band_entry_inside_isco"}
+STATUS_VARIABLE_LABELS = {
+    "band_entry_status": "Band-entry geometry",
+    "transport_status": "Gas/GW transport outcome\n(including invalid states)",
+    "event_outcome": "IMRI event outcome",
+    "detectability_outcome": "Detectability outcome",
+}
+STATUS_CATEGORY_LABELS = {
+    "band_entry_status": {
+        "entry_in_migration_domain": "In migration domain",
+        "entry_below_migration_domain_but_above_isco": "GW handoff required",
+        "band_entry_inside_isco": "Inside ISCO",
+        "profile_error": "Profile unavailable",
+    },
+    "transport_status": {
+        "already_inside_lisa_entry": "Already at/inside entry",
+        "entry_reached": "Gas reaches entry",
+        "gas_to_gw_handoff": "Gas reaches GW handoff",
+        "gw_dominates_at_start": "GW faster at start",
+        "gw_dominates_after_gas": "Gas→GW timescale crossover",
+        "duty_cycle_limited": "AGN lifetime exhausted",
+        "damping_misses_duty_cycle": "No gas time after embedding",
+        "migration_trap_bound": "Migration trapped",
+        "invalid_radius": "Transport not evaluable",
+    },
+    "event_outcome": {
+        "imri candi": "IMRI candidate",
+        "no-IMRI": "No IMRI",
+        "not evaluated": "Not evaluated",
+    },
+    "detectability_outcome": {
+        "imri data": "Detectable",
+        "non-detectable": "Non-detectable",
+        "not evaluated": "Not evaluated",
+    },
+}
+STATUS_CATEGORY_COLORS = {
+    "band_entry_status": {
+        "entry_in_migration_domain": "#0072B2",
+        "entry_below_migration_domain_but_above_isco": "#009E73",
+        "band_entry_inside_isco": "#D55E00",
+        "profile_error": "#7F7F7F",
+    },
+    "transport_status": {
+        "already_inside_lisa_entry": "#56B4E9",
+        "entry_reached": "#009E73",
+        "gas_to_gw_handoff": "#0072B2",
+        "gw_dominates_at_start": "#CC79A7",
+        "gw_dominates_after_gas": "#9467BD",
+        "duty_cycle_limited": "#E69F00",
+        "damping_misses_duty_cycle": "#F0E442",
+        "migration_trap_bound": "#D55E00",
+        "invalid_radius": "#7F7F7F",
+    },
+    "event_outcome": {
+        "imri candi": "#009E73",
+        "no-IMRI": "#D55E00",
+        "not evaluated": "#7F7F7F",
+    },
+    "detectability_outcome": {
+        "imri data": "#0072B2",
+        "non-detectable": "#E69F00",
+        "not evaluated": "#7F7F7F",
+    },
+}
 
-MAX_FIGURE_CURVES = 4
 MIN_REPEATS_FOR_BAND = 10
 FIGURE_SIZE = (7.0, 4.5)
-OKABE_ITO_COLORS = ("#0072B2", "#D55E00", "#009E73", "#CC79A7")
+OKABE_ITO_COLORS = (
+    "#0072B2",
+    "#D55E00",
+    "#009E73",
+    "#CC79A7",
+    "#E69F00",
+    "#56B4E9",
+    "#F0E442",
+    "#000000",
+)
 
 
 @dataclass(frozen=True)
@@ -334,6 +467,296 @@ def shared_rate_axis_limits(summary_data: pd.DataFrame) -> tuple[float, float]:
     return 0.0, (1.05 * upper if upper > 0.0 else 1.0)
 
 
+def _status_fraction_columns(scan_column: str) -> list[str]:
+    if scan_column == "redshift":
+        return STATUS_FRACTION_COLUMNS
+    if scan_column == "m_smbh_msun":
+        return STATUS_FRACTION_SMBH_MASS_COLUMNS
+    raise ValueError(f"unsupported status-fraction scan column: {scan_column}")
+
+
+def validate_status_fraction_data(
+    status_data: pd.DataFrame,
+    scan_column: str = "redshift",
+) -> None:
+    """Validate the four-layer taxonomy, denominators, and conservation."""
+    _require_columns(
+        status_data, _status_fraction_columns(scan_column), "status fractions"
+    )
+    expected_variables = set(STATUS_VARIABLE_ORDER)
+    unknown_variables = sorted(
+        set(status_data["variable"].astype(str)).difference(expected_variables)
+    )
+    if unknown_variables:
+        raise ValueError(
+            f"status fractions contain unknown variables: {unknown_variables}"
+        )
+    for variable in STATUS_VARIABLE_ORDER:
+        expected_categories = set(STATUS_CATEGORY_ORDER[variable])
+        if set(STATUS_CATEGORY_LABELS[variable]) != expected_categories:
+            raise ValueError(f"status labels are incomplete for {variable}")
+        if set(STATUS_CATEGORY_COLORS[variable]) != expected_categories:
+            raise ValueError(f"status colors are incomplete for {variable}")
+
+    key_columns = [
+        "disk_model",
+        scan_column,
+        "m_nsc_msun",
+        "variable",
+        "category",
+    ]
+    if status_data.duplicated(key_columns).any():
+        raise ValueError("status fractions contain duplicate category keys")
+
+    count = pd.to_numeric(status_data["count"], errors="coerce")
+    denominator = pd.to_numeric(status_data["denominator"], errors="coerce")
+    fraction = pd.to_numeric(status_data["fraction"], errors="coerce")
+    if (
+        not np.isfinite(count.to_numpy(dtype=float)).all()
+        or not np.isfinite(denominator.to_numpy(dtype=float)).all()
+    ):
+        raise ValueError("status counts and denominators must be finite")
+    if (count < 0.0).any() or (denominator < 0.0).any():
+        raise ValueError("status counts and denominators must be nonnegative")
+
+    valid = status_data["result_state"].eq("valid")
+    unavailable = status_data["result_state"].eq("unavailable")
+    if not (valid | unavailable).all():
+        raise ValueError("status fraction state must be valid or unavailable")
+    if (
+        (denominator[valid] <= 0.0).any()
+        or not np.isfinite(fraction[valid].to_numpy(dtype=float)).all()
+        or (fraction[valid] < 0.0).any()
+        or (fraction[valid] > 1.0).any()
+    ):
+        raise ValueError("valid status fractions require a positive denominator")
+    if (denominator[unavailable] != 0.0).any() or fraction[unavailable].notna().any():
+        raise ValueError("unavailable fractions require zero denominator and NaN")
+
+    group_columns = ["disk_model", scan_column, "m_nsc_msun", "variable"]
+    scan_group_columns = ["disk_model", scan_column, "m_nsc_msun"]
+    for scan_key, scan_group in status_data.groupby(scan_group_columns, sort=False):
+        variables = set(scan_group["variable"].astype(str))
+        if variables != expected_variables:
+            raise ValueError(
+                f"status bin {scan_key} does not contain all four variables"
+            )
+
+    for group_key, group in status_data.groupby(group_columns, sort=False):
+        variable = str(group_key[-1])
+        observed_categories = set(group["category"].astype(str))
+        expected_categories = set(STATUS_CATEGORY_ORDER[variable])
+        if observed_categories != expected_categories:
+            unexpected = sorted(observed_categories.difference(expected_categories))
+            missing = sorted(expected_categories.difference(observed_categories))
+            raise ValueError(
+                f"invalid categories for {variable}: "
+                f"unexpected={unexpected}, missing={missing}"
+            )
+        group_denominators = pd.to_numeric(group["denominator"]).unique()
+        if len(group_denominators) != 1:
+            raise ValueError("status denominator varies within one scan bin")
+        group_denominator = float(group_denominators[0])
+        group_count = float(pd.to_numeric(group["count"]).sum())
+        if group_denominator == 0.0:
+            if group_count != 0.0 or not group["result_state"].eq(
+                "unavailable"
+            ).all():
+                raise ValueError("unavailable status bin has a nonzero count")
+            continue
+        if not group["result_state"].eq("valid").all():
+            raise ValueError("positive status denominator requires valid rows")
+        if not np.isclose(group_count, group_denominator, rtol=0.0, atol=1.0e-12):
+            raise ValueError("status counts do not conserve the denominator")
+        group_fraction = float(pd.to_numeric(group["fraction"]).sum())
+        # Status tables are persisted with ten significant digits.
+        if not np.isclose(group_fraction, 1.0, rtol=0.0, atol=1.0e-9):
+            raise ValueError("status fractions do not sum to one")
+
+
+def _normalize_transport_status(gas_stop_reason: pd.Series) -> pd.Series:
+    """Return strict plot-layer transport keys while excluding non-transport rows."""
+    raw = gas_stop_reason.astype("string").str.strip()
+    defined = raw.notna() & raw.ne("")
+    observed = {str(value) for value in raw[defined].unique()}
+    allowed = set(TRANSPORT_STATUS_BY_GAS_STOP_REASON) | TRANSPORT_EXCLUDED_REASONS
+    unknown = sorted(observed.difference(allowed))
+    if unknown:
+        raise ValueError(f"unknown gas_stop_reason categories: {unknown}")
+    return raw.map(TRANSPORT_STATUS_BY_GAS_STOP_REASON).astype("string")
+
+
+def _validate_class_values(
+    values: pd.Series,
+    *,
+    source_column: str,
+    expected_categories: Sequence[str],
+) -> pd.Series:
+    raw = values.astype("string").str.strip()
+    missing = raw.isna() | raw.eq("")
+    observed = {str(value) for value in raw[~missing].unique()}
+    unknown = sorted(observed.difference(expected_categories))
+    if missing.any():
+        unknown.append("<blank/null>")
+    if unknown:
+        raise ValueError(f"unknown {source_column} categories: {unknown}")
+    return raw
+
+
+def _fraction_records(
+    *,
+    disk_model: str,
+    scan_column: str,
+    scan_value: float,
+    nsc_mass_msun: float,
+    variable: str,
+    category_counts: dict[str, float],
+) -> list[dict[str, float | str]]:
+    categories = STATUS_CATEGORY_ORDER[variable]
+    denominator = float(sum(category_counts[category] for category in categories))
+    state = "valid" if denominator > 0.0 else "unavailable"
+    return [
+        {
+            "disk_model": disk_model,
+            scan_column: scan_value,
+            "m_nsc_msun": nsc_mass_msun,
+            "variable": variable,
+            "category": category,
+            "count": category_counts[category],
+            "denominator": denominator,
+            "fraction": (
+                category_counts[category] / denominator
+                if denominator > 0.0
+                else np.nan
+            ),
+            "result_state": state,
+        }
+        for category in categories
+    ]
+
+
+def _build_status_fraction_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+    scan_column: str,
+) -> pd.DataFrame:
+    validate_repeat_results(repeats)
+    validate_event_keys(events, repeats)
+    _require_columns(
+        repeats,
+        [*GROUP_COLUMNS, "n_band_eval", *BAND_ENTRY_COUNTER_CATEGORIES],
+        "repeat results",
+    )
+    _require_columns(
+        events,
+        [
+            *GROUP_COLUMNS,
+            "gas_stop_reason",
+            "event_rate_class",
+            "detect_rate_class",
+        ],
+        "event results",
+    )
+
+    output_columns = _status_fraction_columns(scan_column)
+    scan_columns = ["disk_model", scan_column, "m_nsc_msun"]
+    records: list[dict[str, float | str]] = []
+    expected_bins = repeats[scan_columns].drop_duplicates().sort_values(scan_columns)
+    normalized_events = events.copy()
+    normalized_events["_transport_status"] = _normalize_transport_status(
+        normalized_events["gas_stop_reason"]
+    )
+    normalized_events["_event_outcome"] = _validate_class_values(
+        normalized_events["event_rate_class"],
+        source_column="event_rate_class",
+        expected_categories=EVENT_OUTCOME_ORDER,
+    )
+    normalized_events["_detectability_outcome"] = _validate_class_values(
+        normalized_events["detect_rate_class"],
+        source_column="detect_rate_class",
+        expected_categories=DETECTABILITY_ORDER,
+    )
+
+    for _, expected in expected_bins.iterrows():
+        disk_model = str(expected["disk_model"])
+        scan_value = float(expected[scan_column])
+        nsc_mass_msun = float(expected["m_nsc_msun"])
+        repeat_mask = (
+            repeats["disk_model"].astype(str).eq(disk_model)
+            & np.isclose(repeats[scan_column].astype(float), scan_value)
+            & np.isclose(repeats["m_nsc_msun"].astype(float), nsc_mass_msun)
+        )
+        repeat_group = repeats.loc[repeat_mask]
+        band_denominator = float(pd.to_numeric(repeat_group["n_band_eval"]).sum())
+        band_counts = {
+            category: float(pd.to_numeric(repeat_group[column]).sum())
+            for column, category in BAND_ENTRY_COUNTER_CATEGORIES.items()
+        }
+        if not np.isclose(
+            sum(band_counts.values()), band_denominator, rtol=0.0, atol=1.0e-12
+        ):
+            raise ValueError("band-entry counters do not sum to n_band_eval")
+        records.extend(
+            _fraction_records(
+                disk_model=disk_model,
+                scan_column=scan_column,
+                scan_value=scan_value,
+                nsc_mass_msun=nsc_mass_msun,
+                variable="band_entry_status",
+                category_counts=band_counts,
+            )
+        )
+
+        event_mask = (
+            normalized_events["disk_model"].astype(str).eq(disk_model)
+            & np.isclose(normalized_events[scan_column].astype(float), scan_value)
+            & np.isclose(
+                normalized_events["m_nsc_msun"].astype(float), nsc_mass_msun
+            )
+        )
+        event_group = normalized_events.loc[event_mask]
+        for variable, source_column in (
+            ("transport_status", "_transport_status"),
+            ("event_outcome", "_event_outcome"),
+            ("detectability_outcome", "_detectability_outcome"),
+        ):
+            source = event_group[source_column].dropna().astype(str)
+            category_counts = {
+                category: float(source.eq(category).sum())
+                for category in STATUS_CATEGORY_ORDER[variable]
+            }
+            records.extend(
+                _fraction_records(
+                    disk_model=disk_model,
+                    scan_column=scan_column,
+                    scan_value=scan_value,
+                    nsc_mass_msun=nsc_mass_msun,
+                    variable=variable,
+                    category_counts=category_counts,
+                )
+            )
+
+    frame = pd.DataFrame.from_records(records, columns=output_columns)
+    validate_status_fraction_data(frame, scan_column)
+    return frame
+
+
+def build_status_fraction_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> pd.DataFrame:
+    """Aggregate four diagnostic layers across the configured SMBH-mass grid."""
+    return _build_status_fraction_data(events, repeats, "redshift")
+
+
+def build_status_fraction_by_smbh_mass_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> pd.DataFrame:
+    """Aggregate four diagnostic layers across the requested redshift grid."""
+    return _build_status_fraction_data(events, repeats, "m_smbh_msun")
+
+
 def validate_agn_time_endpoints(
     time_data: pd.DataFrame,
     repeats: pd.DataFrame,
@@ -391,12 +814,8 @@ def save_plot_data(frame: pd.DataFrame, path: str | Path) -> Path:
     return output_path
 
 
-def _representative_values(values: Sequence[float]) -> list[float]:
-    unique = sorted({float(value) for value in values})
-    if len(unique) <= MAX_FIGURE_CURVES:
-        return unique
-    indices = np.rint(np.linspace(0, len(unique) - 1, MAX_FIGURE_CURVES)).astype(int)
-    return [unique[index] for index in indices]
+def _sorted_unique_values(values: Sequence[float]) -> list[float]:
+    return sorted({float(value) for value in values})
 
 
 def _resolve_nsc_mass(frame: pd.DataFrame, selected: float | None) -> float:
@@ -437,12 +856,12 @@ def select_time_series_data(
     time_data: pd.DataFrame,
     selected_nsc_mass_msun: float | None = None,
 ) -> pd.DataFrame:
-    """Select one NSC mass and at most four representative SMBH curves."""
+    """Select one NSC mass while retaining every configured SMBH curve."""
     _require_columns(time_data, TIME_SERIES_COLUMNS, "time-series results")
     _single_disk_model(time_data)
     nsc_mass = _resolve_nsc_mass(time_data, selected_nsc_mass_msun)
     nsc_data = time_data[np.isclose(time_data["m_nsc_msun"], nsc_mass)]
-    masses = _representative_values(nsc_data["m_smbh_msun"].unique())
+    masses = _sorted_unique_values(nsc_data["m_smbh_msun"].unique())
     selected = nsc_data[nsc_data["m_smbh_msun"].isin(masses)].copy()
     return selected.sort_values(["m_smbh_msun", "time_myr"]).reset_index(drop=True)
 
@@ -462,9 +881,17 @@ def _caption_mass_label(mass_msun: float) -> str:
     return _mass_label(mass_msun).replace(chr(92) * 2, chr(92))
 
 
-def _color_map(values: Sequence[float]) -> dict[float, str]:
-    selected = _representative_values(values)
-    return {value: OKABE_ITO_COLORS[index] for index, value in enumerate(selected)}
+def _color_map(values: Sequence[float]) -> dict[float, Any]:
+    selected = _sorted_unique_values(values)
+    if len(selected) <= len(OKABE_ITO_COLORS):
+        colors: Sequence[Any] = OKABE_ITO_COLORS[: len(selected)]
+    else:
+        color_map = plt.get_cmap("tab20")
+        colors = [
+            color_map(index / max(1, len(selected) - 1))
+            for index in range(len(selected))
+        ]
+    return dict(zip(selected, colors, strict=True))
 
 
 def _new_figure(title: str) -> tuple[Any, Any]:
@@ -485,6 +912,177 @@ def _save_figure(fig: Any, output_stem: Path) -> list[Path]:
         fig.savefig(path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return paths
+
+
+def _plot_status_fractions(
+    status_data: pd.DataFrame,
+    output_stem: str | Path,
+    selected_nsc_mass_msun: float | None = None,
+    scan_column: str = "redshift",
+) -> list[Path]:
+    validate_status_fraction_data(status_data, scan_column)
+    nsc_mass = _resolve_nsc_mass(status_data, selected_nsc_mass_msun)
+    selected = status_data[np.isclose(status_data["m_nsc_msun"], nsc_mass)]
+    available_models = set(selected["disk_model"].astype(str))
+    disk_models = [model for model in DISK_MODELS if model in available_models]
+    disk_models.extend(sorted(available_models.difference(disk_models)))
+    if not disk_models:
+        raise ValueError("status fraction figure has no disk models")
+
+    fig, axes = plt.subplots(
+        len(STATUS_VARIABLE_ORDER),
+        len(disk_models),
+        figsize=(5.6 * len(disk_models), 12.4),
+        sharey="row",
+        squeeze=False,
+    )
+    for column_index, disk_model in enumerate(disk_models):
+        for row_index, variable in enumerate(STATUS_VARIABLE_ORDER):
+            axis = axes[row_index, column_index]
+            panel = selected[
+                selected["disk_model"].astype(str).eq(disk_model)
+                & selected["variable"].eq(variable)
+            ]
+            scan_values = sorted({float(value) for value in panel[scan_column]})
+            if scan_column == "redshift":
+                x_values = np.asarray(scan_values, dtype=float)
+                if x_values.size > 1:
+                    bar_width = 0.65 * float(np.min(np.diff(x_values)))
+                else:
+                    bar_width = 0.6
+                tick_labels = [f"{value:g}" for value in scan_values]
+            else:
+                x_values = np.arange(len(scan_values), dtype=float)
+                bar_width = 0.72
+                tick_labels = [_mass_label(value) for value in scan_values]
+            bottom = np.zeros(x_values.shape, dtype=float)
+            for category in STATUS_CATEGORY_ORDER[variable]:
+                fractions = []
+                for scan_value in scan_values:
+                    row = panel[
+                        np.isclose(panel[scan_column], scan_value)
+                        & panel["category"].astype(str).eq(category)
+                        & panel["result_state"].eq("valid")
+                    ]
+                    fractions.append(
+                        float(row["fraction"].iloc[0]) if len(row) == 1 else 0.0
+                    )
+                values = np.asarray(fractions, dtype=float)
+                axis.bar(
+                    x_values,
+                    values,
+                    width=bar_width,
+                    bottom=bottom,
+                    color=STATUS_CATEGORY_COLORS[variable][category],
+                    edgecolor="white",
+                    linewidth=0.5,
+                    label=STATUS_CATEGORY_LABELS[variable][category],
+                )
+                bottom += values
+
+            unavailable_values = sorted(
+                {
+                    float(value)
+                    for value in panel.loc[
+                        panel["result_state"].eq("unavailable"), scan_column
+                    ]
+                }
+            )
+            if unavailable_values:
+                unavailable_positions = (
+                    unavailable_values
+                    if scan_column == "redshift"
+                    else [scan_values.index(value) for value in unavailable_values]
+                )
+                axis.scatter(
+                    unavailable_positions,
+                    np.full(len(unavailable_values), 0.5),
+                    marker="x",
+                    color="black",
+                    linewidths=1.7,
+                    s=55,
+                    label="Unavailable bin",
+                    zorder=5,
+                )
+            axis.set_ylim(0.0, 1.0)
+            axis.set_xticks(x_values)
+            axis.set_xticklabels(
+                tick_labels,
+                rotation=20 if scan_column == "m_smbh_msun" else 0,
+                ha="right" if scan_column == "m_smbh_msun" else "center",
+            )
+            axis.yaxis.grid(True, color="0.9", linewidth=0.8)
+            axis.set_axisbelow(True)
+            if row_index == 0:
+                axis.set_title(_disk_model_label(disk_model), fontsize=12)
+            if column_index == 0:
+                axis.set_ylabel(STATUS_VARIABLE_LABELS[variable])
+            if row_index == len(STATUS_VARIABLE_ORDER) - 1:
+                axis.set_xlabel(
+                    "Redshift $z$" if scan_column == "redshift" else "SMBH mass"
+                )
+            if column_index == len(disk_models) - 1:
+                axis.legend(
+                    frameon=False,
+                    fontsize=8,
+                    loc="center left",
+                    bbox_to_anchor=(1.02, 0.5),
+                )
+
+    dimension_label = "redshift" if scan_column == "redshift" else "SMBH mass"
+    fig.suptitle(
+        f"IMRI classification fractions across {dimension_label}\n"
+        + rf"NSC mass $={_mass_label(nsc_mass).strip('$')}$",
+        fontsize=13,
+    )
+    aggregation_note = (
+        "Each redshift bar aggregates configured SMBH masses."
+        if scan_column == "redshift"
+        else "Each SMBH-mass bar aggregates requested redshifts."
+    )
+    fig.text(
+        0.01,
+        0.01,
+        "Denominators: geometry = attempted band-entry classifications; transport = "
+        "persisted transport outcomes, including invalid states but excluding "
+        "inside-ISCO geometry and blank/null reasons; event and detectability = all "
+        "persisted event rows.\n"
+        + aggregation_note
+        + " Status fractions are diagnostic and may include outcomes from repeats "
+        "excluded from rate estimation.",
+        fontsize=8.0,
+        color="0.3",
+    )
+    fig.tight_layout(rect=(0.0, 0.065, 1.0, 0.95))
+    return _save_figure(fig, Path(output_stem))
+
+
+def plot_status_fractions(
+    status_data: pd.DataFrame,
+    output_stem: str | Path,
+    selected_nsc_mass_msun: float | None = None,
+) -> list[Path]:
+    """Plot 100%-stacked status fractions by redshift and disk model."""
+    return _plot_status_fractions(
+        status_data,
+        output_stem,
+        selected_nsc_mass_msun,
+        "redshift",
+    )
+
+
+def plot_status_fractions_vs_smbh_mass(
+    status_data: pd.DataFrame,
+    output_stem: str | Path,
+    selected_nsc_mass_msun: float | None = None,
+) -> list[Path]:
+    """Plot 100%-stacked status fractions by SMBH mass and disk model."""
+    return _plot_status_fractions(
+        status_data,
+        output_stem,
+        selected_nsc_mass_msun,
+        "m_smbh_msun",
+    )
 
 
 def plot_agn_time(
@@ -598,7 +1196,7 @@ def _plot_rate_dependence(
                 x,
                 y,
                 color=color,
-                linestyle=line_styles[curve_index],
+                linestyle=line_styles[curve_index % len(line_styles)],
                 linewidth=2.1,
                 marker="o",
                 markersize=6.0,

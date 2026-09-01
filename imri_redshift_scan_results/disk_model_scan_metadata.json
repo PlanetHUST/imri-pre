@@ -93,6 +93,27 @@
   "disk_model_scan_summary": "imri_redshift_scan_results/disk_model_scan_summary.csv",
   "disk_model_rate_summary": "imri_redshift_scan_results/figures/data/imri_rate_summary.csv",
   "disk_model_rate_comparison": "imri_redshift_scan_results/disk_model_rate_comparison.csv",
+  "status_fraction_summary": "imri_redshift_scan_results/figures/data/imri_status_fraction_summary.csv",
+  "status_fraction_figures": [
+    "imri_redshift_scan_results/figures/imri_status_fractions_vs_redshift.png",
+    "imri_redshift_scan_results/figures/imri_status_fractions_vs_redshift.pdf"
+  ],
+  "status_fraction_smbh_mass_summary": "imri_redshift_scan_results/figures/data/imri_status_fraction_by_smbh_mass_summary.csv",
+  "status_fraction_smbh_mass_figures": [
+    "imri_redshift_scan_results/figures/imri_status_fractions_vs_smbh_mass.png",
+    "imri_redshift_scan_results/figures/imri_status_fractions_vs_smbh_mass.pdf"
+  ],
+  "status_fraction_semantics": {
+    "variables": [
+      "band_entry_status",
+      "transport_status",
+      "event_outcome",
+      "detectability_outcome"
+    ],
+    "redshift_aggregation": "each redshift bar aggregates the configured SMBH-mass grid",
+    "smbh_mass_aggregation": "each SMBH-mass bar aggregates the requested redshift grid",
+    "rate_completeness": "diagnostic status fractions may include evaluations from repeats excluded from rate estimation"
+  },
   "scan_figures": {
     "torque_with_trap": {
       "time_series_data": "imri_redshift_scan_results/figures/torque_with_trap/data/imri_rate_time_series.csv",
