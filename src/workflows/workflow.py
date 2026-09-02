@@ -51,6 +51,13 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(f"gap_opening_condition: {config.gap_opening_condition}")
     print(f"Redshift: {config.redshift:.3e}")
+    print(
+        "LISA detector model: "
+        f"mission={config.lisa_mission_duration_years:g} yr, "
+        f"SNR threshold={config.snr_threshold:g}, "
+        f"H0={config.detector_hubble_constant_km_s_mpc:g} km/s/Mpc, "
+        f"Omega_m={config.detector_omega_m:g}"
+    )
 
     source_lisa_min_hz = gw_helpers.source_frame_gw_frequency_hz(
         config.lisa_min_gw_frequency_hz,

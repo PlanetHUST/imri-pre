@@ -21,6 +21,13 @@ from .event_rate import (
     classify_event_rate,
     classify_unsupported_band_entry,
 )
+from .lisa_snr import (
+    SNR_STATUS_EVALUATED,
+    SNR_STATUS_MODEL_UNAVAILABLE,
+    SNR_STATUS_NO_OVERLAP,
+    SNR_STATUS_NUMERICAL_FAILURE,
+    SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE,
+)
 from .models import (
     DampingResult,
     DiskProfiles,
@@ -203,23 +210,55 @@ class IMRIEventEvaluator:
                 result.imri_count += 1
                 result.imri_mass_msun += event["mass_msun"]
                 if event["is_lisa_detectable"] is True:
+                    if event["snr_status"] != SNR_STATUS_EVALUATED:
+                        raise RuntimeError("detectable event has a non-evaluated SNR status")
+                    result.detector_evaluated_imri_count += 1
                     result.detectable_imri_count += 1
                     result.detectable_imri_mass_msun += event["mass_msun"]
                 elif event["is_lisa_detectable"] is False:
+                    result.detector_evaluated_imri_count += 1
                     result.no_detectable_imri_count += 1
+                    if event["snr_status"] == SNR_STATUS_EVALUATED:
+                        result.detector_below_threshold_imri_count += 1
+                    elif event["snr_status"] == SNR_STATUS_NO_OVERLAP:
+                        result.detector_no_overlap_imri_count += 1
+                    else:
+                        raise RuntimeError(
+                            "physical nondetection has an unavailable SNR status"
+                        )
+                else:
+                    result.detector_unavailable_imri_count += 1
+                    if event["snr_status"] == SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE:
+                        result.detector_required_input_unavailable_imri_count += 1
+                    elif event["snr_status"] == SNR_STATUS_MODEL_UNAVAILABLE:
+                        result.detector_model_unavailable_imri_count += 1
+                    elif event["snr_status"] == SNR_STATUS_NUMERICAL_FAILURE:
+                        result.detector_numerical_failure_imri_count += 1
+                    else:
+                        raise RuntimeError(
+                            "detector-unavailable event has an unrecognized SNR status"
+                        )
             elif event["is_imri_candidate"] is False:
                 result.no_imri_count += 1
 
         if result.band_entry_inside_isco_count > 0 or result.profile_error_count > 0:
             result.imri_rate_per_myr = np.nan
             result.imri_mass_rate_msun_per_myr = np.nan
-            result.detectable_imri_rate_per_myr = np.nan
-            result.detectable_imri_mass_rate_msun_per_myr = np.nan
         else:
             result.imri_rate_per_myr = result.imri_count / self.duty_cycle_myr
             result.imri_mass_rate_msun_per_myr = (
                 result.imri_mass_msun / self.duty_cycle_myr
             )
+
+        detector_rate_unavailable = (
+            result.band_entry_inside_isco_count > 0
+            or result.profile_error_count > 0
+            or result.detector_unavailable_imri_count > 0
+        )
+        if detector_rate_unavailable:
+            result.detectable_imri_rate_per_myr = np.nan
+            result.detectable_imri_mass_rate_msun_per_myr = np.nan
+        else:
             result.detectable_imri_rate_per_myr = (
                 result.detectable_imri_count / self.duty_cycle_myr
             )
@@ -262,6 +301,7 @@ class IMRIEventEvaluator:
             detect_decision = unsupported_band_entry_decision(
                 primary_mass_msun=result.m_smbh_msun,
                 current_radius_cm=r_ini_cm,
+                mission_duration_years=self.config.lisa_mission_duration_years,
             )
         else:
             torque_profile: TorqueProfile | None = None
@@ -383,6 +423,11 @@ class IMRIEventEvaluator:
                 ),
                 cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
                 snr_threshold=self.config.snr_threshold,
+                mission_duration_years=self.config.lisa_mission_duration_years,
+                detector_hubble_constant_km_s_mpc=(
+                    self.config.detector_hubble_constant_km_s_mpc
+                ),
+                detector_omega_m=self.config.detector_omega_m,
             )
         # vprint(
         #     "total_migration_time is "
@@ -419,7 +464,31 @@ class IMRIEventEvaluator:
             else _safe_observed_gw_frequency_hz(f_entry_source_hz, redshift)
         )
 
+        event_id = (
+            f"{self.config.disk_model}:z={redshift:.12g}:"
+            f"m_smbh={result.m_smbh_msun:.12g}:m_nsc={result.m_nsc_msun:.12g}:"
+            f"repeat={result.repeat_idx}:object={damping_result['idx']}"
+        )
+        intrinsic_rate_contribution_per_myr = (
+            1.0 / self.duty_cycle_myr
+            if event_decision.is_imri_candidate is True
+            else 0.0
+            if event_decision.is_imri_candidate is False
+            else np.nan
+        )
+        detected_rate_contribution_per_myr = (
+            1.0 / self.duty_cycle_myr
+            if detect_decision.is_lisa_detectable is True
+            else 0.0
+            if (
+                event_decision.is_imri_candidate is True
+                and detect_decision.is_lisa_detectable is False
+            )
+            else np.nan
+        )
+
         return {
+            "event_id": event_id,
             "m_smbh_msun": result.m_smbh_msun,
             "m_nsc_msun": result.m_nsc_msun,
             "repeat": result.repeat_idx,
@@ -428,6 +497,9 @@ class IMRIEventEvaluator:
             "detection_redshift": detect_decision.detection_redshift,
             "object_index": damping_result["idx"],
             "mass_msun": migrator_mass_msun,
+            "mass_ratio_secondary_to_primary": (
+                migrator_mass_msun / detect_decision.final_smbh_mass_msun
+            ),
             "bh_origin": event_decision.bh_origin,
             "band_entry_status": band_entry_status,
             "event_rate_class": event_decision.event_rate_class,
@@ -460,6 +532,9 @@ class IMRIEventEvaluator:
             "f_gas_fin_obs_hz": f_gas_fin_observed_hz,
             "f_entry_src_hz": f_entry_output_source_hz,
             "f_entry_obs_hz": f_entry_output_observed_hz,
+            "snr_input_observed_frequency_hz": (
+                detect_decision.observed_frequency_hz
+            ),
             "gas_elapsed_time_myr": event_decision.gas_elapsed_time_myr,
             "gas_final_time_myr": event_decision.gas_final_time_myr,
             "migration_time_to_entry_myr": event_decision.migration_time_to_entry_myr,
@@ -483,6 +558,27 @@ class IMRIEventEvaluator:
             "bh_candidate": event_decision.bh_candidate,
             "is_imri_candidate": event_decision.is_imri_candidate,
             "is_lisa_detectable": detect_decision.is_lisa_detectable,
+            "lisa_snr": detect_decision.lisa_snr,
+            "snr_status": detect_decision.snr_status,
+            "chirp_mass_source_msun": detect_decision.chirp_mass_source_msun,
+            "chirp_mass_detector_msun": detect_decision.chirp_mass_detector_msun,
+            "luminosity_distance_mpc": detect_decision.luminosity_distance_mpc,
+            "snr_f_low_hz": detect_decision.snr_f_low_hz,
+            "snr_f_high_hz": detect_decision.snr_f_high_hz,
+            "f_isco_observer_hz": detect_decision.f_isco_observer_hz,
+            "mission_duration_years": detect_decision.mission_duration_years,
+            "snr_observation_duration_years": (
+                detect_decision.snr_observation_duration_years
+            ),
+            "snr_observation_case": detect_decision.snr_observation_case,
+            "snr_threshold": self.config.snr_threshold,
+            "monte_carlo_event_weight": 1.0,
+            "intrinsic_rate_contribution_per_myr": (
+                intrinsic_rate_contribution_per_myr
+            ),
+            "detected_rate_contribution_per_myr": (
+                detected_rate_contribution_per_myr
+            ),
             "snr_proxy": detect_decision.snr_proxy,
             "event_rate_reason": event_decision.event_rate_reason,
             "detect_rate_reason": detect_decision.detect_rate_reason,

@@ -24,6 +24,7 @@ IMRI_RESULT_COLUMN_MAP = [
     ("disk_model", "disk_model"),
     ("num_repeats", "n_repeat"),
     ("rate_evaluation_status", "rate_status"),
+    ("detector_rate_evaluation_status", "detector_rate_status"),
     ("gravitational_radius_cm", "rg_cm"),
     ("disk_outer_radius_mpc", "r_disk_out_mpc"),
     ("disk_outer_radius_rg", "r_disk_out_rg"),
@@ -43,6 +44,16 @@ IMRI_RESULT_COLUMN_MAP = [
     ("detectable_imri_count_mean", "n_det"),
     ("detectable_imri_count_min", "n_det_min"),
     ("detectable_imri_count_max", "n_det_max"),
+    ("detector_evaluated_imri_count_mean", "n_detector_eval"),
+    ("detector_unavailable_imri_count_mean", "n_detector_unavailable"),
+    ("detector_below_threshold_imri_count_mean", "n_snr_below"),
+    ("detector_no_overlap_imri_count_mean", "n_no_overlap"),
+    (
+        "detector_required_input_unavailable_imri_count_mean",
+        "n_detector_input_unavailable",
+    ),
+    ("detector_model_unavailable_imri_count_mean", "n_detector_model_unavailable"),
+    ("detector_numerical_failure_imri_count_mean", "n_detector_numerical_failure"),
     ("band_entry_evaluated_count_mean", "n_band_eval"),
     ("entry_in_migration_domain_count_mean", "n_entry_in_domain"),
     ("entry_handoff_count_mean", "n_entry_handoff"),
@@ -59,6 +70,7 @@ IMRI_RESULT_COLUMNS = [
 ]
 
 IMRI_EVENT_COLUMNS = [
+    "event_id",
     "m_smbh_msun",
     "m_nsc_msun",
     "repeat",
@@ -67,6 +79,7 @@ IMRI_EVENT_COLUMNS = [
     "detection_redshift",
     "object_index",
     "mass_msun",
+    "mass_ratio_secondary_to_primary",
     "bh_origin",
     "band_entry_status",
     "event_rate_class",
@@ -97,8 +110,9 @@ IMRI_EVENT_COLUMNS = [
     # "f_ini_obs_hz",
     # "f_gas_fin_src_hz",
     # "f_gas_fin_obs_hz",
-    # "f_entry_src_hz",
-    # "f_entry_obs_hz",
+    "f_entry_src_hz",
+    "f_entry_obs_hz",
+    "snr_input_observed_frequency_hz",
     "gas_elapsed_time_myr",
     "gas_final_time_myr",
     "migration_time_to_entry_myr",
@@ -116,6 +130,21 @@ IMRI_EVENT_COLUMNS = [
     "bh_candidate",
     "is_imri_candidate",
     "is_lisa_detectable",
+    "lisa_snr",
+    "snr_status",
+    "chirp_mass_source_msun",
+    "chirp_mass_detector_msun",
+    "luminosity_distance_mpc",
+    "snr_f_low_hz",
+    "snr_f_high_hz",
+    "f_isco_observer_hz",
+    "mission_duration_years",
+    "snr_observation_duration_years",
+    "snr_observation_case",
+    "snr_threshold",
+    "monte_carlo_event_weight",
+    "intrinsic_rate_contribution_per_myr",
+    "detected_rate_contribution_per_myr",
     "snr_proxy",
     "event_rate_reason",
     "detect_rate_reason",
@@ -130,6 +159,7 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "base_seed",
     "task_seed",
     "rate_status",
+    "detector_rate_status",
     "duty_cycle_myr",
     "n_sampled",
     "n_disk_cross",
@@ -144,6 +174,13 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "rate_imri_per_myr",
     "n_det",
     "n_nondet",
+    "n_detector_eval",
+    "n_detector_unavailable",
+    "n_snr_below",
+    "n_no_overlap",
+    "n_detector_input_unavailable",
+    "n_detector_model_unavailable",
+    "n_detector_numerical_failure",
     "rate_det_per_myr",
     "n_band_eval",
     "n_entry_in_domain",
@@ -176,6 +213,10 @@ EVENT_FREQUENCY_COLUMNS = {
     "f_gas_fin_obs_hz": "f_gas_fin_obs",
     "f_entry_src_hz": "f_entry_src",
     "f_entry_obs_hz": "f_entry_obs",
+    "snr_input_observed_frequency_hz": "snr_input_observed_frequency",
+    "snr_f_low_hz": "snr_f_low",
+    "snr_f_high_hz": "snr_f_high",
+    "f_isco_observer_hz": "f_isco_obs",
 }
 
 FREQUENCY_UNITS_HZ = [
@@ -313,6 +354,14 @@ def _rate_evaluation_status(result: IMRIDynSingleResult) -> str:
     return "complete"
 
 
+def _detector_rate_evaluation_status(result: IMRIDynSingleResult) -> str:
+    if _rate_evaluation_status(result) != "complete":
+        return "not_evaluated_intrinsic_incomplete"
+    if result.detector_unavailable_imri_count:
+        return "incomplete_detector_unavailable"
+    return "complete"
+
+
 def _repeat_output_record(
     result: IMRIDynSingleResult,
     config: IMRIDynConfig,
@@ -326,6 +375,7 @@ def _repeat_output_record(
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,
         "rate_status": _rate_evaluation_status(result),
+        "detector_rate_status": _detector_rate_evaluation_status(result),
         "duty_cycle_myr": config.duty_cycle_myr,
         "n_sampled": result.total_sampled_objects,
         "n_disk_cross": result.disk_crossing_objects,
@@ -340,6 +390,17 @@ def _repeat_output_record(
         "rate_imri_per_myr": result.imri_rate_per_myr,
         "n_det": result.detectable_imri_count,
         "n_nondet": result.no_detectable_imri_count,
+        "n_detector_eval": result.detector_evaluated_imri_count,
+        "n_detector_unavailable": result.detector_unavailable_imri_count,
+        "n_snr_below": result.detector_below_threshold_imri_count,
+        "n_no_overlap": result.detector_no_overlap_imri_count,
+        "n_detector_input_unavailable": (
+            result.detector_required_input_unavailable_imri_count
+        ),
+        "n_detector_model_unavailable": result.detector_model_unavailable_imri_count,
+        "n_detector_numerical_failure": (
+            result.detector_numerical_failure_imri_count
+        ),
         "rate_det_per_myr": result.detectable_imri_rate_per_myr,
         "n_band_eval": result.band_entry_evaluated_count,
         "n_entry_in_domain": result.entry_in_migration_domain_count,
@@ -474,6 +535,64 @@ def save_migration_diagnostics(
     if result.profile_error_count != result.migration_error_count:
         raise ValueError("profile-error counter does not match migration errors")
 
+    if result.imri_count != (
+        result.detector_evaluated_imri_count
+        + result.detector_unavailable_imri_count
+    ):
+        raise ValueError("intrinsic IMRI candidates do not conserve detector outcomes")
+    if result.detector_evaluated_imri_count != (
+        result.detectable_imri_count + result.no_detectable_imri_count
+    ):
+        raise ValueError("detector-evaluated IMRIs do not conserve classifications")
+    if result.no_detectable_imri_count != (
+        result.detector_below_threshold_imri_count
+        + result.detector_no_overlap_imri_count
+    ):
+        raise ValueError("physical nondetections do not conserve SNR outcomes")
+    if result.detector_unavailable_imri_count != (
+        result.detector_required_input_unavailable_imri_count
+        + result.detector_model_unavailable_imri_count
+        + result.detector_numerical_failure_imri_count
+    ):
+        raise ValueError("detector-unavailable IMRIs do not conserve failure outcomes")
+    if (
+        np.isfinite(result.imri_rate_per_myr)
+        and np.isfinite(result.detectable_imri_rate_per_myr)
+        and result.detectable_imri_rate_per_myr > result.imri_rate_per_myr
+    ):
+        raise ValueError("detectable IMRI rate exceeds intrinsic IMRI rate")
+
+    intrinsic_contribution_per_myr = sum(
+        event["intrinsic_rate_contribution_per_myr"]
+        for event in result.imri_events
+        if np.isfinite(event["intrinsic_rate_contribution_per_myr"])
+    )
+    detected_contribution_per_myr = sum(
+        event["detected_rate_contribution_per_myr"]
+        for event in result.imri_events
+        if np.isfinite(event["detected_rate_contribution_per_myr"])
+    )
+    expected_intrinsic_contribution_per_myr = (
+        result.imri_count / config.duty_cycle_myr
+    )
+    expected_detected_contribution_per_myr = (
+        result.detectable_imri_count / config.duty_cycle_myr
+    )
+    if not np.isclose(
+        intrinsic_contribution_per_myr,
+        expected_intrinsic_contribution_per_myr,
+        rtol=0.0,
+        atol=1.0e-12,
+    ):
+        raise ValueError("event intrinsic-rate contributions do not match the repeat")
+    if not np.isclose(
+        detected_contribution_per_myr,
+        expected_detected_contribution_per_myr,
+        rtol=0.0,
+        atol=1.0e-12,
+    ):
+        raise ValueError("event detected-rate contributions do not match the repeat")
+
     event_status_counts = {
         status: sum(
             event["band_entry_status"] == status for event in result.imri_events
@@ -509,11 +628,27 @@ def save_migration_diagnostics(
         "gap_opening_condition": config.gap_opening_condition,
         "consider_type_ii_migration": config.consider_type_ii_migration,
         "rate_evaluation_status": _rate_evaluation_status(result),
+        "detector_rate_evaluation_status": _detector_rate_evaluation_status(result),
         "band_entry_evaluated_count": result.band_entry_evaluated_count,
         "entry_in_migration_domain_count": result.entry_in_migration_domain_count,
         "entry_handoff_count": result.entry_handoff_count,
         "band_entry_inside_isco_count": result.band_entry_inside_isco_count,
         "profile_error_count": result.profile_error_count,
+        "detector_evaluated_imri_count": result.detector_evaluated_imri_count,
+        "detector_unavailable_imri_count": result.detector_unavailable_imri_count,
+        "detector_below_threshold_imri_count": (
+            result.detector_below_threshold_imri_count
+        ),
+        "detector_no_overlap_imri_count": result.detector_no_overlap_imri_count,
+        "detector_required_input_unavailable_imri_count": (
+            result.detector_required_input_unavailable_imri_count
+        ),
+        "detector_model_unavailable_imri_count": (
+            result.detector_model_unavailable_imri_count
+        ),
+        "detector_numerical_failure_imri_count": (
+            result.detector_numerical_failure_imri_count
+        ),
         "migration_evaluated_count": result.migration_evaluated_count,
         "finite_migration_count": result.finite_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,

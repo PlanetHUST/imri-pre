@@ -7,6 +7,17 @@ from typing import Any
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import IMRIDynConfig
+from .lisa_snr import (
+    COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
+    LISA_AVERAGING_CONVENTION,
+    LISA_ARM_LENGTH_M,
+    LISA_COSMOLOGY_MODEL,
+    LISA_ISCO_MODEL,
+    LISA_SENSITIVITY_MODEL,
+    LISA_WAVEFORM_MODEL,
+    SNR_QUADRATURE_METHOD,
+    SNR_QUADRATURE_RELATIVE_TOLERANCE,
+)
 
 
 def build_metadata(
@@ -52,6 +63,11 @@ def build_metadata(
                 config.redshift,
             ),
             "snr_threshold": config.snr_threshold,
+            "lisa_mission_duration_years": config.lisa_mission_duration_years,
+            "detector_hubble_constant_km_s_mpc": (
+                config.detector_hubble_constant_km_s_mpc
+            ),
+            "detector_omega_m": config.detector_omega_m,
             "cosmic_merge_time_myr": config.cosmic_merge_time_myr,
             "cosmic_merge_smbh_mass_factor": config.cosmic_merge_smbh_mass_factor,
             "cosmic_merge_radius_factor": config.cosmic_merge_radius_factor,
@@ -67,6 +83,29 @@ def build_metadata(
                 if config.base_seed is not None
                 else None
             ),
+        },
+        "detector_model": {
+            "sensitivity_model": LISA_SENSITIVITY_MODEL,
+            "waveform_model": LISA_WAVEFORM_MODEL,
+            "averaging_convention": LISA_AVERAGING_CONVENTION,
+            "cosmology_model": LISA_COSMOLOGY_MODEL,
+            "cosmology_flat": True,
+            "cosmology_omega_lambda": 1.0 - config.detector_omega_m,
+            "cosmology_radiation_included": False,
+            "cosmology_quadrature_relative_tolerance": (
+                COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE
+            ),
+            "lisa_arm_length_m": LISA_ARM_LENGTH_M,
+            "isco_model": LISA_ISCO_MODEL,
+            "snr_quadrature_method": SNR_QUADRATURE_METHOD,
+            "snr_quadrature_relative_tolerance": (
+                SNR_QUADRATURE_RELATIVE_TOLERANCE
+            ),
+            "frequency_frame": "observer",
+            "mass_inputs_frame": "source",
+            "noise_quantity": "effective_strain_psd_hz_inverse",
+            "snr_statistic": "lisa_snr",
+            "snr_proxy_compatibility": "deprecated_alias_of_lisa_snr",
         },
         "runtime_statistics": runtime_stats,
     }

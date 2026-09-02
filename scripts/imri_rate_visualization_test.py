@@ -101,6 +101,9 @@ def _repeat_record(
         "base_seed": BASE_SEED,
         "task_seed": derive_task_seed(BASE_SEED, mass_index, 0, repeat),
         "rate_status": status,
+        "detector_rate_status": (
+            "complete" if complete else "not_evaluated_intrinsic_incomplete"
+        ),
         "duty_cycle_myr": T_AGN_MYR,
         "n_sampled": 100 + mass_index,
         "n_imri": n_imri,
@@ -143,9 +146,9 @@ def _event_record(
         None: "not evaluated",
     }[is_imri_candidate]
     is_lisa_detectable = (
-        None
-        if is_imri_candidate is None
-        else bool(is_imri_candidate and np.isfinite(detection_time_myr))
+        bool(np.isfinite(detection_time_myr))
+        if is_imri_candidate is True
+        else None
     )
     detect_rate_class = {
         True: "imri data",
@@ -215,7 +218,9 @@ def synthetic_tables() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
                     repeat=0,
                     object_index=1,
                     gas_final_time_myr=8.0,
-                    detection_time_myr=12.0,
+                    detection_time_myr=(
+                        12.0 if redshift == REDSHIFTS[0] else np.inf
+                    ),
                     is_imri_candidate=True,
                     migration_status="finite",
                 ),
@@ -314,8 +319,8 @@ def synthetic_tables() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     ].eq(1)
     semi_events.loc[semi_second_candidate, "is_imri_candidate"] = False
     semi_events.loc[semi_second_candidate, "event_rate_class"] = "no-IMRI"
-    semi_events.loc[semi_second_candidate, "is_lisa_detectable"] = False
-    semi_events.loc[semi_second_candidate, "detect_rate_class"] = "non-detectable"
+    semi_events.loc[semi_second_candidate, "is_lisa_detectable"] = None
+    semi_events.loc[semi_second_candidate, "detect_rate_class"] = "not evaluated"
     semi_events.loc[
         semi_events["migration_status"].eq("trap_bound"), "migration_status"
     ] = "finite"
@@ -500,7 +505,7 @@ def run_harness(output_dir: Path) -> None:
 
     for variable, category, expected_count in (
         ("event_outcome", "not evaluated", 4.0),
-        ("detectability_outcome", "not evaluated", 4.0),
+        ("detectability_outcome", "not evaluated", 6.0),
     ):
         rows = torque_status[
             torque_status["variable"].eq(variable)
@@ -605,18 +610,18 @@ def run_harness(output_dir: Path) -> None:
     if unavailable["imri_rate_mean_per_myr"].notna().any():
         raise AssertionError("unavailable rates were converted to zero")
 
-    proxy_z1 = summary_data[
+    detectable_z1 = summary_data[
         summary_data["disk_model"].eq(TORQUE_WITH_TRAP)
         & np.isclose(summary_data["redshift"], REDSHIFTS[0])
         & np.isclose(summary_data["m_smbh_msun"], 1.0e3)
-    ]["proxy_detectable_rate_mean_per_myr"].iloc[0]
-    proxy_z2 = summary_data[
+    ]["lisa_detectable_rate_mean_per_myr"].iloc[0]
+    detectable_z2 = summary_data[
         summary_data["disk_model"].eq(TORQUE_WITH_TRAP)
         & np.isclose(summary_data["redshift"], REDSHIFTS[1])
         & np.isclose(summary_data["m_smbh_msun"], 1.0e3)
-    ]["proxy_detectable_rate_mean_per_myr"].iloc[0]
-    if not np.isclose(proxy_z1, 0.1) or not np.isclose(proxy_z2, 0.05):
-        raise AssertionError("secondary proxy rate summary changed")
+    ]["lisa_detectable_rate_mean_per_myr"].iloc[0]
+    if not np.isclose(detectable_z1, 0.1) or not np.isclose(detectable_z2, 0.05):
+        raise AssertionError("secondary physical LISA rate summary changed")
 
     actual_seeds = (
         derive_task_seed(BASE_SEED, 0, 0, 0),
@@ -740,12 +745,18 @@ def run_harness(output_dir: Path) -> None:
                 "duty_cycle_myr": T_AGN_MYR,
                 "n_repeats_total": 1,
                 "n_repeats_valid": 1,
+                "n_detector_repeats_valid": 1,
                 "mean_imri_count": float(mass_index),
                 "imri_rate_mean_per_myr": mass_index / T_AGN_MYR,
                 "imri_rate_p16_per_myr": np.nan,
                 "imri_rate_p84_per_myr": np.nan,
-                "proxy_detectable_rate_mean_per_myr": 0.0,
+                "mean_lisa_detectable_count": 0.0,
+                "lisa_detectable_rate_mean_per_myr": 0.0,
+                "lisa_detectable_rate_p16_per_myr": np.nan,
+                "lisa_detectable_rate_p84_per_myr": np.nan,
+                "lisa_detectable_fraction": 0.0,
                 "result_state": "valid",
+                "detector_result_state": "valid",
             }
             for mass_index, mass in enumerate(five_masses, start=1)
             for redshift in REDSHIFTS[:2]

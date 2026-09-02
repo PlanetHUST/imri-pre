@@ -59,6 +59,7 @@ def debug_print_result(result: IMRIDynSingleResult) -> None:
     print(f"BH candidates: {result.bh_candidate_count}")
     print(f"IMRI candidates: {result.imri_count}")
     print(f"Detectable IMRIs: {result.detectable_imri_count}")
+    print(f"Detector-unavailable IMRIs: {result.detector_unavailable_imri_count}")
     print(f"IMRI candidate mass: {result.imri_mass_msun:.3e} Msun")
     print(f"Detectable IMRI mass: {result.detectable_imri_mass_msun:.3e} Msun")
     print("================================\n")
@@ -81,6 +82,15 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
     print(f"  no-IMRI objects       : {result.no_imri_count:.3e}")
     print(f"  detectable IMRIs      : {result.detectable_imri_count:.3e}")
     print(f"  non-detectable IMRIs  : {result.no_detectable_imri_count:.3e}")
+    print(f"  detector unavailable  : {result.detector_unavailable_imri_count:.3e}")
+    print(f"  SNR below threshold   : {result.detector_below_threshold_imri_count:.3e}")
+    print(f"  no frequency overlap  : {result.detector_no_overlap_imri_count:.3e}")
+    print(
+        "  detector input/model/numerical unavailable: "
+        f"{result.detector_required_input_unavailable_imri_count}/"
+        f"{result.detector_model_unavailable_imri_count}/"
+        f"{result.detector_numerical_failure_imri_count}"
+    )
     print(
         "  Band entry            : "
         f"evaluated={result.band_entry_evaluated_count}, "

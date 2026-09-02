@@ -16,6 +16,9 @@ from .config import (
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
     IMRI_HUBBLE_CONSTANT_PER_MYR,
+    IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
+    IMRI_DETECTOR_OMEGA_M,
+    IMRI_LISA_MISSION_DURATION_YEARS,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
     IMRI_COSMIC_MERGE_RADIUS_FACTOR,
@@ -171,7 +174,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--snr-threshold",
         type=float,
         default=IMRI_SNR_THRESHOLD,
-        help="single-frequency proxy threshold for detectable IMRI sources",
+        help="physical sky-averaged LISA SNR detection threshold",
+    )
+    parser.add_argument(
+        "--lisa-mission-duration-years",
+        type=float,
+        choices=(0.5, 1.0, 2.0, 4.0),
+        default=IMRI_LISA_MISSION_DURATION_YEARS,
+        help="observer-frame mission duration selecting the RCL foreground curve",
+    )
+    parser.add_argument(
+        "--detector-hubble-constant-km-s-mpc",
+        type=float,
+        default=IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
+        help="flat-LambdaCDM H0 used only for detector luminosity distance",
+    )
+    parser.add_argument(
+        "--detector-omega-m",
+        type=float,
+        default=IMRI_DETECTOR_OMEGA_M,
+        help="flat-LambdaCDM matter density used only for detector distance",
     )
     parser.add_argument(
         "--cosmic-merge-time-myr",
@@ -233,6 +255,11 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         redshift=arguments.redshift,
         hubble_constant_per_myr=arguments.hubble_constant_per_myr,
         snr_threshold=arguments.snr_threshold,
+        lisa_mission_duration_years=arguments.lisa_mission_duration_years,
+        detector_hubble_constant_km_s_mpc=(
+            arguments.detector_hubble_constant_km_s_mpc
+        ),
+        detector_omega_m=arguments.detector_omega_m,
         cosmic_merge_time_myr=arguments.cosmic_merge_time_myr,
         cosmic_merge_smbh_mass_factor=arguments.cosmic_merge_smbh_mass_factor,
         cosmic_merge_radius_factor=arguments.cosmic_merge_radius_factor,

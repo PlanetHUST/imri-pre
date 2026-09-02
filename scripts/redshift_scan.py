@@ -36,6 +36,9 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "gw_eccentricity": 0.0,
     "hubble_constant_per_myr": 1.0 / 13.6e3,
     "snr_threshold": 20.0,
+    "lisa_mission_duration_years": 4.0,
+    "detector_hubble_constant_km_s_mpc": 67.4,
+    "detector_omega_m": 0.315,
     "cosmic_merge_time_myr": 1.0e3,
     "cosmic_merge_smbh_mass_factor": 2.0,
     "cosmic_merge_radius_factor": 2.0,
@@ -91,6 +94,9 @@ CONFIG_TEMPLATE_FIELDS = (
     "gw_eccentricity",
     "hubble_constant_per_myr",
     "snr_threshold",
+    "lisa_mission_duration_years",
+    "detector_hubble_constant_km_s_mpc",
+    "detector_omega_m",
     "cosmic_merge_time_myr",
     "cosmic_merge_smbh_mass_factor",
     "cosmic_merge_radius_factor",
@@ -172,6 +178,23 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
         warnings.warn(
             "historical simulation metadata has no disk_model; explicitly "
             f"inferring {DEFAULT_DISK_MODEL}",
+            stacklevel=2,
+        )
+    historical_detector_defaults = {
+        "lisa_mission_duration_years": 4.0,
+        "detector_hubble_constant_km_s_mpc": 67.4,
+        "detector_omega_m": 0.315,
+    }
+    missing_detector_fields = [
+        field for field in historical_detector_defaults if field not in source
+    ]
+    if missing_detector_fields and is_metadata:
+        source = dict(source)
+        for field in missing_detector_fields:
+            source[field] = historical_detector_defaults[field]
+        warnings.warn(
+            "historical simulation metadata has no physical detector settings; "
+            f"explicitly inferring defaults for {missing_detector_fields}",
             stacklevel=2,
         )
     missing = [field for field in CONFIG_TEMPLATE_FIELDS if field not in source]

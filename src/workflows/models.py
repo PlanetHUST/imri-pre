@@ -77,6 +77,7 @@ class GeometricPopulation(TypedDict):
 
 
 class IMRIEventRecord(TypedDict):
+    event_id: str
     m_smbh_msun: float
     m_nsc_msun: float
     repeat: int
@@ -85,6 +86,7 @@ class IMRIEventRecord(TypedDict):
     detection_redshift: float
     object_index: int
     mass_msun: float
+    mass_ratio_secondary_to_primary: float
     bh_origin: str
     band_entry_status: str
     event_rate_class: str
@@ -117,6 +119,7 @@ class IMRIEventRecord(TypedDict):
     f_gas_fin_obs_hz: float
     f_entry_src_hz: float
     f_entry_obs_hz: float
+    snr_input_observed_frequency_hz: float
     gas_elapsed_time_myr: float
     gas_final_time_myr: float
     migration_time_to_entry_myr: float
@@ -134,6 +137,21 @@ class IMRIEventRecord(TypedDict):
     bh_candidate: bool
     is_imri_candidate: bool | None
     is_lisa_detectable: bool | None
+    lisa_snr: float
+    snr_status: str
+    chirp_mass_source_msun: float
+    chirp_mass_detector_msun: float
+    luminosity_distance_mpc: float
+    snr_f_low_hz: float
+    snr_f_high_hz: float
+    f_isco_observer_hz: float
+    mission_duration_years: float
+    snr_observation_duration_years: float
+    snr_observation_case: str
+    snr_threshold: float
+    monte_carlo_event_weight: float
+    intrinsic_rate_contribution_per_myr: float
+    detected_rate_contribution_per_myr: float
     snr_proxy: float
     event_rate_reason: str
     detect_rate_reason: str
@@ -183,6 +201,13 @@ class IMRIDynSingleResult:
         self.imri_mass_rate_msun_per_myr = 0.0
         self.detectable_imri_count = 0
         self.no_detectable_imri_count = 0
+        self.detector_evaluated_imri_count = 0
+        self.detector_unavailable_imri_count = 0
+        self.detector_below_threshold_imri_count = 0
+        self.detector_no_overlap_imri_count = 0
+        self.detector_required_input_unavailable_imri_count = 0
+        self.detector_model_unavailable_imri_count = 0
+        self.detector_numerical_failure_imri_count = 0
         self.detectable_imri_mass_msun = 0.0
         self.detectable_imri_rate_per_myr = 0.0
         self.detectable_imri_mass_rate_msun_per_myr = 0.0
@@ -226,6 +251,21 @@ class IMRIDynSingleResult:
             "imri_mass_rate_msun_per_myr": self.imri_mass_rate_msun_per_myr,
             "detectable_imri_count": self.detectable_imri_count,
             "no_detectable_imri_count": self.no_detectable_imri_count,
+            "detector_evaluated_imri_count": self.detector_evaluated_imri_count,
+            "detector_unavailable_imri_count": self.detector_unavailable_imri_count,
+            "detector_below_threshold_imri_count": (
+                self.detector_below_threshold_imri_count
+            ),
+            "detector_no_overlap_imri_count": self.detector_no_overlap_imri_count,
+            "detector_required_input_unavailable_imri_count": (
+                self.detector_required_input_unavailable_imri_count
+            ),
+            "detector_model_unavailable_imri_count": (
+                self.detector_model_unavailable_imri_count
+            ),
+            "detector_numerical_failure_imri_count": (
+                self.detector_numerical_failure_imri_count
+            ),
             "detectable_imri_mass_msun": self.detectable_imri_mass_msun,
             "detectable_imri_rate_per_myr": self.detectable_imri_rate_per_myr,
             "detectable_imri_mass_rate_msun_per_myr": (
@@ -276,6 +316,12 @@ class IMRIDynAveragedResult:
         rate_evaluation_complete = (
             inside_isco_count == 0.0 and profile_error_count == 0.0
         )
+        detector_unavailable_count = float(
+            np.sum(values("detector_unavailable_imri_count"))
+        )
+        detector_evaluation_complete = (
+            rate_evaluation_complete and detector_unavailable_count == 0.0
+        )
         if inside_isco_count > 0.0 and profile_error_count > 0.0:
             rate_evaluation_status = "not_evaluated_band_entry_and_profile_error"
         elif inside_isco_count > 0.0:
@@ -285,8 +331,25 @@ class IMRIDynAveragedResult:
         else:
             rate_evaluation_status = "complete"
 
+        if not rate_evaluation_complete:
+            detector_rate_evaluation_status = "not_evaluated_intrinsic_incomplete"
+        elif detector_unavailable_count > 0.0:
+            detector_rate_evaluation_status = "incomplete_detector_unavailable"
+        else:
+            detector_rate_evaluation_status = "complete"
+
         def classified_stat(name: str, reducer: str = "mean") -> float:
             if not rate_evaluation_complete:
+                return np.nan
+            data = values(name)
+            if reducer == "min":
+                return float(np.min(data))
+            if reducer == "max":
+                return float(np.max(data))
+            return float(np.mean(data))
+
+        def detector_stat(name: str, reducer: str = "mean") -> float:
+            if not detector_evaluation_complete:
                 return np.nan
             data = values(name)
             if reducer == "min":
@@ -301,6 +364,7 @@ class IMRIDynAveragedResult:
             "disk_model": self.disk_model,
             "num_repeats": len(self.results),
             "rate_evaluation_status": rate_evaluation_status,
+            "detector_rate_evaluation_status": detector_rate_evaluation_status,
             "f_geo_mean": float(np.mean(values("f_geo"))),
             "disk_crossing_objects_mean": float(
                 np.mean(values("disk_crossing_objects"))
@@ -320,24 +384,45 @@ class IMRIDynAveragedResult:
             "imri_candidate_mass_rate_mean_msun_per_myr": classified_stat(
                 "imri_mass_rate_msun_per_myr"
             ),
-            "detectable_imri_count_mean": classified_stat("detectable_imri_count"),
-            "detectable_imri_count_min": classified_stat(
+            "detectable_imri_count_mean": detector_stat("detectable_imri_count"),
+            "detectable_imri_count_min": detector_stat(
                 "detectable_imri_count", "min"
             ),
-            "detectable_imri_count_max": classified_stat(
+            "detectable_imri_count_max": detector_stat(
                 "detectable_imri_count", "max"
             ),
-            "detectable_imri_mass_mean_msun": classified_stat(
+            "detectable_imri_mass_mean_msun": detector_stat(
                 "detectable_imri_mass_msun"
             ),
-            "detectable_imri_rate_mean_per_myr": classified_stat(
+            "detectable_imri_rate_mean_per_myr": detector_stat(
                 "detectable_imri_rate_per_myr"
             ),
-            "detectable_imri_mass_rate_mean_msun_per_myr": classified_stat(
+            "detectable_imri_mass_rate_mean_msun_per_myr": detector_stat(
                 "detectable_imri_mass_rate_msun_per_myr"
             ),
-            "no_detectable_imri_count_mean": classified_stat(
+            "no_detectable_imri_count_mean": detector_stat(
                 "no_detectable_imri_count"
+            ),
+            "detector_evaluated_imri_count_mean": float(
+                np.mean(values("detector_evaluated_imri_count"))
+            ),
+            "detector_unavailable_imri_count_mean": float(
+                np.mean(values("detector_unavailable_imri_count"))
+            ),
+            "detector_below_threshold_imri_count_mean": float(
+                np.mean(values("detector_below_threshold_imri_count"))
+            ),
+            "detector_no_overlap_imri_count_mean": float(
+                np.mean(values("detector_no_overlap_imri_count"))
+            ),
+            "detector_required_input_unavailable_imri_count_mean": float(
+                np.mean(values("detector_required_input_unavailable_imri_count"))
+            ),
+            "detector_model_unavailable_imri_count_mean": float(
+                np.mean(values("detector_model_unavailable_imri_count"))
+            ),
+            "detector_numerical_failure_imri_count_mean": float(
+                np.mean(values("detector_numerical_failure_imri_count"))
             ),
             "band_entry_evaluated_count_mean": float(
                 np.mean(values("band_entry_evaluated_count"))

@@ -29,6 +29,9 @@ IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
 IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
 IMRI_SNR_THRESHOLD = 20.0
+IMRI_LISA_MISSION_DURATION_YEARS = 4.0
+IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
+IMRI_DETECTOR_OMEGA_M = 0.315
 IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
@@ -72,6 +75,9 @@ class IMRIDynConfig:
         redshift: float,
         hubble_constant_per_myr: float,
         snr_threshold: float,
+        lisa_mission_duration_years: float,
+        detector_hubble_constant_km_s_mpc: float,
+        detector_omega_m: float,
         cosmic_merge_time_myr: float,
         cosmic_merge_smbh_mass_factor: float,
         cosmic_merge_radius_factor: float,
@@ -117,6 +123,15 @@ class IMRIDynConfig:
             raise ValueError("Hubble constant must be positive")
         if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
             raise ValueError("SNR threshold must be positive")
+        if lisa_mission_duration_years not in (0.5, 1.0, 2.0, 4.0):
+            raise ValueError("LISA mission duration must be 0.5, 1, 2, or 4 years")
+        if (
+            not np.isfinite(detector_hubble_constant_km_s_mpc)
+            or detector_hubble_constant_km_s_mpc <= 0.0
+        ):
+            raise ValueError("detector H0 must be finite and positive")
+        if not np.isfinite(detector_omega_m) or not 0.0 < detector_omega_m < 1.0:
+            raise ValueError("detector Omega_m must satisfy 0 < Omega_m < 1")
         if not np.isfinite(cosmic_merge_time_myr) and cosmic_merge_time_myr != np.inf:
             raise ValueError("cosmic merge time must be finite or infinity")
         if cosmic_merge_time_myr <= 0.0:
@@ -161,6 +176,11 @@ class IMRIDynConfig:
         self.redshift = redshift
         self.hubble_constant_per_myr = hubble_constant_per_myr
         self.snr_threshold = snr_threshold
+        self.lisa_mission_duration_years = lisa_mission_duration_years
+        self.detector_hubble_constant_km_s_mpc = (
+            detector_hubble_constant_km_s_mpc
+        )
+        self.detector_omega_m = detector_omega_m
         self.cosmic_merge_time_myr = cosmic_merge_time_myr
         self.cosmic_merge_smbh_mass_factor = cosmic_merge_smbh_mass_factor
         self.cosmic_merge_radius_factor = cosmic_merge_radius_factor

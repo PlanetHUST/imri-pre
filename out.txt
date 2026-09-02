@@ -1,0 +1,174 @@
+
+End-to-end demonstration
+m1_source_msun                       100000.0
+m2_source_msun                       100.0
+redshift                             1.0
+chirp_mass_source_msun               1584.5764038704444
+chirp_mass_detector_msun             3169.152807740889
+luminosity_distance_mpc              6802.525834693799
+f_isco_source_hz                     0.04392649145417517
+f_isco_observer_hz                   0.021963245727087584
+current_observed_frequency_hz        0.001
+f_low_hz                             0.001
+f_high_hz                            0.021963245727087584
+mission_duration_years               4.0
+observation_duration_years           2.9975644979861324
+observation_case                     already_in_band:reaches_isco_during_mission
+lisa_snr                             58.07069322689072
+snr_threshold                        20.0
+reason                               lisa_snr_above_threshold
+lisa_psd_at_1e-3_hz_hz_inv           8.296514847664091e-38
+lisa_asd_at_1e-3_hz_hz_mhalf         2.8803671376517423e-19
+fourier_amplitude_at_f_low_hz_inv    3.0008960779408375e-17
+
+RCL four-year total effective strain sensitivity
+f_obs_hz       psd_hz_inv       asd_hz_mhalf
+ 1.000e-04   2.1418353e-33   4.6279966e-17
+ 3.000e-04   6.4717243e-36   2.5439584e-18
+ 1.000e-03   8.2965148e-38   2.8803671e-19
+ 3.000e-03   3.1256997e-40   1.7679649e-20
+ 1.000e-02   1.4431695e-40   1.2013199e-20
+ 3.000e-02   3.0165756e-40   1.7368292e-20
+ 1.000e-01   2.1295831e-39   4.6147406e-20
+
+Flat-LambdaCDM luminosity-distance benchmarks
+z             d_l_mpc
+  0.1       477.522094099
+  1.0      6802.525834694
+  5.0     47676.040906297
+ 10.0    105971.081494102
+ 15.0    167196.706346107
+
+Observation-window cases
+already_in_band_reaches_isco already_in_band:reaches_isco_during_mission             [1.000000e-03, 2.196325e-02]
+enters_during_mission        enters_band_during_mission:reaches_isco_during_mission  [1.000000e-03, 2.196325e-02]
+slowly_evolving              already_in_band:mission_limited_slow_inspiral           [1.000000e-03, 1.000032e-03]
+detector_upper_limited       already_in_band:reaches_detector_max_during_mission     [1.000000e-03, 1.000000e-01]
+never_overlaps               no_lisa_frequency_overlap                               [nan, nan]
+isco_below_band              no_lisa_frequency_overlap                               [nan, nan]
+
+SNR numerical checks
+fixed-frame distance ratio rho(1000 Mpc)/rho(2000 Mpc): 2.000000000000
+adaptive-quadrature SNR: 58.070693226891
+200001-point log-grid SNR: 58.070693226794
+
+Fixed source-mass redshift behavior
+z       d_l_mpc       mchirp_z     f_low_hz    f_high_hz   snr       status
+ 0.1       477.522     1743.034   1.000e-03   1.290e-03    31.533  evaluated
+ 0.5      2927.080     2376.865   1.000e-03   1.926e-03    18.510  evaluated
+ 1.0      6802.526     3169.153   1.000e-03   2.196e-02    58.071  evaluated
+ 2.0     15936.226     4753.729   1.000e-03   1.464e-02    34.044  evaluated
+ 5.0     47676.041     9507.458   1.000e-03   7.321e-03    18.194  evaluated
+10.0    105971.081    17430.340   1.000e-03   3.993e-03     9.814  evaluated
+13.0    142468.046    22184.070   1.000e-03   3.138e-03     6.754  evaluated
+15.0    167196.706    25353.222   1.000e-03   2.745e-03     5.178  evaluated
+
+Controlled mass-redshift selection grid
+m1       m2       z     d_l_mpc     f_isco_obs  f_low       f_high      snr       class
+  1e+04    1e+01   0.1       477.5   3.993e-01   1.000e-03   1.004e-03      0.47  below
+  1e+04    1e+01   0.5      2927.1   2.928e-01   1.000e-03   1.007e-03      0.13  below
+  1e+04    1e+01   1.0      6802.5   2.196e-01   1.000e-03   1.011e-03      0.09  below
+  1e+04    1e+01   2.0     15936.2   1.464e-01   1.000e-03   1.022e-03      0.08  below
+  1e+04    1e+01   5.0     47676.0   7.321e-02   1.000e-03   1.077e-03      0.09  below
+  1e+04    1e+01  10.0    105971.1   3.993e-02   1.000e-03   1.290e-03      0.14  below
+  1e+04    1e+01  13.0    142468.0   3.138e-02   1.000e-03   1.648e-03      0.24  below
+  1e+04    1e+01  15.0    167196.7   2.745e-02   1.000e-03   2.575e-03      0.67  below
+  1e+04    1e+02   0.1       477.5   3.958e-01   1.000e-03   1.043e-03      4.98  below
+  1e+04    1e+02   0.5      2927.1   2.902e-01   1.000e-03   1.076e-03      1.42  below
+  1e+04    1e+02   1.0      6802.5   2.177e-01   1.000e-03   1.135e-03      1.06  below
+  1e+04    1e+02   2.0     15936.2   1.451e-01   1.000e-03   1.364e-03      1.18  below
+  1e+04    1e+02   5.0     47676.0   7.256e-02   1.000e-03   7.256e-02      9.71  below
+  1e+04    1e+02  10.0    105971.1   3.958e-02   1.000e-03   3.958e-02      7.22  below
+  1e+04    1e+02  13.0    142468.0   3.110e-02   1.000e-03   3.110e-02      6.55  below
+  1e+04    1e+02  15.0    167196.7   2.721e-02   1.000e-03   2.721e-02      6.23  below
+  1e+04    1e+03   0.1       477.5   3.634e-01   1.000e-03   1.000e-01    735.22  detectable
+  1e+04    1e+03   0.5      2927.1   2.665e-01   1.000e-03   1.000e-01    155.32  detectable
+  1e+04    1e+03   1.0      6802.5   1.999e-01   1.000e-03   1.000e-01     84.94  detectable
+  1e+04    1e+03   2.0     15936.2   1.332e-01   1.000e-03   1.000e-01     50.83  detectable
+  1e+04    1e+03   5.0     47676.0   6.662e-02   1.000e-03   6.662e-02     30.26  detectable
+  1e+04    1e+03  10.0    105971.1   3.634e-02   1.000e-03   3.634e-02     22.50  detectable
+  1e+04    1e+03  13.0    142468.0   2.855e-02   1.000e-03   2.855e-02     20.40  detectable
+  1e+04    1e+03  15.0    167196.7   2.498e-02   1.000e-03   2.498e-02     19.38  below
+  1e+05    1e+01   0.1       477.5   3.997e-02   1.000e-03   1.019e-03      2.25  below
+  1e+05    1e+01   0.5      2927.1   2.931e-02   1.000e-03   1.033e-03      0.63  below
+  1e+05    1e+01   1.0      6802.5   2.198e-02   1.000e-03   1.055e-03      0.45  below
+  1e+05    1e+01   2.0     15936.2   1.466e-02   1.000e-03   1.121e-03      0.41  below
+  1e+05    1e+01   5.0     47676.0   7.328e-03   1.000e-03   1.955e-03      1.18  below
+  1e+05    1e+01  10.0    105971.1   3.997e-03   1.000e-03   3.997e-03      3.11  below
+  1e+05    1e+01  13.0    142468.0   3.140e-03   1.000e-03   3.140e-03      2.14  below
+  1e+05    1e+01  15.0    167196.7   2.748e-03   1.000e-03   2.748e-03      1.64  below
+  1e+05    1e+02   0.1       477.5   3.993e-02   1.000e-03   1.290e-03     31.53  detectable
+  1e+05    1e+02   0.5      2927.1   2.928e-02   1.000e-03   1.926e-03     18.51  below
+  1e+05    1e+02   1.0      6802.5   2.196e-02   1.000e-03   2.196e-02     58.07  detectable
+  1e+05    1e+02   2.0     15936.2   1.464e-02   1.000e-03   1.464e-02     34.04  detectable
+  1e+05    1e+02   5.0     47676.0   7.321e-03   1.000e-03   7.321e-03     18.19  below
+  1e+05    1e+02  10.0    105971.1   3.993e-03   1.000e-03   3.993e-03      9.81  below
+  1e+05    1e+02  13.0    142468.0   3.138e-03   1.000e-03   3.138e-03      6.75  below
+  1e+05    1e+02  15.0    167196.7   2.745e-03   1.000e-03   2.745e-03      5.18  below
+  1e+05    1e+03   0.1       477.5   3.958e-02   1.000e-03   3.958e-02   1603.05  detectable
+  1e+05    1e+03   0.5      2927.1   2.902e-02   1.000e-03   2.902e-02    337.48  detectable
+  1e+05    1e+03   1.0      6802.5   2.177e-02   1.000e-03   2.177e-02    183.31  detectable
+  1e+05    1e+03   2.0     15936.2   1.451e-02   1.000e-03   1.451e-02    107.42  detectable
+  1e+05    1e+03   5.0     47676.0   7.256e-03   1.000e-03   7.256e-03     57.30  detectable
+  1e+05    1e+03  10.0    105971.1   3.958e-03   1.000e-03   3.958e-03     30.74  detectable
+  1e+05    1e+03  13.0    142468.0   3.110e-03   1.000e-03   3.110e-03     21.05  detectable
+  1e+05    1e+03  15.0    167196.7   2.721e-03   1.000e-03   2.721e-03     16.08  below
+  1e+06    1e+01   0.1       477.5   3.997e-03   1.000e-03   1.102e-03     11.62  below
+  1e+06    1e+01   0.5      2927.1   2.931e-03   1.000e-03   1.199e-03      3.59  below
+  1e+06    1e+01   1.0      6802.5   2.198e-03   1.000e-03   1.437e-03      3.32  below
+  1e+06    1e+01   2.0     15936.2   1.466e-03   1.000e-03   1.466e-03      2.09  below
+  1e+06    1e+01   5.0     47676.0   7.328e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+01  10.0    105971.1   3.997e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+01  13.0    142468.0   3.141e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+01  15.0    167196.7   2.748e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+02   0.1       477.5   3.997e-03   1.000e-03   3.997e-03    689.40  detectable
+  1e+06    1e+02   0.5      2927.1   2.931e-03   1.000e-03   2.931e-03     99.22  detectable
+  1e+06    1e+02   1.0      6802.5   2.198e-03   1.000e-03   2.198e-03     30.19  detectable
+  1e+06    1e+02   2.0     15936.2   1.466e-03   1.000e-03   1.466e-03      6.62  below
+  1e+06    1e+02   5.0     47676.0   7.328e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+02  10.0    105971.1   3.997e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+02  13.0    142468.0   3.140e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+02  15.0    167196.7   2.748e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+03   0.1       477.5   3.993e-03   1.000e-03   3.993e-03   2177.96  detectable
+  1e+06    1e+03   0.5      2927.1   2.928e-03   1.000e-03   2.928e-03    313.26  detectable
+  1e+06    1e+03   1.0      6802.5   2.196e-03   1.000e-03   2.196e-03     95.24  detectable
+  1e+06    1e+03   2.0     15936.2   1.464e-03   1.000e-03   1.464e-03     20.88  detectable
+  1e+06    1e+03   5.0     47676.0   7.321e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+03  10.0    105971.1   3.993e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+03  13.0    142468.0   3.138e-04         nan         nan      0.00  no_overlap
+  1e+06    1e+03  15.0    167196.7   2.745e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+01   0.1       477.5   3.997e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+01   0.5      2927.1   2.931e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+01   1.0      6802.5   2.199e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+01   2.0     15936.2   1.466e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+01   5.0     47676.0   7.328e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+01  10.0    105971.1   3.997e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+01  13.0    142468.0   3.141e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+01  15.0    167196.7   2.748e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+02   0.1       477.5   3.997e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+02   0.5      2927.1   2.931e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+02   1.0      6802.5   2.198e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+02   2.0     15936.2   1.466e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+02   5.0     47676.0   7.328e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+02  10.0    105971.1   3.997e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+02  13.0    142468.0   3.141e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+02  15.0    167196.7   2.748e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+03   0.1       477.5   3.997e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+03   0.5      2927.1   2.931e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+03   1.0      6802.5   2.198e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+03   2.0     15936.2   1.466e-04         nan         nan      0.00  no_overlap
+  1e+07    1e+03   5.0     47676.0   7.328e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+03  10.0    105971.1   3.997e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+03  13.0    142468.0   3.140e-05         nan         nan      0.00  no_overlap
+  1e+07    1e+03  15.0    167196.7   2.748e-05         nan         nan      0.00  no_overlap
+
+Workflow classification integration
+candidate=imri data, snr=58.070693, reason=lisa_snr_above_threshold
+noncandidate=not evaluated, reason=not_imri_candidate
+eccentric=not evaluated, reason=snr_model_unavailable_nonzero_eccentricity
+
+Schema and completeness checks
+physical event diagnostics: present
+intrinsic complete + detector unavailable: preserved separately
+
+LISA detectability validation passed.

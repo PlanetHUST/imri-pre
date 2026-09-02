@@ -30,6 +30,7 @@ EVENT_REQUIRED_COLUMNS = [
 REPEAT_REQUIRED_COLUMNS = [
     *REPEAT_KEY_COLUMNS,
     "rate_status",
+    "detector_rate_status",
     "duty_cycle_myr",
     "n_imri",
     "rate_imri_per_myr",
@@ -49,12 +50,18 @@ RATE_SUMMARY_COLUMNS = [
     "duty_cycle_myr",
     "n_repeats_total",
     "n_repeats_valid",
+    "n_detector_repeats_valid",
     "mean_imri_count",
     "imri_rate_mean_per_myr",
     "imri_rate_p16_per_myr",
     "imri_rate_p84_per_myr",
-    "proxy_detectable_rate_mean_per_myr",
+    "mean_lisa_detectable_count",
+    "lisa_detectable_rate_mean_per_myr",
+    "lisa_detectable_rate_p16_per_myr",
+    "lisa_detectable_rate_p84_per_myr",
+    "lisa_detectable_fraction",
     "result_state",
+    "detector_result_state",
 ]
 STATUS_FRACTION_COLUMNS = [
     "disk_model",
@@ -228,11 +235,11 @@ def validate_repeat_results(repeats: pd.DataFrame) -> None:
     if duty_cycle.isna().any() or (duty_cycle <= 0.0).any():
         raise ValueError("repeat duty_cycle_myr values must be finite and positive")
 
-    complete = repeats["rate_status"].eq("complete")
-    for count_column, rate_column in (
-        ("n_imri", "rate_imri_per_myr"),
-        ("n_det", "rate_det_per_myr"),
+    for count_column, rate_column, status_column in (
+        ("n_imri", "rate_imri_per_myr", "rate_status"),
+        ("n_det", "rate_det_per_myr", "detector_rate_status"),
     ):
+        complete = repeats[status_column].eq("complete")
         count = pd.to_numeric(repeats[count_column], errors="coerce")
         rate = pd.to_numeric(repeats[rate_column], errors="coerce")
         expected = count / duty_cycle
@@ -416,8 +423,10 @@ def build_rate_summary_data(repeats: pd.DataFrame) -> pd.DataFrame:
             raise ValueError("duty cycle must be constant within a plotted grid bin")
 
         valid = group[group["rate_status"].eq("complete")]
+        detector_valid = group[group["detector_rate_status"].eq("complete")]
         n_total = len(group)
         n_valid = len(valid)
+        n_detector_valid = len(detector_valid)
         result_state = (
             "valid" if n_valid == n_total else "partial" if n_valid else "unavailable"
         )
@@ -427,9 +436,43 @@ def build_rate_summary_data(repeats: pd.DataFrame) -> pd.DataFrame:
                 dtype=float
             )
             mean_rate, lower_rate, upper_rate = _statistics(rate_values)
-            proxy_rate = float(pd.to_numeric(valid["rate_det_per_myr"]).mean())
         else:
-            mean_count = mean_rate = lower_rate = upper_rate = proxy_rate = np.nan
+            mean_count = mean_rate = lower_rate = upper_rate = np.nan
+
+        detector_result_state = (
+            "valid"
+            if n_detector_valid == n_total
+            else "partial"
+            if n_detector_valid
+            else "unavailable"
+        )
+        if n_detector_valid:
+            mean_detectable_count = float(
+                pd.to_numeric(detector_valid["n_det"]).mean()
+            )
+            detector_rate_values = pd.to_numeric(
+                detector_valid["rate_det_per_myr"]
+            ).to_numpy(dtype=float)
+            (
+                mean_detectable_rate,
+                lower_detectable_rate,
+                upper_detectable_rate,
+            ) = _statistics(detector_rate_values)
+            intrinsic_count_total = float(
+                pd.to_numeric(detector_valid["n_imri"]).sum()
+            )
+            detectable_fraction = (
+                float(pd.to_numeric(detector_valid["n_det"]).sum())
+                / intrinsic_count_total
+                if intrinsic_count_total > 0.0
+                else np.nan
+            )
+        else:
+            mean_detectable_count = np.nan
+            mean_detectable_rate = np.nan
+            lower_detectable_rate = np.nan
+            upper_detectable_rate = np.nan
+            detectable_fraction = np.nan
 
         records.append(
             {
@@ -440,12 +483,18 @@ def build_rate_summary_data(repeats: pd.DataFrame) -> pd.DataFrame:
                 "duty_cycle_myr": float(duties[0]),
                 "n_repeats_total": n_total,
                 "n_repeats_valid": n_valid,
+                "n_detector_repeats_valid": n_detector_valid,
                 "mean_imri_count": mean_count,
                 "imri_rate_mean_per_myr": mean_rate,
                 "imri_rate_p16_per_myr": lower_rate,
                 "imri_rate_p84_per_myr": upper_rate,
-                "proxy_detectable_rate_mean_per_myr": proxy_rate,
+                "mean_lisa_detectable_count": mean_detectable_count,
+                "lisa_detectable_rate_mean_per_myr": mean_detectable_rate,
+                "lisa_detectable_rate_p16_per_myr": lower_detectable_rate,
+                "lisa_detectable_rate_p84_per_myr": upper_detectable_rate,
+                "lisa_detectable_fraction": detectable_fraction,
                 "result_state": result_state,
+                "detector_result_state": detector_result_state,
             }
         )
     return pd.DataFrame.from_records(records, columns=RATE_SUMMARY_COLUMNS)
@@ -1406,8 +1455,9 @@ def write_figure_captions(
             ),
             "",
             (
-                "The proxy-detectable rate is retained in `imri_rate_summary.csv` "
-                "as secondary information and is not a cosmological detector rate."
+                "The physical sky-averaged LISA-selected rate is retained in "
+                "`imri_rate_summary.csv` as secondary information. It is a "
+                "conditional per-host yield, not a cosmological detector rate."
             ),
             "",
         ]
