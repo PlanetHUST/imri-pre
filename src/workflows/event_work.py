@@ -13,7 +13,11 @@ from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
 from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
-from .detect_rate import classify_detectability, unsupported_band_entry_decision
+from .detect_rate import (
+    classify_detectability,
+    solve_time_to_observed_lisa_entry,
+    unsupported_band_entry_decision,
+)
 from .engine import IMRIDynEngine, MigrationProfileError, TorqueProfileError
 from .event_rate import (
     BH_ORIGIN_MIGRATION_FORMED,
@@ -276,6 +280,7 @@ class IMRIEventEvaluator:
         boundary: gw_helpers.CircularBandBoundary,
     ) -> IMRIEventRecord:
         redshift = self.config.redshift
+        redshift_model = RedshiftEvolution(self.config.hubble_constant_per_myr)
         migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + migrator_mass_msun
@@ -380,15 +385,32 @@ class IMRIEventEvaluator:
             migration_status = initial_migration_outcome.status
             blocking_radius_cm = initial_migration_outcome.blocking_radius_cm
 
-            def gw_time_to_entry_myr_call(radius_cm: float) -> float:
-                return gw_helpers.peters_time_to_lisa_band_myr(
-                    result.m_smbh_msun,
-                    migrator_mass_msun,
-                    radius_cm,
-                    self.config.lisa_min_gw_frequency_hz,
-                    self.config.gw_eccentricity,
+            def gw_time_to_entry_myr_call(
+                radius_cm: float,
+                absolute_time_myr: float,
+            ) -> float:
+                current_redshift = redshift_model.redshift_evlove_with_time(
                     redshift,
+                    absolute_time_myr,
                 )
+                entry_outcome = solve_time_to_observed_lisa_entry(
+                    primary_mass_msun=result.m_smbh_msun,
+                    secondary_mass_msun=migrator_mass_msun,
+                    initial_radius_cm=radius_cm,
+                    initial_redshift=redshift,
+                    start_time_myr=absolute_time_myr,
+                    redshift_model=redshift_model,
+                    min_observed_frequency_hz=(
+                        self.config.lisa_min_gw_frequency_hz
+                    ),
+                    eccentricity=self.config.gw_eccentricity,
+                    max_elapsed_time_myr=(
+                        redshift_model.remaining_time_to_zero_redshift_myr(
+                            current_redshift
+                        )
+                    ),
+                )
+                return entry_outcome.time_to_entry_myr
 
             event_decision = classify_event_rate(
                 object_status=damping_result["status"],
@@ -439,9 +461,9 @@ class IMRIEventEvaluator:
         #     f"r_gas_fin is {event_decision.r_gas_fin_cm:.3e} cm"
         # )
 
-        redshift_at_gas_fin = RedshiftEvolution(
-            self.config.hubble_constant_per_myr
-        ).redshift_evlove_with_time(redshift, event_decision.gas_final_time_myr)
+        redshift_at_gas_fin = redshift_model.redshift_evlove_with_time(
+            redshift, event_decision.gas_final_time_myr
+        )
 
         f_ini_source_hz = _safe_gw_frequency_hz(total_mass_msun, r_ini_cm)
         f_gas_fin_source_hz = _safe_gw_frequency_hz(

@@ -38,7 +38,7 @@ class EventRateDecision:
 
 
 MigrationTimeFunction = Callable[[float, float], float]
-GwTimeFunction = Callable[[float], float]
+GwTimeFunction = Callable[[float, float], float]
 
 
 def _safe_migration_time_myr(
@@ -53,12 +53,32 @@ def _safe_migration_time_myr(
 def _safe_gw_time_myr(
     gw_time_to_entry_myr: GwTimeFunction,
     radius_cm: float,
+    absolute_time_myr: float,
 ) -> float:
     try:
-        value = float(gw_time_to_entry_myr(radius_cm))
+        value = float(gw_time_to_entry_myr(radius_cm, absolute_time_myr))
     except (ArithmeticError, ValueError, OverflowError):
         return np.inf
     return value if np.isfinite(value) and value >= 0.0 else np.inf
+
+
+def _refine_first_true_radius_cm(
+    *,
+    outer_radius_cm: float,
+    inner_radius_cm: float,
+    condition_at_radius: Callable[[float], bool],
+) -> float:
+    """Refine a bracketed inward transition and return its first true radius."""
+
+    outer_cm = float(outer_radius_cm)
+    inner_cm = float(inner_radius_cm)
+    for _ in range(48):
+        midpoint_cm = float(np.sqrt(outer_cm * inner_cm))
+        if condition_at_radius(midpoint_cm):
+            inner_cm = midpoint_cm
+        else:
+            outer_cm = midpoint_cm
+    return inner_cm
 
 
 def solve_gas_final_radius_cm(
@@ -67,6 +87,7 @@ def solve_gas_final_radius_cm(
     r_gas_target_cm: float,
     r_entry_cm: float,
     handoff_required: bool,
+    gas_start_time_myr: float,
     available_gas_time_myr: float,
     migration_time_myr_call: MigrationTimeFunction,
     gw_time_to_entry_myr: GwTimeFunction,
@@ -94,10 +115,20 @@ def solve_gas_final_radius_cm(
         r_ini_cm,
         r_gas_target_cm,
     )
-    total_gw_time_myr = _safe_gw_time_myr(gw_time_to_entry_myr, r_ini_cm)
+    total_gw_time_myr = _safe_gw_time_myr(
+        gw_time_to_entry_myr,
+        r_ini_cm,
+        gas_start_time_myr,
+    )
+    gas_target_time_myr = gas_start_time_myr + (
+        total_migration_time_myr
+        if np.isfinite(total_migration_time_myr)
+        else 0.0
+    )
     gw_time_gas_target_to_entry_myr = _safe_gw_time_myr(
         gw_time_to_entry_myr,
         r_gas_target_cm,
+        gas_target_time_myr,
     )
     target_reached_reason = "gas_to_gw_handoff" if handoff_required else "entry_reached"
 
@@ -139,7 +170,10 @@ def solve_gas_final_radius_cm(
     gas_assisted_time_to_entry_myr = (
         total_migration_time_myr + gw_time_gas_target_to_entry_myr
     )
-    if gas_assisted_time_to_entry_myr >= total_gw_time_myr:
+    if (
+        np.isfinite(total_gw_time_myr)
+        and gas_assisted_time_to_entry_myr >= total_gw_time_myr
+    ):
         return (
             r_ini_cm,
             0.0,
@@ -149,76 +183,133 @@ def solve_gas_final_radius_cm(
             "gw_dominates_at_start",
         )
 
-    # migration towards the in-domain gas target
-    if total_migration_time_myr <= available_gas_time_myr:
-        return (
-            r_gas_target_cm,
-            total_migration_time_myr,
-            total_migration_time_myr,
-            total_gw_time_myr,
-            gw_time_gas_target_to_entry_myr,
-            target_reached_reason,
-        )
-
-    # total_migration_time_myr between available_gas_time_myr and total_gw_time_myr, the most common case
-    # calculate details
-    sample_count = int(num_radius_samples)
+    sample_count = max(2, int(num_radius_samples))
     radius_samples_cm = np.geomspace(r_ini_cm, r_gas_target_cm, sample_count)
 
-    # initilization parameters
-    r_gas_fin_cm = r_ini_cm
-    gas_elapsed_time_myr = 0.0
-    stop_reason = "duty_cycle_limited"
-
-    for radius_sample_cm in radius_samples_cm[1:]:
-        evloved_embed_myr = _safe_migration_time_myr(
+    def gas_is_not_faster(radius_cm: float) -> bool:
+        gas_elapsed_time_myr = _safe_migration_time_myr(
             migration_time_myr_call,
             r_ini_cm,
-            float(radius_sample_cm),
+            radius_cm,
         )
-        remaining_migration_myr = _safe_migration_time_myr(
+        remaining_migration_time_myr = _safe_migration_time_myr(
             migration_time_myr_call,
-            float(radius_sample_cm),
+            radius_cm,
             r_gas_target_cm,
         )
-        remaining_gw_myr = _safe_gw_time_myr(
-            gw_time_to_entry_myr, float(radius_sample_cm)
+        absolute_time_myr = gas_start_time_myr + gas_elapsed_time_myr
+        direct_gw_time_myr = _safe_gw_time_myr(
+            gw_time_to_entry_myr,
+            radius_cm,
+            absolute_time_myr,
+        )
+        target_gw_time_myr = _safe_gw_time_myr(
+            gw_time_to_entry_myr,
+            r_gas_target_cm,
+            absolute_time_myr + remaining_migration_time_myr,
+        )
+        return bool(
+            np.isfinite(direct_gw_time_myr)
+            and remaining_migration_time_myr + target_gw_time_myr
+            >= direct_gw_time_myr
         )
 
-        if not np.isfinite(evloved_embed_myr):
-            stop_reason = "migration_trap_bound"
-            break
+    previous_radius_cm = r_ini_cm
+    previous_elapsed_time_myr = 0.0
 
-        if evloved_embed_myr > available_gas_time_myr:
-            stop_reason = "duty_cycle_limited"
-            break
-
-        r_gas_fin_cm = float(radius_sample_cm)
-        gas_elapsed_time_myr = evloved_embed_myr
-
-        if not np.isfinite(remaining_migration_myr):
-            stop_reason = "migration_trap_bound"
-            break
-
-        remaining_gas_assisted_myr = (
-            remaining_migration_myr + gw_time_gas_target_to_entry_myr
+    for sample_index, radius_sample_cm in enumerate(radius_samples_cm[1:], start=1):
+        radius_sample_cm = float(radius_sample_cm)
+        evolved_gas_time_myr = _safe_migration_time_myr(
+            migration_time_myr_call,
+            r_ini_cm,
+            radius_sample_cm,
         )
-        if remaining_gas_assisted_myr >= remaining_gw_myr:
-            stop_reason = "gw_dominates_after_gas"
-            break
+        if not np.isfinite(evolved_gas_time_myr):
+            return (
+                previous_radius_cm,
+                previous_elapsed_time_myr,
+                total_migration_time_myr,
+                total_gw_time_myr,
+                gw_time_gas_target_to_entry_myr,
+                "migration_trap_bound",
+            )
 
-        if radius_sample_cm <= r_gas_target_cm:
-            stop_reason = target_reached_reason
-            break
+        target_reached = sample_index == sample_count - 1
+        target_reachable = total_migration_time_myr <= available_gas_time_myr
 
-    return (
-        r_gas_fin_cm,
-        gas_elapsed_time_myr,
-        total_migration_time_myr,
-        total_gw_time_myr,
-        gw_time_gas_target_to_entry_myr,
-        stop_reason,
-    )
+        if target_reached and target_reachable:
+            return (
+                r_gas_target_cm,
+                total_migration_time_myr,
+                total_migration_time_myr,
+                total_gw_time_myr,
+                gw_time_gas_target_to_entry_myr,
+                target_reached_reason,
+            )
+
+        if evolved_gas_time_myr >= available_gas_time_myr:
+            duty_radius_cm = _refine_first_true_radius_cm(
+                outer_radius_cm=previous_radius_cm,
+                inner_radius_cm=radius_sample_cm,
+                condition_at_radius=lambda radius_cm: _safe_migration_time_myr(
+                    migration_time_myr_call,
+                    r_ini_cm,
+                    radius_cm,
+                )
+                >= available_gas_time_myr,
+            )
+            if gas_is_not_faster(duty_radius_cm):
+                crossover_radius_cm = _refine_first_true_radius_cm(
+                    outer_radius_cm=previous_radius_cm,
+                    inner_radius_cm=duty_radius_cm,
+                    condition_at_radius=gas_is_not_faster,
+                )
+                crossover_elapsed_time_myr = _safe_migration_time_myr(
+                    migration_time_myr_call,
+                    r_ini_cm,
+                    crossover_radius_cm,
+                )
+                return (
+                    crossover_radius_cm,
+                    crossover_elapsed_time_myr,
+                    total_migration_time_myr,
+                    total_gw_time_myr,
+                    gw_time_gas_target_to_entry_myr,
+                    "gw_dominates_after_gas",
+                )
+            return (
+                duty_radius_cm,
+                available_gas_time_myr,
+                total_migration_time_myr,
+                total_gw_time_myr,
+                gw_time_gas_target_to_entry_myr,
+                "duty_cycle_limited",
+            )
+
+        if gas_is_not_faster(radius_sample_cm):
+            crossover_radius_cm = _refine_first_true_radius_cm(
+                outer_radius_cm=previous_radius_cm,
+                inner_radius_cm=radius_sample_cm,
+                condition_at_radius=gas_is_not_faster,
+            )
+            crossover_elapsed_time_myr = _safe_migration_time_myr(
+                migration_time_myr_call,
+                r_ini_cm,
+                crossover_radius_cm,
+            )
+            return (
+                crossover_radius_cm,
+                crossover_elapsed_time_myr,
+                total_migration_time_myr,
+                total_gw_time_myr,
+                gw_time_gas_target_to_entry_myr,
+                "gw_dominates_after_gas",
+            )
+
+        previous_radius_cm = radius_sample_cm
+        previous_elapsed_time_myr = evolved_gas_time_myr
+
+    raise RuntimeError("gas-delivery radius search did not reach a terminal state")
 
 
 def classify_event_rate(
@@ -252,6 +343,7 @@ def classify_event_rate(
         r_gas_target_cm=r_gas_target_cm,
         r_entry_cm=r_entry_cm,
         handoff_required=handoff_required,
+        gas_start_time_myr=embed_time_myr,
         available_gas_time_myr=available_gas_time_myr,
         migration_time_myr_call=migration_time_myr_call,
         gw_time_to_entry_myr=gw_time_to_entry_myr_call,
@@ -307,6 +399,7 @@ def classify_event_rate(
         "gw_dominates_at_start",
         "gw_dominates_after_gas",
         "gas_to_gw_handoff",
+        "duty_cycle_limited",
     }
     is_imri_candidate = gas_stop_reason in candidate_reasons
 

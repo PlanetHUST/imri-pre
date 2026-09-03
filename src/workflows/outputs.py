@@ -1,6 +1,7 @@
 """Persistence helpers for dynamical IMRI simulations."""
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence, cast
 
@@ -17,6 +18,13 @@ from .config import (
     IMRIDynConfig,
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
+from .lisa_snr import (
+    SNR_STATUS_EVALUATED,
+    SNR_STATUS_MODEL_UNAVAILABLE,
+    SNR_STATUS_NO_OVERLAP,
+    SNR_STATUS_NUMERICAL_FAILURE,
+    SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE,
+)
 
 IMRI_RESULT_COLUMN_MAP = [
     ("m_smbh_msun", "m_smbh_msun"),
@@ -104,8 +112,8 @@ IMRI_EVENT_COLUMNS = [
     "r_handoff_cm",
     "r_handoff_rg",
     "source_entry_frequency_hz",
-    # "r_det_entry_cm",
-    # "r_det_entry_rg",
+    "r_det_entry_cm",
+    "r_det_entry_rg",
     # "f_ini_src_hz",
     # "f_ini_obs_hz",
     # "f_gas_fin_src_hz",
@@ -203,7 +211,6 @@ EVENT_HIDDEN_COLUMNS = {
     "r_disk_inner_cm",
     "r_migration_min_cm",
     "r_handoff_cm",
-    "r_det_entry_cm",
 }
 
 EVENT_FREQUENCY_COLUMNS = {
@@ -226,6 +233,217 @@ FREQUENCY_UNITS_HZ = [
     ("nano_hz", 1.0e-9),
     ("pico_hz", 1.0e-12),
 ]
+
+
+@dataclass(frozen=True)
+class _PhysicalEntrySummary:
+    """Output-layer counts for systems that reach the physical LISA entry."""
+
+    count: int
+    mass_msun: float
+    detectable_count: int
+    detectable_mass_msun: float
+    nondetectable_count: int
+    detector_evaluated_count: int
+    detector_unavailable_count: int
+    below_threshold_count: int
+    no_overlap_count: int
+    required_input_unavailable_count: int
+    model_unavailable_count: int
+    numerical_failure_count: int
+
+
+def _boolean_state(value: Any) -> bool | None:
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    text = str(value).strip().lower()
+    if text == "true":
+        return True
+    if text == "false":
+        return False
+    return None
+
+
+def _physical_entry_summary(result: IMRIDynSingleResult) -> _PhysicalEntrySummary:
+    entries = [
+        event
+        for event in result.imri_events
+        if _boolean_state(event["is_imri_candidate"]) is True
+        and np.isfinite(float(event["detection_time_myr"]))
+    ]
+    detectable_count = 0
+    detectable_mass_msun = 0.0
+    nondetectable_count = 0
+    detector_unavailable_count = 0
+    below_threshold_count = 0
+    no_overlap_count = 0
+    required_input_unavailable_count = 0
+    model_unavailable_count = 0
+    numerical_failure_count = 0
+    for event in entries:
+        detector_state = _boolean_state(event["is_lisa_detectable"])
+        snr_status = str(event["snr_status"])
+        if detector_state is True:
+            if snr_status != SNR_STATUS_EVALUATED:
+                raise ValueError("detectable physical entry has unavailable SNR")
+            detectable_count += 1
+            detectable_mass_msun += float(event["mass_msun"])
+        elif detector_state is False:
+            nondetectable_count += 1
+            if snr_status == SNR_STATUS_EVALUATED:
+                below_threshold_count += 1
+            elif snr_status == SNR_STATUS_NO_OVERLAP:
+                no_overlap_count += 1
+            else:
+                raise ValueError("physical nondetection has unavailable SNR")
+        else:
+            detector_unavailable_count += 1
+            if snr_status == SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE:
+                required_input_unavailable_count += 1
+            elif snr_status == SNR_STATUS_MODEL_UNAVAILABLE:
+                model_unavailable_count += 1
+            elif snr_status == SNR_STATUS_NUMERICAL_FAILURE:
+                numerical_failure_count += 1
+            else:
+                raise ValueError(
+                    "detector-unavailable physical entry has unknown SNR status"
+                )
+
+    detector_evaluated_count = detectable_count + nondetectable_count
+    if len(entries) != detector_evaluated_count + detector_unavailable_count:
+        raise ValueError("physical entries do not conserve detector outcomes")
+    if nondetectable_count != below_threshold_count + no_overlap_count:
+        raise ValueError("physical nondetections do not conserve SNR outcomes")
+    if detector_unavailable_count != (
+        required_input_unavailable_count
+        + model_unavailable_count
+        + numerical_failure_count
+    ):
+        raise ValueError("detector-unavailable entries do not conserve outcomes")
+    return _PhysicalEntrySummary(
+        count=len(entries),
+        mass_msun=float(sum(float(event["mass_msun"]) for event in entries)),
+        detectable_count=detectable_count,
+        detectable_mass_msun=detectable_mass_msun,
+        nondetectable_count=nondetectable_count,
+        detector_evaluated_count=detector_evaluated_count,
+        detector_unavailable_count=detector_unavailable_count,
+        below_threshold_count=below_threshold_count,
+        no_overlap_count=no_overlap_count,
+        required_input_unavailable_count=required_input_unavailable_count,
+        model_unavailable_count=model_unavailable_count,
+        numerical_failure_count=numerical_failure_count,
+    )
+
+
+def _physical_rate_from_core_denominator(
+    result: IMRIDynSingleResult,
+    count: int,
+) -> float:
+    """Recover the configured duty denominator without changing the core model."""
+    if _rate_evaluation_status(result) != "complete":
+        return np.nan
+    if count == 0:
+        return 0.0
+    if result.imri_count <= 0 or not np.isfinite(result.imri_rate_per_myr):
+        raise ValueError("cannot recover duty-cycle denominator for physical entries")
+    duty_cycle_myr = result.imri_count / result.imri_rate_per_myr
+    if not np.isfinite(duty_cycle_myr) or duty_cycle_myr <= 0.0:
+        raise ValueError("recovered duty-cycle denominator is invalid")
+    return float(count / duty_cycle_myr)
+
+
+def _core_duty_cycle_myr(result: IMRIDynSingleResult) -> float | None:
+    if result.imri_count == 0:
+        return None
+    if not np.isfinite(result.imri_rate_per_myr) or result.imri_rate_per_myr <= 0.0:
+        return None
+    duty_cycle_myr = result.imri_count / result.imri_rate_per_myr
+    return float(duty_cycle_myr) if duty_cycle_myr > 0.0 else None
+
+
+def _detector_status_for_summary(
+    result: IMRIDynSingleResult,
+    summary: _PhysicalEntrySummary,
+) -> str:
+    if _rate_evaluation_status(result) != "complete":
+        return "not_evaluated_intrinsic_incomplete"
+    if summary.detector_unavailable_count:
+        return "incomplete_detector_unavailable"
+    return "complete"
+
+
+def _serialized_event_record(
+    result: IMRIDynSingleResult,
+    event: IMRIEventRecord,
+    physical_summary: _PhysicalEntrySummary,
+) -> dict[str, Any]:
+    """Return an event copy with contributions aligned to physical entry."""
+    record = dict(event)
+    if _rate_evaluation_status(result) != "complete":
+        record["intrinsic_rate_contribution_per_myr"] = np.nan
+        record["detected_rate_contribution_per_myr"] = np.nan
+        return record
+    candidate = _boolean_state(event["is_imri_candidate"]) is True
+    physical_entry = candidate and np.isfinite(float(event["detection_time_myr"]))
+    duty_cycle_myr = _core_duty_cycle_myr(result)
+    if physical_entry and duty_cycle_myr is None:
+        raise ValueError("physical event is missing its AGN duty-cycle denominator")
+    record["intrinsic_rate_contribution_per_myr"] = (
+        1.0 / duty_cycle_myr if physical_entry and duty_cycle_myr else 0.0
+    )
+
+    detector_status = _detector_status_for_summary(result, physical_summary)
+    detector_state = _boolean_state(event["is_lisa_detectable"])
+    if detector_status != "complete" and physical_entry:
+        record["detected_rate_contribution_per_myr"] = np.nan
+    else:
+        record["detected_rate_contribution_per_myr"] = (
+            1.0
+            / duty_cycle_myr
+            if physical_entry and detector_state is True and duty_cycle_myr
+            else 0.0
+        )
+    return record
+
+
+def _validate_serialized_contributions(
+    result: IMRIDynSingleResult,
+    records: Sequence[dict[str, Any]],
+    physical_summary: _PhysicalEntrySummary,
+) -> None:
+    intrinsic_total = float(
+        sum(
+            float(record["intrinsic_rate_contribution_per_myr"])
+            for record in records
+            if np.isfinite(float(record["intrinsic_rate_contribution_per_myr"]))
+        )
+    )
+    detected_total = float(
+        sum(
+            float(record["detected_rate_contribution_per_myr"])
+            for record in records
+            if np.isfinite(float(record["detected_rate_contribution_per_myr"]))
+        )
+    )
+    if detected_total > intrinsic_total + 1.0e-12:
+        raise ValueError("detected contributions exceed intrinsic contributions")
+    if _rate_evaluation_status(result) == "complete":
+        expected_intrinsic = _physical_rate_from_core_denominator(
+            result, physical_summary.count
+        )
+        if not np.isclose(
+            intrinsic_total, expected_intrinsic, rtol=0.0, atol=1.0e-12
+        ):
+            raise ValueError("physical-entry contributions disagree with repeat rate")
+    if _detector_status_for_summary(result, physical_summary) == "complete":
+        expected_detected = _physical_rate_from_core_denominator(
+            result, physical_summary.detectable_count
+        )
+        if not np.isclose(
+            detected_total, expected_detected, rtol=0.0, atol=1.0e-12
+        ):
+            raise ValueError("detected contributions disagree with detector rate")
 
 
 def _mean_disk_outer_radius_rg_pc(
@@ -257,6 +475,118 @@ def _result_output_record(
     averaged_result: IMRIDynAveragedResult,
 ) -> dict[str, float | int | str]:
     record = dict(averaged_result.to_dict())
+    summaries = [_physical_entry_summary(result) for result in averaged_result.results]
+    physical_rate_statuses = [
+        _rate_evaluation_status(result) for result in averaged_result.results
+    ]
+    rate_complete = all(status == "complete" for status in physical_rate_statuses)
+    if (
+        record["rate_evaluation_status"] == "complete"
+        and not rate_complete
+    ):
+        record["rate_evaluation_status"] = "incomplete_physical_entry_unavailable"
+    detector_complete = rate_complete and all(
+        summary.detector_unavailable_count == 0 for summary in summaries
+    )
+
+    # The model's legacy ``imri_candidate_*`` keys count eligibility for
+    # post-gas propagation. Override those mapped values at the persistence
+    # boundary so the established n_imri columns mean finite physical entry.
+    if rate_complete:
+        physical_counts = np.asarray([summary.count for summary in summaries])
+        physical_masses = np.asarray([summary.mass_msun for summary in summaries])
+        physical_rates = np.asarray(
+            [
+                _physical_rate_from_core_denominator(result, summary.count)
+                for result, summary in zip(
+                    averaged_result.results, summaries, strict=True
+                )
+            ]
+        )
+        record["imri_candidate_count_mean"] = float(np.mean(physical_counts))
+        record["imri_candidate_count_min"] = float(np.min(physical_counts))
+        record["imri_candidate_count_max"] = float(np.max(physical_counts))
+        record["imri_candidate_mass_mean_msun"] = float(np.mean(physical_masses))
+        record["imri_candidate_rate_mean_per_myr"] = float(
+            np.mean(physical_rates)
+        )
+    else:
+        for name in (
+            "imri_candidate_count_mean",
+            "imri_candidate_count_min",
+            "imri_candidate_count_max",
+            "imri_candidate_mass_mean_msun",
+            "imri_candidate_rate_mean_per_myr",
+        ):
+            record[name] = np.nan
+
+    record["detector_rate_evaluation_status"] = (
+        "complete"
+        if detector_complete
+        else "not_evaluated_intrinsic_incomplete"
+        if not rate_complete
+        else "incomplete_detector_unavailable"
+    )
+    record["detector_evaluated_imri_count_mean"] = float(
+        np.mean([summary.detector_evaluated_count for summary in summaries])
+    )
+    record["detector_unavailable_imri_count_mean"] = float(
+        np.mean([summary.detector_unavailable_count for summary in summaries])
+    )
+    record["detector_below_threshold_imri_count_mean"] = float(
+        np.mean([summary.below_threshold_count for summary in summaries])
+    )
+    record["detector_no_overlap_imri_count_mean"] = float(
+        np.mean([summary.no_overlap_count for summary in summaries])
+    )
+    record["detector_required_input_unavailable_imri_count_mean"] = float(
+        np.mean([summary.required_input_unavailable_count for summary in summaries])
+    )
+    record["detector_model_unavailable_imri_count_mean"] = float(
+        np.mean([summary.model_unavailable_count for summary in summaries])
+    )
+    record["detector_numerical_failure_imri_count_mean"] = float(
+        np.mean([summary.numerical_failure_count for summary in summaries])
+    )
+    if detector_complete:
+        detectable_counts = np.asarray(
+            [summary.detectable_count for summary in summaries]
+        )
+        detectable_rates = np.asarray(
+            [
+                _physical_rate_from_core_denominator(
+                    result, summary.detectable_count
+                )
+                for result, summary in zip(
+                    averaged_result.results, summaries, strict=True
+                )
+            ]
+        )
+        record["detectable_imri_count_mean"] = float(
+            np.mean(detectable_counts)
+        )
+        record["detectable_imri_count_min"] = float(np.min(detectable_counts))
+        record["detectable_imri_count_max"] = float(np.max(detectable_counts))
+        record["detectable_imri_mass_mean_msun"] = float(
+            np.mean([summary.detectable_mass_msun for summary in summaries])
+        )
+        record["detectable_imri_rate_mean_per_myr"] = float(
+            np.mean(detectable_rates)
+        )
+        record["no_detectable_imri_count_mean"] = float(
+            np.mean([summary.nondetectable_count for summary in summaries])
+        )
+    else:
+        for name in (
+            "detectable_imri_count_mean",
+            "detectable_imri_count_min",
+            "detectable_imri_count_max",
+            "detectable_imri_mass_mean_msun",
+            "detectable_imri_rate_mean_per_myr",
+            "no_detectable_imri_count_mean",
+        ):
+            record[name] = np.nan
+
     rg_values = [
         result.gravitational_radius_cm
         for result in averaged_result.results
@@ -312,6 +642,86 @@ def _format_event_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return output_frame
 
 
+def _validate_event_output(frame: pd.DataFrame) -> None:
+    """Validate physical-entry fields and per-event contribution ordering."""
+    candidate = np.asarray(
+        cast(pd.Series, frame["is_imri_candidate"]).map(_boolean_state).eq(True),
+        dtype=bool,
+    )
+    detection_time = np.asarray(
+        pd.to_numeric(
+            cast(pd.Series, frame["detection_time_myr"]), errors="coerce"
+        ),
+        dtype=float,
+    )
+    physical_entry = candidate & np.isfinite(detection_time)
+    for column in (
+        "detection_redshift",
+        "r_det_entry_cm",
+        "r_det_entry_rg",
+        "f_entry_src_hz",
+        "f_entry_obs_hz",
+    ):
+        values = np.asarray(
+            pd.to_numeric(
+                cast(pd.Series, frame.loc[physical_entry, column]), errors="coerce"
+            ),
+            dtype=float,
+        )
+        if not np.isfinite(values).all():
+            raise ValueError(f"physical entries require finite {column}")
+
+    intrinsic = np.asarray(
+        pd.to_numeric(
+            cast(pd.Series, frame["intrinsic_rate_contribution_per_myr"]),
+            errors="coerce",
+        ),
+        dtype=float,
+    )
+    detected = np.asarray(
+        pd.to_numeric(
+            cast(pd.Series, frame["detected_rate_contribution_per_myr"]),
+            errors="coerce",
+        ),
+        dtype=float,
+    )
+    comparable = np.isfinite(intrinsic) & np.isfinite(detected)
+    if np.any(detected[comparable] > intrinsic[comparable] + 1.0e-12):
+        raise ValueError("detected event contribution exceeds intrinsic contribution")
+
+
+def _validate_rate_output(frame: pd.DataFrame) -> None:
+    """Validate physical/detector counts without converting unavailable rates."""
+    intrinsic = np.asarray(
+        pd.to_numeric(cast(pd.Series, frame["n_imri"]), errors="coerce"),
+        dtype=float,
+    )
+    detected = np.asarray(
+        pd.to_numeric(cast(pd.Series, frame["n_det"]), errors="coerce"),
+        dtype=float,
+    )
+    comparable = np.isfinite(intrinsic) & np.isfinite(detected)
+    if np.any(detected[comparable] > intrinsic[comparable]):
+        raise ValueError("detectable IMRI count exceeds physical-entry count")
+
+    intrinsic_rate = np.asarray(
+        pd.to_numeric(
+            cast(pd.Series, frame["rate_imri_per_myr"]), errors="coerce"
+        ),
+        dtype=float,
+    )
+    detector_rate = np.asarray(
+        pd.to_numeric(cast(pd.Series, frame["rate_det_per_myr"]), errors="coerce"),
+        dtype=float,
+    )
+    comparable_rates = np.isfinite(intrinsic_rate) & np.isfinite(detector_rate)
+    if np.any(
+        detector_rate[comparable_rates]
+        > intrinsic_rate[comparable_rates] + 1.0e-12
+    ):
+        raise ValueError("detectable IMRI rate exceeds physical-entry rate")
+
+
 def save_results(
     averaged_results: Sequence[IMRIDynAveragedResult],
     output_dir: Path,
@@ -321,6 +731,7 @@ def save_results(
         [_result_output_record(result) for result in averaged_results],
         columns=IMRI_RESULT_COLUMNS,
     )
+    _validate_rate_output(frame)
     path = output_dir / IMRI_AVERAGED_RESULTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.6e")
     print(f"saved: {path}")
@@ -335,8 +746,22 @@ def save_events(
     records: list[IMRIEventRecord] = []
     for averaged_result in averaged_results:
         for result in averaged_result.results:
-            records.extend(result.imri_events)
+            physical_summary = _physical_entry_summary(result)
+            result_records = [
+                cast(
+                    IMRIEventRecord,
+                    _serialized_event_record(result, event, physical_summary),
+                )
+                for event in result.imri_events
+            ]
+            _validate_serialized_contributions(
+                result,
+                cast(Sequence[dict[str, Any]], result_records),
+                physical_summary,
+            )
+            records.extend(result_records)
     raw_frame = pd.DataFrame.from_records(records, columns=IMRI_EVENT_COLUMNS)
+    _validate_event_output(raw_frame)
     frame = _format_event_frame(raw_frame)
     path = output_dir / IMRI_EVENTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.6e")
@@ -351,21 +776,38 @@ def _rate_evaluation_status(result: IMRIDynSingleResult) -> str:
         return "not_evaluated_band_entry_inside_isco"
     if result.profile_error_count:
         return "incomplete_profile_error"
+    physical_entry_unavailable = any(
+        _boolean_state(event["is_imri_candidate"]) is True
+        and not np.isfinite(float(event["detection_time_myr"]))
+        and _boolean_state(event["is_lisa_detectable"]) is None
+        for event in result.imri_events
+    )
+    if physical_entry_unavailable:
+        return "incomplete_physical_entry_unavailable"
     return "complete"
 
 
 def _detector_rate_evaluation_status(result: IMRIDynSingleResult) -> str:
-    if _rate_evaluation_status(result) != "complete":
-        return "not_evaluated_intrinsic_incomplete"
-    if result.detector_unavailable_imri_count:
-        return "incomplete_detector_unavailable"
-    return "complete"
+    return _detector_status_for_summary(result, _physical_entry_summary(result))
 
 
 def _repeat_output_record(
     result: IMRIDynSingleResult,
     config: IMRIDynConfig,
 ) -> dict[str, float | int | str | None]:
+    physical = _physical_entry_summary(result)
+    rate_status = _rate_evaluation_status(result)
+    detector_rate_status = _detector_status_for_summary(result, physical)
+    intrinsic_rate = (
+        physical.count / config.duty_cycle_myr
+        if rate_status == "complete"
+        else np.nan
+    )
+    detector_rate = (
+        physical.detectable_count / config.duty_cycle_myr
+        if detector_rate_status == "complete"
+        else np.nan
+    )
     return {
         "redshift": config.redshift,
         "disk_model": result.disk_model,
@@ -374,8 +816,8 @@ def _repeat_output_record(
         "repeat": result.repeat_idx,
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,
-        "rate_status": _rate_evaluation_status(result),
-        "detector_rate_status": _detector_rate_evaluation_status(result),
+        "rate_status": rate_status,
+        "detector_rate_status": detector_rate_status,
         "duty_cycle_myr": config.duty_cycle_myr,
         "n_sampled": result.total_sampled_objects,
         "n_disk_cross": result.disk_crossing_objects,
@@ -385,23 +827,19 @@ def _repeat_output_record(
         "n_mfbh": result.migration_formed_bh_count,
         "n_outside_or_failed": result.outside_or_failed_count,
         "n_bh_candi": result.bh_candidate_count,
-        "n_no_imri": result.no_imri_count,
-        "n_imri": result.imri_count,
-        "rate_imri_per_myr": result.imri_rate_per_myr,
-        "n_det": result.detectable_imri_count,
-        "n_nondet": result.no_detectable_imri_count,
-        "n_detector_eval": result.detector_evaluated_imri_count,
-        "n_detector_unavailable": result.detector_unavailable_imri_count,
-        "n_snr_below": result.detector_below_threshold_imri_count,
-        "n_no_overlap": result.detector_no_overlap_imri_count,
-        "n_detector_input_unavailable": (
-            result.detector_required_input_unavailable_imri_count
-        ),
-        "n_detector_model_unavailable": result.detector_model_unavailable_imri_count,
-        "n_detector_numerical_failure": (
-            result.detector_numerical_failure_imri_count
-        ),
-        "rate_det_per_myr": result.detectable_imri_rate_per_myr,
+        "n_no_imri": result.no_imri_count + result.imri_count - physical.count,
+        "n_imri": physical.count,
+        "rate_imri_per_myr": intrinsic_rate,
+        "n_det": physical.detectable_count,
+        "n_nondet": physical.nondetectable_count,
+        "n_detector_eval": physical.detector_evaluated_count,
+        "n_detector_unavailable": physical.detector_unavailable_count,
+        "n_snr_below": physical.below_threshold_count,
+        "n_no_overlap": physical.no_overlap_count,
+        "n_detector_input_unavailable": physical.required_input_unavailable_count,
+        "n_detector_model_unavailable": physical.model_unavailable_count,
+        "n_detector_numerical_failure": physical.numerical_failure_count,
+        "rate_det_per_myr": detector_rate,
         "n_band_eval": result.band_entry_evaluated_count,
         "n_entry_in_domain": result.entry_in_migration_domain_count,
         "n_entry_handoff": result.entry_handoff_count,
@@ -434,6 +872,7 @@ def save_repeat_results(
             cast(pd.Series, frame[column]),
             dtype="Int64",
         )
+    _validate_rate_output(frame)
     path = output_dir / IMRI_REPEAT_RESULTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.6e")
     print(f"saved: {path}")
@@ -449,6 +888,9 @@ def save_migration_diagnostics(
 
     if result.disk_model != config.disk_model:
         raise ValueError("result disk model disagrees with workflow configuration")
+    physical = _physical_entry_summary(result)
+    rate_status = _rate_evaluation_status(result)
+    detector_rate_status = _detector_status_for_summary(result, physical)
 
     def json_float(value: float | None) -> float | None:
         if value is None or not np.isfinite(value):
@@ -627,35 +1069,46 @@ def save_migration_diagnostics(
         "duty_cycle_myr": json_float(config.duty_cycle_myr),
         "gap_opening_condition": config.gap_opening_condition,
         "consider_type_ii_migration": config.consider_type_ii_migration,
-        "rate_evaluation_status": _rate_evaluation_status(result),
-        "detector_rate_evaluation_status": _detector_rate_evaluation_status(result),
+        "rate_evaluation_status": rate_status,
+        "detector_rate_evaluation_status": detector_rate_status,
+        "physical_entry_imri_count": physical.count,
+        "gw_propagation_eligible_count": result.imri_count,
         "band_entry_evaluated_count": result.band_entry_evaluated_count,
         "entry_in_migration_domain_count": result.entry_in_migration_domain_count,
         "entry_handoff_count": result.entry_handoff_count,
         "band_entry_inside_isco_count": result.band_entry_inside_isco_count,
         "profile_error_count": result.profile_error_count,
-        "detector_evaluated_imri_count": result.detector_evaluated_imri_count,
-        "detector_unavailable_imri_count": result.detector_unavailable_imri_count,
+        "detector_evaluated_imri_count": physical.detector_evaluated_count,
+        "detector_unavailable_imri_count": physical.detector_unavailable_count,
         "detector_below_threshold_imri_count": (
-            result.detector_below_threshold_imri_count
+            physical.below_threshold_count
         ),
-        "detector_no_overlap_imri_count": result.detector_no_overlap_imri_count,
+        "detector_no_overlap_imri_count": physical.no_overlap_count,
         "detector_required_input_unavailable_imri_count": (
-            result.detector_required_input_unavailable_imri_count
+            physical.required_input_unavailable_count
         ),
         "detector_model_unavailable_imri_count": (
-            result.detector_model_unavailable_imri_count
+            physical.model_unavailable_count
         ),
         "detector_numerical_failure_imri_count": (
-            result.detector_numerical_failure_imri_count
+            physical.numerical_failure_count
         ),
         "migration_evaluated_count": result.migration_evaluated_count,
         "finite_migration_count": result.finite_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,
         "migration_error_count": result.migration_error_count,
         "trap_bound_mass_msun": json_float(result.trap_bound_mass_msun),
-        "imri_rate_per_myr": json_float(result.imri_rate_per_myr),
-        "detectable_imri_rate_per_myr": json_float(result.detectable_imri_rate_per_myr),
+        "imri_rate_per_myr": json_float(
+            physical.count / config.duty_cycle_myr
+            if rate_status == "complete"
+            else np.nan
+        ),
+        "detectable_imri_rate_per_myr": json_float(
+            physical.detectable_count / config.duty_cycle_myr
+            if detector_rate_status == "complete"
+            else np.nan
+        ),
+        "gw_propagation_eligible_rate_per_myr": json_float(result.imri_rate_per_myr),
         "band_entry_objects": band_entry_objects,
         "trap_bound_objects": trap_bound_objects,
         "migration_errors": [
