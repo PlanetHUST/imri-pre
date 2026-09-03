@@ -41,11 +41,11 @@ in `docs/reference/`. Start at `docs/README.md`.
 
 - Single grid run: `scripts/main.py [repeats] [output_dir] [workers]` plus
   flags (`--disk-model`, `--smbh-masses`, `--gap-open-condition`, ...). See
-  `--help`.
+  `--help`. Default output is `output/dyn_results/`.
 - Paired redshift × disk-model scan: `scripts/redshift_scan.py`. Defaults:
   redshifts `10 13 15`, both disk models, `base_seed 12345`, output
-  `imri_redshift_scan_results/`. It refuses to overwrite a non-empty output dir
-  unless you type `yes`, and validates the target is not a repo/system dir.
+  `output/redshift_scan_results/`. It refuses to overwrite a non-empty output
+  dir unless you type `yes`, and validates the target is not a repo/system dir.
 - Deterministic figure harness: `scripts/imri_rate_visualization_test.py
   --output-dir figs/`.
 - Diagnostics: `scripts/migration_test.py`, `scripts/trap_plot.py`,
@@ -82,5 +82,5 @@ in `docs/reference/`. Start at `docs/README.md`.
   Compare CSVs with care.
 - The working tree is usually mid-task: treat all uncommitted/untracked files
   as user-owned baseline and do not reset or rewrite unrelated changes.
-- Git: `figs/`, `docs/`, `imri_dyn_results/`, and all `*.md` (including this
-  file) are gitignored. `imri_redshift_scan_results/` is tracked.
+- Git: `docs/`, `output/`, `figs/`, and all `*.md` (including this
+  file) are gitignored.

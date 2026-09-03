@@ -30,7 +30,7 @@ from .config import (
 from .workflow import run_simulation
 
 DEFAULT_NUM_REPEATS = 1
-DEFAULT_OUTPUT_DIR = Path("./imri_dyn_results")
+DEFAULT_OUTPUT_DIR = Path("output/dyn_results")
 DEFAULT_DAMPING_CPU_COUNT = None
 DEFAULT_DUTY_CYCLE_MYR = 10.0
 DEFAULT_SMBH_MASSES_MSUN = (1e3, 1e4, 1e5, 1e6)

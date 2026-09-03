@@ -27,7 +27,7 @@ from src.workflows.rate_plots import (
     shared_rate_axis_limits,
 )
 
-DEFAULT_RESULTS_DIR = Path("imri_dyn_results")
+DEFAULT_RESULTS_DIR = Path("output/dyn_results")
 
 
 def _print_event_summary(events_csv: Path) -> None:

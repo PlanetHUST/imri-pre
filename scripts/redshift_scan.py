@@ -18,7 +18,7 @@ import pandas as pd
 DEFAULT_CONFIG_JSON: Path | None = None
 DEFAULT_REDSHIFTS = (10, 13, 15)
 DEFAULT_BASE_SEED = 12345
-DEFAULT_OUTPUT_DIR = Path("imri_redshift_scan_results")
+DEFAULT_OUTPUT_DIR = Path("output/redshift_scan_results")
 DEFAULT_NSC_MASS_MSUN: float | None = None
 DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "smbh_masses_msun": (1.0e3, 5e3, 1.0e4, 5e4, 1e5),
@@ -75,6 +75,7 @@ from workflows.rate_plots import (
     plot_status_fractions_vs_smbh_mass,
     save_plot_data,
     shared_rate_axis_limits,
+    write_status_fraction_captions,
 )
 from workflows.workflow import run_simulation
 
@@ -445,6 +446,12 @@ def run_scan(
         output_dir / "figures" / "imri_status_fractions_vs_smbh_mass",
         selected_nsc_mass_msun,
     )
+    status_fraction_caption_path = write_status_fraction_captions(
+        status_fractions,
+        mass_status_fractions,
+        output_dir / "figures" / "figure_captions.md",
+        selected_nsc_mass_msun=selected_nsc_mass_msun,
+    )
 
     scan_figures: dict[str, Any] = {}
     for disk_model in model_values:
@@ -489,6 +496,7 @@ def run_scan(
         "status_fraction_figures": status_fraction_figures,
         "status_fraction_smbh_mass_summary": mass_status_fraction_path,
         "status_fraction_smbh_mass_figures": mass_status_fraction_figures,
+        "status_fraction_figure_captions": status_fraction_caption_path,
         "status_fraction_semantics": {
             "variables": list(STATUS_VARIABLE_ORDER),
             "redshift_aggregation": (
@@ -535,6 +543,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "saved SMBH-mass status fractions: "
         f"{outputs['status_fraction_smbh_mass_summary']}"
     )
+    print(f"saved figure captions: {outputs['status_fraction_figure_captions']}")
     print(f"saved scan metadata: {outputs['disk_model_scan_metadata']}")
 
 

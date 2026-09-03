@@ -951,6 +951,25 @@ def _disk_model_label(disk_model: str) -> str:
     return labels.get(disk_model, disk_model.replace("_", " "))
 
 
+def _present_disk_models(frame: pd.DataFrame) -> list[str]:
+    """Return present disk models in canonical configuration order."""
+    available = set(frame["disk_model"].dropna().astype(str))
+    models = [model for model in DISK_MODELS if model in available]
+    models.extend(sorted(available.difference(models)))
+    if not models:
+        raise ValueError("status fraction data has no disk models")
+    return models
+
+
+def _english_join(values: Sequence[str]) -> str:
+    """Join a nonempty sequence of strings with Oxford-style commas."""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} and {values[1]}"
+    return ", ".join(values[:-1]) + ", and " + values[-1]
+
+
 def select_time_series_data(
     time_data: pd.DataFrame,
     selected_nsc_mass_msun: float | None = None,
@@ -1051,11 +1070,7 @@ def _plot_status_fractions(
     validate_status_fraction_data(status_data, scan_column)
     nsc_mass = _resolve_nsc_mass(status_data, selected_nsc_mass_msun)
     selected = status_data[np.isclose(status_data["m_nsc_msun"], nsc_mass)]
-    available_models = set(selected["disk_model"].astype(str))
-    disk_models = [model for model in DISK_MODELS if model in available_models]
-    disk_models.extend(sorted(available_models.difference(disk_models)))
-    if not disk_models:
-        raise ValueError("status fraction figure has no disk models")
+    disk_models = _present_disk_models(selected)
 
     fig, axes = plt.subplots(
         len(STATUS_VARIABLE_ORDER),
@@ -1600,6 +1615,130 @@ def write_figure_captions(
             "",
         ]
     )
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(captions))
+    return path
+
+
+def write_status_fraction_captions(
+    redshift_status: pd.DataFrame,
+    smbh_mass_status: pd.DataFrame,
+    output_path: str | Path,
+    *,
+    selected_nsc_mass_msun: float | None = None,
+) -> Path:
+    """Write scholar-facing captions for the layered status-fraction figures."""
+    validate_status_fraction_data(redshift_status, "redshift")
+    validate_status_fraction_data(smbh_mass_status, "m_smbh_msun")
+    nsc_mass = _resolve_nsc_mass(redshift_status, selected_nsc_mass_msun)
+    nsc_label = _caption_mass_label(nsc_mass).strip("$")
+    redshift_selected = redshift_status[
+        np.isclose(redshift_status["m_nsc_msun"], nsc_mass)
+    ]
+    mass_selected = smbh_mass_status[
+        np.isclose(smbh_mass_status["m_nsc_msun"], nsc_mass)
+    ]
+    models = _present_disk_models(redshift_selected)
+    if _present_disk_models(mass_selected) != models:
+        raise ValueError("status fraction captions found mismatched disk models")
+    scenario_text = ", ".join(_disk_model_label(model) for model in models)
+
+    redshift_values = sorted(
+        {float(value) for value in redshift_selected["redshift"].unique()}
+    )
+    redshift_text = _english_join(
+        [f"$z={value:g}$" for value in redshift_values]
+    )
+    masses = sorted(
+        {float(value) for value in mass_selected["m_smbh_msun"].unique()}
+    )
+    mass_grid_text = (
+        f"a central SMBH mass of "
+        f"${_caption_mass_label(masses[0]).strip('$')}$"
+        if len(masses) == 1
+        else (
+            f"central SMBH masses from "
+            f"${_caption_mass_label(masses[0]).strip('$')}$ to "
+            f"${_caption_mass_label(masses[-1]).strip('$')}$"
+        )
+    )
+    has_unavailable = redshift_selected["result_state"].eq(
+        "unavailable"
+    ).any() or mass_selected["result_state"].eq("unavailable").any()
+
+    denominator_text = (
+        "Denominators: band-entry geometry = attempted band-entry "
+        "classifications; transport = persisted transport outcomes, including "
+        "invalid states but excluding inside-ISCO geometry and blank/null "
+        "reasons; event and detectability outcomes = all persisted event rows."
+    )
+    caveat_text = (
+        "These fractions are diagnostic and may include outcomes from repeats "
+        "excluded from the rate estimation; they are not event rates."
+    )
+    unavailable_text = (
+        "A black cross marks a bin whose evaluations could not be classified "
+        "(zero denominator); it is not drawn as a zero bar."
+    )
+
+    captions = [
+        "# Figure captions",
+        "",
+        (
+            "Diagnostic outcome-taxonomy figures for a paired migration-scenario "
+            f"and redshift IMRI scan of an NSC of mass ${nsc_label}$ around "
+            f"{mass_grid_text}. Panel columns compare the migration scenarios "
+            f"{scenario_text}; panel rows list the four taxonomy layers. Figures "
+            "are saved at 300-dpi PNG and as vector PDF."
+        ),
+        "",
+        "## IMRI classification fractions across redshift",
+        "",
+        "Files: `imri_status_fractions_vs_redshift.png` and "
+        "`imri_status_fractions_vs_redshift.pdf`.",
+        "",
+        (
+            "100%-stacked bar panels showing, for each requested redshift and "
+            "migration scenario, the fraction of evaluations that fall into "
+            "every category of the four-layer outcome taxonomy (band-entry "
+            "geometry, gas/GW transport outcome, IMRI event outcome, and "
+            "detectability outcome). Bars are shown for "
+            f"{redshift_text}; each redshift bin aggregates the configured "
+            f"SMBH-mass grid at the selected NSC mass of ${nsc_label}$. "
+            "Category colors and order are fixed per layer and appear in each "
+            "panel legend."
+        ),
+        "",
+        denominator_text,
+        "",
+    ]
+    if has_unavailable:
+        captions.extend([unavailable_text, ""])
+    captions.extend(
+        [
+            caveat_text,
+            "",
+            "## IMRI classification fractions across SMBH mass",
+            "",
+            "Files: `imri_status_fractions_vs_smbh_mass.png` and "
+            "`imri_status_fractions_vs_smbh_mass.pdf`.",
+            "",
+            (
+                "As for the redshift figure, but with the aggregation axes "
+                "swapped: each SMBH-mass bin aggregates the requested redshift "
+                f"grid at the selected NSC mass of ${nsc_label}$, and panel "
+                f"columns again compare the migration scenarios {scenario_text}."
+            ),
+            "",
+            denominator_text,
+            "",
+        ]
+    )
+    if has_unavailable:
+        captions.extend([unavailable_text, ""])
+    captions.append(caveat_text)
+
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(captions))
