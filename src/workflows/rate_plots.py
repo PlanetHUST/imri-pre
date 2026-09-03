@@ -25,6 +25,7 @@ REPEAT_KEY_COLUMNS = [*GROUP_COLUMNS, "repeat"]
 EVENT_REQUIRED_COLUMNS = [
     *REPEAT_KEY_COLUMNS,
     "gas_final_time_myr",
+    "detection_time_myr",
     "is_imri_candidate",
 ]
 REPEAT_REQUIRED_COLUMNS = [
@@ -253,6 +254,12 @@ def validate_repeat_results(repeats: pd.DataFrame) -> None:
         if rate[~complete].notna().any():
             raise ValueError(f"unavailable repeat {rate_column} must remain NaN")
 
+    n_imri = pd.to_numeric(repeats["n_imri"], errors="coerce")
+    n_det = pd.to_numeric(repeats["n_det"], errors="coerce")
+    finite_counts = np.isfinite(n_imri) & np.isfinite(n_det)
+    if (n_det[finite_counts] > n_imri[finite_counts]).any():
+        raise ValueError("detectable count exceeds physical LISA-entry count")
+
 
 def validate_event_keys(events: pd.DataFrame, repeats: pd.DataFrame) -> None:
     """Require every persisted event to resolve to one repeat result."""
@@ -335,11 +342,13 @@ def _event_group(
     return events.loc[mask]
 
 
-def build_agn_time_plot_data(
+def _build_time_plot_data(
     events: pd.DataFrame,
     repeats: pd.DataFrame,
+    *,
+    time_column: str,
+    limit_to_duty_cycle: bool,
 ) -> pd.DataFrame:
-    """Build compact cumulative candidate-rate time series."""
     validate_repeat_results(repeats)
     validate_event_keys(events, repeats)
     records: list[dict[str, float | int | str]] = []
@@ -361,20 +370,21 @@ def build_agn_time_plot_data(
             _true_mask(event_group["is_imri_candidate"])
             & event_group["repeat"].isin(valid_ids)
         ].copy()
-        candidate_events["_candidate_time"] = pd.to_numeric(
-            candidate_events["gas_final_time_myr"], errors="coerce"
+        candidate_events["_event_time"] = pd.to_numeric(
+            candidate_events[time_column], errors="coerce"
         )
-        finite_candidates = candidate_events[
-            np.isfinite(candidate_events["_candidate_time"])
-            & candidate_events["_candidate_time"].between(
-                0.0, duty_cycle_myr, inclusive="both"
-            )
-        ]
+        finite_mask = np.isfinite(candidate_events["_event_time"]) & candidate_events[
+            "_event_time"
+        ].ge(0.0)
+        if limit_to_duty_cycle:
+            finite_mask &= candidate_events["_event_time"].le(duty_cycle_myr)
+        finite_candidates = candidate_events[finite_mask]
+        fixed_grid = [0.0, duty_cycle_myr] if limit_to_duty_cycle else [0.0]
         time_grid = np.unique(
             np.concatenate(
                 (
-                    np.asarray([0.0, duty_cycle_myr]),
-                    finite_candidates["_candidate_time"].to_numpy(dtype=float),
+                    np.asarray(fixed_grid),
+                    finite_candidates["_event_time"].to_numpy(dtype=float),
                 )
             )
         )
@@ -385,7 +395,7 @@ def build_agn_time_plot_data(
                     float(
                         (
                             finite_candidates["repeat"].eq(repeat_index)
-                            & finite_candidates["_candidate_time"].le(time_myr)
+                            & finite_candidates["_event_time"].le(time_myr)
                         ).sum()
                     )
                     / duty_cycle_myr
@@ -408,6 +418,40 @@ def build_agn_time_plot_data(
                 }
             )
     return pd.DataFrame.from_records(records, columns=TIME_SERIES_COLUMNS)
+
+
+def build_transport_time_plot_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build AGN-duty-bounded gas-transport completion time series."""
+    return _build_time_plot_data(
+        events,
+        repeats,
+        time_column="gas_final_time_myr",
+        limit_to_duty_cycle=True,
+    )
+
+
+def build_physical_entry_time_plot_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build physical LISA-entry time series, including post-duty entries."""
+    return _build_time_plot_data(
+        events,
+        repeats,
+        time_column="detection_time_myr",
+        limit_to_duty_cycle=False,
+    )
+
+
+def build_agn_time_plot_data(
+    events: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> pd.DataFrame:
+    """Backward-compatible alias for the gas-transport completion series."""
+    return build_transport_time_plot_data(events, repeats)
 
 
 def build_rate_summary_data(repeats: pd.DataFrame) -> pd.DataFrame:
@@ -811,19 +855,9 @@ def validate_agn_time_endpoints(
     repeats: pd.DataFrame,
     averaged: pd.DataFrame,
 ) -> None:
-    """Check complete cumulative endpoints against persisted averaged rates."""
+    """Validate the legacy gas-time product without equating it to IMRI entry."""
     _require_columns(time_data, TIME_SERIES_COLUMNS, "time-series results")
-    _require_columns(
-        averaged,
-        [
-            "disk_model",
-            "m_smbh_msun",
-            "m_nsc_msun",
-            "rate_status",
-            "rate_imri_per_myr",
-        ],
-        "averaged results",
-    )
+    del averaged
     for group_key, repeat_group in repeats.groupby(GROUP_COLUMNS, sort=True):
         if not repeat_group["rate_status"].eq("complete").all():
             continue
@@ -837,21 +871,37 @@ def validate_agn_time_endpoints(
             & np.isclose(time_data["m_nsc_msun"], m_nsc_msun)
             & np.isclose(time_data["time_myr"], duty_cycle_myr)
         ]
-        reference = averaged[
-            averaged["disk_model"].astype(str).eq(disk_model)
-            & np.isclose(averaged["m_smbh_msun"], m_smbh_msun)
-            & np.isclose(averaged["m_nsc_msun"], m_nsc_msun)
-        ]
-        if len(endpoint) != 1 or len(reference) != 1:
-            raise ValueError("could not resolve one endpoint and averaged-rate row")
-        actual = float(endpoint["cumulative_rate_mean_per_myr"].iloc[0])
-        expected = float(reference["rate_imri_per_myr"].iloc[0])
+        if len(endpoint) != 1:
+            raise ValueError("gas-transport series must end at the AGN duty cycle")
+
+
+def validate_physical_entry_time_endpoints(
+    time_data: pd.DataFrame,
+    repeats: pd.DataFrame,
+) -> None:
+    """Check each physical-entry endpoint against the persisted n_imri rate."""
+    _require_columns(time_data, TIME_SERIES_COLUMNS, "physical-entry time series")
+    validate_repeat_results(repeats)
+    for group_key, repeat_group in repeats.groupby(GROUP_COLUMNS, sort=True):
+        if not repeat_group["rate_status"].eq("complete").all():
+            continue
+        disk_model = str(group_key[0])
+        redshift, m_smbh_msun, m_nsc_msun = (float(value) for value in group_key[1:])
+        curve = time_data[
+            time_data["disk_model"].astype(str).eq(disk_model)
+            & np.isclose(time_data["redshift"], redshift)
+            & np.isclose(time_data["m_smbh_msun"], m_smbh_msun)
+            & np.isclose(time_data["m_nsc_msun"], m_nsc_msun)
+        ].sort_values("time_myr")
+        if curve.empty:
+            raise ValueError("physical-entry time series is missing a repeat group")
+        actual = float(curve["cumulative_rate_mean_per_myr"].iloc[-1])
+        expected = float(pd.to_numeric(repeat_group["rate_imri_per_myr"]).mean())
         if not np.isclose(actual, expected, rtol=5.0e-6, atol=5.0e-12):
             raise ValueError(
-                "candidate time-curve endpoint disagrees with averaged rate: "
+                "physical-entry endpoint disagrees with repeat rates: "
                 f"disk_model={disk_model}, SMBH={m_smbh_msun}, "
-                f"NSC={m_nsc_msun}, "
-                f"curve={actual}, averaged={expected}"
+                f"NSC={m_nsc_msun}, curve={actual}, repeats={expected}"
             )
 
 
@@ -961,6 +1011,35 @@ def _save_figure(fig: Any, output_stem: Path) -> list[Path]:
         fig.savefig(path, dpi=300, bbox_inches="tight")
     plt.close(fig)
     return paths
+
+
+def new_figure(
+    title: str,
+    *,
+    nrows: int = 1,
+    ncols: int = 1,
+    figsize: tuple[float, float] | None = None,
+) -> tuple[Any, Any]:
+    """Create a styled public project figure for diagnostic scripts."""
+    if nrows == 1 and ncols == 1 and figsize is None:
+        return _new_figure(title)
+    fig, axes = plt.subplots(
+        nrows=nrows,
+        ncols=ncols,
+        figsize=figsize or FIGURE_SIZE,
+        squeeze=False,
+    )
+    fig.suptitle(title, fontsize=13)
+    for axis in axes.flat:
+        axis.yaxis.grid(True, color="0.88", linewidth=0.8)
+        axis.xaxis.grid(False)
+        axis.tick_params(labelsize=11)
+    return fig, axes
+
+
+def save_figure(fig: Any, output_stem: str | Path) -> list[Path]:
+    """Save public diagnostic figures as 300-dpi PNG and vector PDF."""
+    return _save_figure(fig, Path(output_stem))
 
 
 def _plot_status_fractions(
@@ -1134,19 +1213,22 @@ def plot_status_fractions_vs_smbh_mass(
     )
 
 
-def plot_agn_time(
+def _plot_time_series(
     time_data: pd.DataFrame,
     output_stem: str | Path,
+    *,
+    title: str,
+    x_label: str,
+    y_label: str,
     rate_ylim: tuple[float, float] | None = None,
 ) -> list[Path]:
-    """Plot one scholar-facing cumulative intrinsic-rate panel."""
     selected = select_time_series_data(time_data)
     disk_model = _single_disk_model(selected)
     redshifts = sorted(selected["redshift"].unique())
     if len(redshifts) != 1:
-        raise ValueError("AGN-time figure requires one scalar-redshift run")
+        raise ValueError("time-series figure requires one scalar-redshift run")
 
-    fig, axis = _new_figure(f"IMRI formation: {_disk_model_label(disk_model)}")
+    fig, axis = _new_figure(f"{title}: {_disk_model_label(disk_model)}")
     colors = _color_map(selected["m_smbh_msun"].unique())
     unavailable: list[str] = []
     for mass, color in colors.items():
@@ -1183,11 +1265,11 @@ def plot_agn_time(
                 alpha=0.14,
             )
 
-    duty_cycle = float(selected["time_myr"].max())
-    axis.set_xlim(0.0, duty_cycle)
+    maximum_time_myr = float(selected["time_myr"].max())
+    axis.set_xlim(0.0, maximum_time_myr if maximum_time_myr > 0.0 else 1.0)
     # axis.set_ylim(bottom=0.0)
-    axis.set_xlabel("AGN time [Myr]", fontsize=12)
-    axis.set_ylabel("Cumulative IMRI rate [Myr$^{-1}$]", fontsize=12)
+    axis.set_xlabel(x_label, fontsize=12)
+    axis.set_ylabel(y_label, fontsize=12)
     if rate_ylim is not None:
         axis.set_ylim(*rate_ylim)
     # axis.set_yscale("log")
@@ -1206,6 +1288,47 @@ def plot_agn_time(
         )
     fig.tight_layout()
     return _save_figure(fig, Path(output_stem))
+
+
+def plot_transport_time(
+    time_data: pd.DataFrame,
+    output_stem: str | Path,
+    rate_ylim: tuple[float, float] | None = None,
+) -> list[Path]:
+    """Plot cumulative gas-transport completion during the AGN episode."""
+    return _plot_time_series(
+        time_data,
+        output_stem,
+        title="AGN-assisted transport through one active episode",
+        x_label="AGN elapsed time [Myr]",
+        y_label="Cumulative transport-completion rate [Myr$^{-1}$]",
+        rate_ylim=rate_ylim,
+    )
+
+
+def plot_physical_entry_time(
+    time_data: pd.DataFrame,
+    output_stem: str | Path,
+    rate_ylim: tuple[float, float] | None = None,
+) -> list[Path]:
+    """Plot cumulative physical LISA-entry time, including post-duty entry."""
+    return _plot_time_series(
+        time_data,
+        output_stem,
+        title="Physical LISA-entry IMRI production",
+        x_label="Elapsed time to physical entry [Myr]",
+        y_label="Cumulative IMRI-entry rate [Myr$^{-1}$]",
+        rate_ylim=rate_ylim,
+    )
+
+
+def plot_agn_time(
+    time_data: pd.DataFrame,
+    output_stem: str | Path,
+    rate_ylim: tuple[float, float] | None = None,
+) -> list[Path]:
+    """Backward-compatible alias for the gas-transport completion figure."""
+    return plot_transport_time(time_data, output_stem, rate_ylim)
 
 
 def _plot_rate_dependence(
@@ -1300,7 +1423,7 @@ def _plot_rate_dependence(
         )
 
     axis.set_xlabel(x_label, fontsize=12)
-    axis.set_ylabel("IMRI rate [Myr$^{-1}$]", fontsize=12)
+    axis.set_ylabel("Physical LISA-entry IMRI rate [Myr$^{-1}$]", fontsize=12)
     if rate_ylim is not None:
         axis.set_ylim(*rate_ylim)
     # axis.set_ylim(bottom=0.0)
@@ -1344,7 +1467,7 @@ def plot_rate_vs_redshift(
         x_column="redshift",
         curve_column="m_smbh_msun",
         curve_label=_mass_label,
-        title="IMRI rate versus redshift",
+        title="Physical LISA-entry IMRI rate versus redshift",
         x_label="Redshift $z$",
         log_x=False,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
@@ -1365,7 +1488,7 @@ def plot_rate_vs_smbh_mass(
         x_column="m_smbh_msun",
         curve_column="redshift",
         curve_label=lambda redshift: f"$z={redshift:g}$",
-        title="IMRI rate versus SMBH mass",
+        title="Physical LISA-entry IMRI rate versus SMBH mass",
         x_label=r"SMBH mass [$M_\odot$]",
         log_x=True,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
@@ -1411,16 +1534,29 @@ def write_figure_captions(
     if time_redshift is not None:
         captions.extend(
             [
-                "## IMRI production through one AGN episode",
+                "## AGN-assisted transport through one active episode",
                 "",
                 (
-                    "Cumulative intrinsic IMRI candidate rate under the "
+                    "Cumulative gas-transport completion rate for systems eligible "
+                    "for downstream evolution under the "
                     f"{scenario_text} migration scenario during a "
                     f"{duties[0]:g} Myr AGN episode at redshift "
                     f"$z={time_redshift:g}$ for an NSC mass of "
                     f"${_caption_mass_label(nsc_mass).strip('$')}$. Curves distinguish "
                     f"SMBH mass and summarize {repeat_text} Monte Carlo repeats. "
+                    "Gas completion is not physical LISA entry. "
                     f"{band_text}"
+                ),
+                "",
+                "## Physical LISA-entry IMRI production",
+                "",
+                (
+                    "Cumulative physical LISA-entry rate versus entry time under the "
+                    f"{scenario_text} migration scenario at redshift "
+                    f"$z={time_redshift:g}$. The time coordinate is the persisted "
+                    "`detection_time_myr`, and the curve may extend beyond the AGN "
+                    f"duty cycle. Rates retain the {duties[0]:g} Myr AGN-episode "
+                    f"denominator. {band_text}"
                 ),
                 "",
             ]
@@ -1428,14 +1564,15 @@ def write_figure_captions(
     if include_redshift:
         captions.extend(
             [
-                "## IMRI rate versus redshift",
+                "## Physical LISA-entry IMRI rate versus redshift",
                 "",
                 (
-                    "Final intrinsic IMRI candidate rate under the "
+                    "Final intrinsic physical LISA-entry IMRI rate under the "
                     f"{scenario_text} migration scenario as a function of redshift "
                     f"for an NSC mass of ${_caption_mass_label(nsc_mass).strip('$')}$. "
                     f"Colors distinguish SMBH mass; each bin uses {repeat_text} "
-                    f"Monte Carlo repeats and a {duties[0]:g} Myr rate denominator. "
+                    f"Monte Carlo repeats and a {duties[0]:g} Myr AGN-duty rate "
+                    "denominator, including entries that occur later. "
                     f"{band_text} A cross marks an unavailable result, not zero."
                 ),
                 "",
@@ -1443,14 +1580,15 @@ def write_figure_captions(
         )
     captions.extend(
         [
-            "## IMRI rate versus SMBH mass",
+            "## Physical LISA-entry IMRI rate versus SMBH mass",
             "",
             (
-                "Final intrinsic IMRI candidate rate under the "
+                "Final intrinsic physical LISA-entry IMRI rate under the "
                 f"{scenario_text} migration scenario as a function of SMBH mass "
                 f"for an NSC mass of ${_caption_mass_label(nsc_mass).strip('$')}$. "
                 f"Colors distinguish redshift; each bin uses {repeat_text} Monte "
-                f"Carlo repeats and a {duties[0]:g} Myr rate denominator. "
+                f"Carlo repeats and a {duties[0]:g} Myr AGN-duty rate denominator, "
+                "including entries that occur later. "
                 f"{band_text} A cross marks an unavailable result, not zero."
             ),
             "",
@@ -1480,11 +1618,26 @@ def generate_run_figures(
     )
     data_dir = figure_dir / "data"
 
-    time_data = build_agn_time_plot_data(run.events, run.repeats)
-    validate_agn_time_endpoints(time_data, run.repeats, run.averaged)
-    selected_time = select_time_series_data(time_data, selected_nsc_mass_msun)
+    transport_time_data = build_transport_time_plot_data(run.events, run.repeats)
+    validate_agn_time_endpoints(transport_time_data, run.repeats, run.averaged)
+    physical_entry_time_data = build_physical_entry_time_plot_data(
+        run.events, run.repeats
+    )
+    validate_physical_entry_time_endpoints(physical_entry_time_data, run.repeats)
+    selected_transport_time = select_time_series_data(
+        transport_time_data, selected_nsc_mass_msun
+    )
+    selected_physical_entry_time = select_time_series_data(
+        physical_entry_time_data, selected_nsc_mass_msun
+    )
     summary_data = build_rate_summary_data(run.repeats)
-    time_path = save_plot_data(selected_time, data_dir / "imri_rate_time_series.csv")
+    transport_time_path = save_plot_data(
+        selected_transport_time, data_dir / "imri_transport_time_series.csv"
+    )
+    physical_entry_time_path = save_plot_data(
+        selected_physical_entry_time,
+        data_dir / "imri_physical_entry_time_series.csv",
+    )
     summary_path = save_plot_data(summary_data, data_dir / "imri_rate_summary.csv")
     redshift = float(run.repeats["redshift"].iloc[0])
     captions = write_figure_captions(
@@ -1494,18 +1647,30 @@ def generate_run_figures(
         include_redshift=False,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
     )
+    transport_figures = plot_transport_time(
+        selected_transport_time,
+        figure_dir / "imri_transport_completion_vs_agn_time",
+    )
+    physical_entry_figures = plot_physical_entry_time(
+        selected_physical_entry_time,
+        figure_dir / "imri_physical_entry_vs_time",
+    )
     return {
-        "time_series_data": time_path,
+        "transport_time_series_data": transport_time_path,
+        "physical_entry_time_series_data": physical_entry_time_path,
         "rate_summary_data": summary_path,
-        "agn_time_figures": plot_agn_time(
-            selected_time, figure_dir / "imri_rate_vs_agn_time"
-        ),
+        "transport_time_figures": transport_figures,
+        "physical_entry_time_figures": physical_entry_figures,
         "smbh_mass_figures": plot_rate_vs_smbh_mass(
             summary_data,
             figure_dir / "imri_rate_vs_smbh_mass",
             selected_nsc_mass_msun,
         ),
         "figure_captions": captions,
+        # Backward-compatible keys now point to the explicitly named
+        # gas-transport products.
+        "time_series_data": transport_time_path,
+        "agn_time_figures": transport_figures,
     }
 
 
@@ -1516,7 +1681,7 @@ def generate_scan_figures(
     selected_nsc_mass_msun: float | None = None,
     rate_ylim: tuple[float, float] | None = None,
 ) -> dict[str, list[Path] | Path]:
-    """Generate one coherent three-figure set for one model's redshift scan."""
+    """Generate one coherent four-figure set for one model's redshift scan."""
     figure_dir = Path(output_dir)
     disk_model = _single_disk_model(repeats)
     reference_disk_model = _single_disk_model(reference_run.repeats)
@@ -1524,12 +1689,31 @@ def generate_scan_figures(
         raise ValueError("scan repeats and reference run use different disk models")
     data_dir = figure_dir / "data"
     summary_data = build_rate_summary_data(repeats)
-    time_data = build_agn_time_plot_data(reference_run.events, reference_run.repeats)
-    validate_agn_time_endpoints(
-        time_data, reference_run.repeats, reference_run.averaged
+    transport_time_data = build_transport_time_plot_data(
+        reference_run.events, reference_run.repeats
     )
-    selected_time = select_time_series_data(time_data, selected_nsc_mass_msun)
-    time_path = save_plot_data(selected_time, data_dir / "imri_rate_time_series.csv")
+    validate_agn_time_endpoints(
+        transport_time_data, reference_run.repeats, reference_run.averaged
+    )
+    physical_entry_time_data = build_physical_entry_time_plot_data(
+        reference_run.events, reference_run.repeats
+    )
+    validate_physical_entry_time_endpoints(
+        physical_entry_time_data, reference_run.repeats
+    )
+    selected_transport_time = select_time_series_data(
+        transport_time_data, selected_nsc_mass_msun
+    )
+    selected_physical_entry_time = select_time_series_data(
+        physical_entry_time_data, selected_nsc_mass_msun
+    )
+    transport_time_path = save_plot_data(
+        selected_transport_time, data_dir / "imri_transport_time_series.csv"
+    )
+    physical_entry_time_path = save_plot_data(
+        selected_physical_entry_time,
+        data_dir / "imri_physical_entry_time_series.csv",
+    )
     summary_path = save_plot_data(summary_data, data_dir / "imri_rate_summary.csv")
     time_redshift = float(reference_run.repeats["redshift"].iloc[0])
     captions = write_figure_captions(
@@ -1539,12 +1723,22 @@ def generate_scan_figures(
         include_redshift=True,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
     )
+    transport_figures = plot_transport_time(
+        selected_transport_time,
+        figure_dir / "imri_transport_completion_vs_agn_time",
+        rate_ylim,
+    )
+    physical_entry_figures = plot_physical_entry_time(
+        selected_physical_entry_time,
+        figure_dir / "imri_physical_entry_vs_time",
+        rate_ylim,
+    )
     return {
-        "time_series_data": time_path,
+        "transport_time_series_data": transport_time_path,
+        "physical_entry_time_series_data": physical_entry_time_path,
         "rate_summary_data": summary_path,
-        "agn_time_figures": plot_agn_time(
-            selected_time, figure_dir / "imri_rate_vs_agn_time", rate_ylim
-        ),
+        "transport_time_figures": transport_figures,
+        "physical_entry_time_figures": physical_entry_figures,
         "redshift_figures": plot_rate_vs_redshift(
             summary_data,
             figure_dir / "imri_rate_vs_redshift",
@@ -1558,4 +1752,8 @@ def generate_scan_figures(
             rate_ylim,
         ),
         "figure_captions": captions,
+        # Legacy consumers retain the old keys while receiving the clarified
+        # gas-transport product.
+        "time_series_data": transport_time_path,
+        "agn_time_figures": transport_figures,
     }

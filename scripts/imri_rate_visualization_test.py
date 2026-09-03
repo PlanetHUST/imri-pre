@@ -41,6 +41,7 @@ from src.workflows.rate_plots import (
     TRANSPORT_ORDER,
     RunResults,
     build_agn_time_plot_data,
+    build_physical_entry_time_plot_data,
     build_rate_summary_data,
     build_status_fraction_by_smbh_mass_data,
     build_status_fraction_data,
@@ -55,6 +56,7 @@ from src.workflows.rate_plots import (
     validate_agn_time_endpoints,
     validate_event_keys,
     validate_repeat_results,
+    validate_physical_entry_time_endpoints,
     validate_status_fraction_data,
 )
 from src.workflows.config import SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
@@ -180,6 +182,7 @@ def synthetic_tables() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     event_records: list[dict[str, Any]] = []
     for redshift in REDSHIFTS:
         detectable_count = 2 if redshift == REDSHIFTS[0] else 1
+        physical_entry_count = 2 if redshift == REDSHIFTS[0] else 1
         repeat_records.extend(
             [
                 _repeat_record(
@@ -187,7 +190,7 @@ def synthetic_tables() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
                     mass=1.0e3,
                     repeat=0,
                     status="complete",
-                    n_imri=2,
+                    n_imri=physical_entry_count,
                     n_det=detectable_count,
                 ),
                 _repeat_record(
@@ -394,13 +397,23 @@ def run_harness(output_dir: Path) -> None:
     first_averaged = averaged[averaged["disk_model"].eq(TORQUE_WITH_TRAP)]
     time_data = build_agn_time_plot_data(first_events, first_repeats)
     selected_time = select_time_series_data(time_data)
+    physical_entry_time_data = build_physical_entry_time_plot_data(
+        first_events, first_repeats
+    )
+    selected_physical_entry_time = select_time_series_data(
+        physical_entry_time_data
+    )
     summary_data = build_rate_summary_data(repeats)
     status_data = build_status_fraction_data(events, repeats)
     mass_status_data = build_status_fraction_by_smbh_mass_data(events, repeats)
     validate_status_fraction_data(status_data)
     validate_status_fraction_data(mass_status_data, "m_smbh_msun")
     validate_agn_time_endpoints(time_data, first_repeats, first_averaged)
+    validate_physical_entry_time_endpoints(
+        physical_entry_time_data, first_repeats
+    )
     _assert_monotone(time_data)
+    _assert_monotone(physical_entry_time_data)
 
     if list(selected_time.columns) != TIME_SERIES_COLUMNS:
         raise AssertionError("time-series table is not compact or ordered")
@@ -598,6 +611,17 @@ def run_harness(output_dir: Path) -> None:
         raise AssertionError("16th percentile is incorrect")
     if not np.isclose(endpoint["cumulative_rate_p84_per_myr"], 0.168):
         raise AssertionError("84th percentile is incorrect")
+    physical_candidate = selected_physical_entry_time[
+        np.isclose(selected_physical_entry_time["m_smbh_msun"], 1.0e3)
+    ].sort_values("time_myr")
+    if tuple(physical_candidate["time_myr"]) != (0.0, 5.0, 12.0):
+        raise AssertionError("physical-entry series did not use detection_time_myr")
+    if physical_candidate["time_myr"].max() <= T_AGN_MYR:
+        raise AssertionError("post-duty physical entry was clipped to the AGN clock")
+    if not np.isclose(
+        physical_candidate["cumulative_rate_mean_per_myr"].iloc[-1], 0.1
+    ):
+        raise AssertionError("physical-entry endpoint disagrees with n_imri rate")
 
     valid_zero = summary_data[np.isclose(summary_data["m_smbh_msun"], 1.0e4)]
     if not valid_zero["result_state"].eq("valid").all():
@@ -695,15 +719,21 @@ def run_harness(output_dir: Path) -> None:
             )
 
     torque_outputs = outputs_by_model[TORQUE_WITH_TRAP]
-    _assert_round_trip(selected_time, Path(torque_outputs["time_series_data"]))
+    _assert_round_trip(
+        selected_time, Path(torque_outputs["transport_time_series_data"])
+    )
+    _assert_round_trip(
+        selected_physical_entry_time,
+        Path(torque_outputs["physical_entry_time_series_data"]),
+    )
     _assert_round_trip(
         summary_data[summary_data["disk_model"].eq(TORQUE_WITH_TRAP)].reset_index(
             drop=True
         ),
         Path(torque_outputs["rate_summary_data"]),
     )
-    if len(figure_metrics) != 6:
-        raise AssertionError("the paired output is not exactly six figures")
+    if len(figure_metrics) != 8:
+        raise AssertionError("the paired output is not exactly eight figures")
     for axes, curves, legend_entries, bands, legend_text, _ylim in figure_metrics:
         if axes != 1:
             raise AssertionError("a main figure contains more than one axis")
@@ -853,7 +883,12 @@ def run_harness(output_dir: Path) -> None:
 
     figure_paths: list[Path] = []
     for outputs in outputs_by_model.values():
-        for key in ("agn_time_figures", "redshift_figures", "smbh_mass_figures"):
+        for key in (
+            "transport_time_figures",
+            "physical_entry_time_figures",
+            "redshift_figures",
+            "smbh_mass_figures",
+        ):
             figure_paths.extend(Path(path) for path in outputs[key])
     figure_paths.extend(Path(path) for path in status_figures)
     figure_paths.extend(Path(path) for path in mass_status_figures)
@@ -865,7 +900,7 @@ def run_harness(output_dir: Path) -> None:
 
     for disk_model, outputs in outputs_by_model.items():
         captions = Path(outputs["figure_captions"]).read_text()
-        if captions.count("## ") != 3 or "exploratory" not in captions.lower():
+        if captions.count("## ") != 4 or "exploratory" not in captions.lower():
             raise AssertionError("scholar-facing captions are incomplete")
         if disk_model.replace("_", " ").split()[0] not in captions.lower():
             raise AssertionError("migration scenario is absent from captions")

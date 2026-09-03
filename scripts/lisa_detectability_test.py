@@ -6,11 +6,14 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import asdict
+from functools import cache
 from pathlib import Path
-from typing import Callable, Sequence
+from tempfile import TemporaryDirectory
+from typing import Any, Callable, Sequence, cast
 from unittest.mock import patch
 
 import numpy as np
+import pandas as pd
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = PROJECT_ROOT / "src"
@@ -20,6 +23,7 @@ if str(SOURCE_ROOT) not in sys.path:
 from workflows.lisa_snr import (  # noqa: E402
     JULIAN_YEAR_S,
     SNR_STATUS_EVALUATED,
+    SNR_STATUS_MODEL_UNAVAILABLE,
     SNR_STATUS_NUMERICAL_FAILURE,
     SNR_STATUS_NO_OVERLAP,
     SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE,
@@ -42,11 +46,16 @@ from workflows.detect_rate import (  # noqa: E402
     classify_detectability,
 )
 from workflows.models import IMRIDynAveragedResult, IMRIDynSingleResult  # noqa: E402
+from workflows.config import IMRIDynConfig  # noqa: E402
 from workflows.outputs import (  # noqa: E402
     IMRI_EVENT_COLUMNS,
     IMRI_REPEAT_RESULT_COLUMNS,
     IMRI_RESULT_COLUMNS,
+    save_events,
+    save_repeat_results,
+    save_results,
 )
+from workflows.rate_plots import new_figure, save_figure, save_plot_data  # noqa: E402
 
 DEMO_M1_SOURCE_MSUN = 1.0e5
 DEMO_M2_SOURCE_MSUN = 100.0
@@ -73,6 +82,9 @@ COSMOLOGY_BENCHMARKS_MPC = {
     10.0: 105971.08149410246,
     15.0: 167196.70634610672,
 }
+REDSHIFT_GRID = (0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 13.0, 15.0)
+PRIMARY_MASS_GRID_MSUN = (1e4, 1e5, 1e6, 1e7)
+SECONDARY_MASS_GRID_MSUN = (10.0, 100.0, 1000.0)
 
 
 def demo_result(redshift: float = DEMO_REDSHIFT):
@@ -86,6 +98,177 @@ def demo_result(redshift: float = DEMO_REDSHIFT):
         detector_max_frequency_hz=DEMO_F_MAX_HZ,
         snr_threshold=DEMO_SNR_THRESHOLD,
     )
+
+
+@cache
+def build_psd_benchmark_data() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "frequency_hz": PSD_FREQUENCIES_HZ,
+            "instrument_psd_hz_inv": [
+                lisa_instrument_strain_psd_hz(frequency_hz)
+                for frequency_hz in PSD_FREQUENCIES_HZ
+            ],
+            "confusion_psd_hz_inv": [
+                lisa_confusion_strain_psd_hz(frequency_hz, DEMO_MISSION_YEARS)
+                for frequency_hz in PSD_FREQUENCIES_HZ
+            ],
+            "total_psd_hz_inv": [
+                lisa_effective_strain_psd_hz(frequency_hz, DEMO_MISSION_YEARS)
+                for frequency_hz in PSD_FREQUENCIES_HZ
+            ],
+        }
+    )
+
+
+@cache
+def build_sensitivity_snr_density_data() -> tuple[pd.DataFrame, float]:
+    result = demo_result()
+    snr_frequency_hz = np.exp(
+        np.linspace(np.log(result.f_low_hz), np.log(result.f_high_hz), 200001)
+    )
+    display_frequency_hz = np.geomspace(1.0e-4, DEMO_F_MAX_HZ, 1200)
+    frequency_hz = np.unique(
+        np.concatenate(
+            (
+                display_frequency_hz,
+                snr_frequency_hz,
+                np.asarray([result.f_low_hz, result.f_high_hz]),
+            )
+        )
+    )
+    instrument_psd = np.asarray(
+        [lisa_instrument_strain_psd_hz(frequency) for frequency in frequency_hz]
+    )
+    confusion_psd = np.asarray(
+        [
+            lisa_confusion_strain_psd_hz(frequency, result.mission_duration_years)
+            for frequency in frequency_hz
+        ]
+    )
+    total_psd = instrument_psd + confusion_psd
+    in_snr_window = (frequency_hz >= result.f_low_hz) & (
+        frequency_hz <= result.f_high_hz
+    )
+    snr_density = np.full(frequency_hz.shape, np.nan)
+    amplitudes = np.asarray(
+        [
+            fourier_inspiral_amplitude_hz_inverse(
+                frequency,
+                result.chirp_mass_detector_msun,
+                result.luminosity_distance_mpc,
+            )
+            for frequency in frequency_hz[in_snr_window]
+        ]
+    )
+    snr_density[in_snr_window] = (
+        16.0
+        / 5.0
+        * frequency_hz[in_snr_window]
+        * amplitudes**2
+        / total_psd[in_snr_window]
+    )
+    snr_rows = in_snr_window
+    grid_snr = float(
+        np.sqrt(
+            np.trapezoid(
+                snr_density[snr_rows],
+                np.log(frequency_hz[snr_rows]),
+            )
+        )
+    )
+    plot_rows = ~in_snr_window
+    window_indices = np.flatnonzero(in_snr_window)
+    plot_rows[window_indices[::50]] = True
+    plot_rows[window_indices[-1]] = True
+    return (
+        pd.DataFrame(
+            {
+                "frequency_hz": frequency_hz[plot_rows],
+                "instrument_asd_hz_mhalf": np.sqrt(instrument_psd[plot_rows]),
+                "confusion_asd_hz_mhalf": np.sqrt(confusion_psd[plot_rows]),
+                "total_asd_hz_mhalf": np.sqrt(total_psd[plot_rows]),
+                "snr_squared_density_per_ln_frequency": snr_density[plot_rows],
+                "in_detector_band": (
+                    frequency_hz[plot_rows] >= DEMO_F_MIN_HZ
+                )
+                & (frequency_hz[plot_rows] <= DEMO_F_MAX_HZ),
+                "in_snr_window": in_snr_window[plot_rows],
+                "f_low_hz": result.f_low_hz,
+                "f_high_hz": result.f_high_hz,
+                "f_isco_observer_hz": result.f_isco_observer_hz,
+                "integrated_lisa_snr": result.lisa_snr,
+                "snr_threshold": result.snr_threshold,
+                "observation_case": result.observation_case,
+            }
+        ),
+        grid_snr,
+    )
+
+
+@cache
+def build_redshift_grid_data() -> pd.DataFrame:
+    records = []
+    for redshift in REDSHIFT_GRID:
+        result = demo_result(redshift)
+        records.append(
+            {
+                "redshift": redshift,
+                "luminosity_distance_mpc": result.luminosity_distance_mpc,
+                "chirp_mass_detector_msun": result.chirp_mass_detector_msun,
+                "f_isco_observer_hz": result.f_isco_observer_hz,
+                "f_low_hz": result.f_low_hz,
+                "f_high_hz": result.f_high_hz,
+                "lisa_snr": (
+                    result.lisa_snr
+                    if result.status == SNR_STATUS_EVALUATED
+                    else np.nan
+                ),
+                "snr_status": result.status,
+                "is_detectable": result.is_detectable,
+            }
+        )
+    return pd.DataFrame.from_records(records)
+
+
+@cache
+def build_mass_redshift_grid_data() -> pd.DataFrame:
+    records = []
+    for m1_source_msun in PRIMARY_MASS_GRID_MSUN:
+        for m2_source_msun in SECONDARY_MASS_GRID_MSUN:
+            for redshift in REDSHIFT_GRID:
+                result = evaluate_lisa_inspiral_snr(
+                    m1_source_msun=m1_source_msun,
+                    m2_source_msun=m2_source_msun,
+                    redshift=redshift,
+                    current_observed_frequency_hz=DEMO_F_MIN_HZ,
+                    mission_duration_years=DEMO_MISSION_YEARS,
+                    detector_min_frequency_hz=DEMO_F_MIN_HZ,
+                    detector_max_frequency_hz=DEMO_F_MAX_HZ,
+                    snr_threshold=DEMO_SNR_THRESHOLD,
+                )
+                records.append(
+                    {
+                        "m1_source_msun": m1_source_msun,
+                        "m2_source_msun": m2_source_msun,
+                        "redshift": redshift,
+                        "luminosity_distance_mpc": result.luminosity_distance_mpc,
+                        "chirp_mass_detector_msun": (
+                            result.chirp_mass_detector_msun
+                        ),
+                        "f_isco_observer_hz": result.f_isco_observer_hz,
+                        "f_low_hz": result.f_low_hz,
+                        "f_high_hz": result.f_high_hz,
+                        "lisa_snr": (
+                            result.lisa_snr
+                            if result.status == SNR_STATUS_EVALUATED
+                            else np.nan
+                        ),
+                        "snr_status": result.status,
+                        "is_detectable": result.is_detectable,
+                    }
+                )
+    return pd.DataFrame.from_records(records)
 
 
 def validate_demo() -> None:
@@ -132,7 +315,8 @@ def validate_demo() -> None:
 
 
 def validate_psd() -> None:
-    values = [lisa_effective_strain_psd_hz(frequency_hz, 4.0) for frequency_hz in PSD_FREQUENCIES_HZ]
+    diagnostic = build_psd_benchmark_data()
+    values = diagnostic["total_psd_hz_inv"].to_numpy(dtype=float)
     assert np.all(np.isfinite(values))
     assert np.all(np.asarray(values) > 0.0)
     assert np.allclose(values, PSD_4_YEAR_BENCHMARKS_HZ_INV, rtol=2e-12)
@@ -293,20 +477,7 @@ def validate_snr() -> None:
     )
     assert np.isclose(snr_near / snr_far, 2.0, rtol=2e-12)
 
-    log_frequency = np.linspace(np.log(result.f_low_hz), np.log(result.f_high_hz), 200001)
-    frequency_hz = np.exp(log_frequency)
-    integrand = np.asarray([
-        frequency
-        * fourier_inspiral_amplitude_hz_inverse(
-            frequency,
-            result.chirp_mass_detector_msun,
-            result.luminosity_distance_mpc,
-        )
-        ** 2
-        / lisa_effective_strain_psd_hz(frequency, result.mission_duration_years)
-        for frequency in frequency_hz
-    ])
-    grid_snr = np.sqrt(16.0 / 5.0 * np.trapezoid(integrand, log_frequency))
+    _, grid_snr = build_sensitivity_snr_density_data()
     assert np.isclose(grid_snr, result.lisa_snr, rtol=2e-9)
 
     required_input_unavailable = evaluate_lisa_inspiral_snr(
@@ -340,46 +511,34 @@ def validate_snr() -> None:
 def validate_redshift_grid() -> None:
     print("\nFixed source-mass redshift behavior")
     print("z       d_l_mpc       mchirp_z     f_low_hz    f_high_hz   snr       status")
-    for redshift in (0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 13.0, 15.0):
-        result = demo_result(redshift)
-        assert result.status in {SNR_STATUS_EVALUATED, SNR_STATUS_NO_OVERLAP}
+    for row in build_redshift_grid_data().to_dict(orient="records"):
+        assert row["snr_status"] in {SNR_STATUS_EVALUATED, SNR_STATUS_NO_OVERLAP}
         print(
-            f"{redshift:4.1f}  {result.luminosity_distance_mpc:12.3f}  "
-            f"{result.chirp_mass_detector_msun:11.3f}  {result.f_low_hz:10.3e}  "
-            f"{result.f_high_hz:10.3e}  {result.lisa_snr:8.3f}  {result.status}"
+            f"{row['redshift']:4.1f}  {row['luminosity_distance_mpc']:12.3f}  "
+            f"{row['chirp_mass_detector_msun']:11.3f}  "
+            f"{row['f_low_hz']:10.3e}  {row['f_high_hz']:10.3e}  "
+            f"{row['lisa_snr']:8.3f}  {row['snr_status']}"
         )
 
 
 def validate_mass_redshift_grid() -> None:
     print("\nControlled mass-redshift selection grid")
     print("m1       m2       z     d_l_mpc     f_isco_obs  f_low       f_high      snr       class")
-    for m1_source_msun in (1e4, 1e5, 1e6, 1e7):
-        for m2_source_msun in (10.0, 100.0, 1000.0):
-            for redshift in (0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 13.0, 15.0):
-                result = evaluate_lisa_inspiral_snr(
-                    m1_source_msun=m1_source_msun,
-                    m2_source_msun=m2_source_msun,
-                    redshift=redshift,
-                    current_observed_frequency_hz=DEMO_F_MIN_HZ,
-                    mission_duration_years=DEMO_MISSION_YEARS,
-                    detector_min_frequency_hz=DEMO_F_MIN_HZ,
-                    detector_max_frequency_hz=DEMO_F_MAX_HZ,
-                    snr_threshold=DEMO_SNR_THRESHOLD,
-                )
-                assert result.status in {SNR_STATUS_EVALUATED, SNR_STATUS_NO_OVERLAP}
-                classification = (
-                    "detectable"
-                    if result.is_detectable is True
-                    else "below"
-                    if result.status == SNR_STATUS_EVALUATED
-                    else "no_overlap"
-                )
-                print(
-                    f"{m1_source_msun:7.0e}  {m2_source_msun:7.0e}  {redshift:4.1f}  "
-                    f"{result.luminosity_distance_mpc:10.1f}  "
-                    f"{result.f_isco_observer_hz:10.3e}  {result.f_low_hz:10.3e}  "
-                    f"{result.f_high_hz:10.3e}  {result.lisa_snr:8.2f}  {classification}"
-                )
+    for row in build_mass_redshift_grid_data().to_dict(orient="records"):
+        assert row["snr_status"] in {SNR_STATUS_EVALUATED, SNR_STATUS_NO_OVERLAP}
+        classification = (
+            "detectable"
+            if row["is_detectable"] is True
+            else "below"
+            if row["snr_status"] == SNR_STATUS_EVALUATED
+            else "no_overlap"
+        )
+        print(
+            f"{row['m1_source_msun']:7.0e}  {row['m2_source_msun']:7.0e}  "
+            f"{row['redshift']:4.1f}  {row['luminosity_distance_mpc']:10.1f}  "
+            f"{row['f_isco_observer_hz']:10.3e}  {row['f_low_hz']:10.3e}  "
+            f"{row['f_high_hz']:10.3e}  {row['lisa_snr']:8.2f}  {classification}"
+        )
 
 
 def validate_classification() -> None:
@@ -486,6 +645,10 @@ def validate_schema() -> None:
     expected_event_fields = {
         "event_id",
         "mass_ratio_secondary_to_primary",
+        "detection_time_myr",
+        "detection_redshift",
+        "r_det_entry_cm",
+        "r_det_entry_rg",
         "lisa_snr",
         "snr_status",
         "chirp_mass_source_msun",
@@ -548,6 +711,333 @@ def validate_schema() -> None:
     print("intrinsic complete + detector unavailable: preserved separately")
 
 
+def validate_output_semantics() -> None:
+    """Check that public CSV writers count finite physical entries."""
+    result = IMRIDynSingleResult(1.0e5, 2.0e5, 0, "semi_without_trap", 123)
+    result.imri_count = 2
+    result.imri_mass_msun = 200.0
+    result.imri_rate_per_myr = 0.2
+    result.detectable_imri_count = 1
+    result.no_detectable_imri_count = 1
+    result.detector_evaluated_imri_count = 2
+    result.detector_no_overlap_imri_count = 1
+    result.detectable_imri_rate_per_myr = 0.1
+    result.imri_events = cast(Any, [
+        {
+            "is_imri_candidate": True,
+            "detection_time_myr": 3.0,
+            "detection_redshift": 1.0,
+            "r_det_entry_cm": 2.0e12,
+            "r_det_entry_rg": 100.0,
+            "f_entry_src_hz": 2.0e-3,
+            "f_entry_obs_hz": 1.0e-3,
+            "is_lisa_detectable": True,
+            "snr_status": SNR_STATUS_EVALUATED,
+            "mass_msun": 100.0,
+            "intrinsic_rate_contribution_per_myr": 0.1,
+            "detected_rate_contribution_per_myr": 0.1,
+        },
+        {
+            "is_imri_candidate": True,
+            "detection_time_myr": np.inf,
+            "detection_redshift": np.nan,
+            "r_det_entry_cm": np.nan,
+            "r_det_entry_rg": np.nan,
+            "f_entry_src_hz": np.nan,
+            "f_entry_obs_hz": np.nan,
+            "is_lisa_detectable": False,
+            "snr_status": SNR_STATUS_NO_OVERLAP,
+            "mass_msun": 100.0,
+            "intrinsic_rate_contribution_per_myr": 0.1,
+            "detected_rate_contribution_per_myr": 0.0,
+        },
+    ])
+    averaged = IMRIDynAveragedResult(
+        1.0e5, 2.0e5, "semi_without_trap", [result]
+    )
+    unavailable_result = IMRIDynSingleResult(
+        2.0e5, 2.0e5, 0, "semi_without_trap", 456
+    )
+    unavailable_result.imri_count = 1
+    unavailable_result.imri_mass_msun = 100.0
+    unavailable_result.imri_rate_per_myr = 0.1
+    unavailable_result.detector_unavailable_imri_count = 1
+    unavailable_result.imri_events = cast(
+        Any,
+        [
+            {
+                "is_imri_candidate": True,
+                "detection_time_myr": np.inf,
+                "is_lisa_detectable": None,
+                "snr_status": SNR_STATUS_MODEL_UNAVAILABLE,
+                "mass_msun": 100.0,
+                "intrinsic_rate_contribution_per_myr": 0.1,
+                "detected_rate_contribution_per_myr": np.nan,
+            }
+        ],
+    )
+    unavailable_averaged = IMRIDynAveragedResult(
+        2.0e5, 2.0e5, "semi_without_trap", [unavailable_result]
+    )
+    config = object.__new__(IMRIDynConfig)
+    config.redshift = 1.0
+    config.base_seed = 123
+    config.duty_cycle_myr = 10.0
+    with TemporaryDirectory(prefix="imri-output-test-") as temporary_dir:
+        output_dir = Path(temporary_dir)
+        output_results = [averaged, unavailable_averaged]
+        repeat_frame = save_repeat_results(output_results, output_dir, config)
+        averaged_frame = save_results(output_results, output_dir)
+        event_frame = save_events(output_results, output_dir)
+    for frame in (repeat_frame, averaged_frame):
+        row = frame[np.isclose(frame["m_smbh_msun"], 1.0e5)].iloc[0]
+        assert row["n_imri"] == 1
+        assert row["n_det"] == 1
+        assert np.isclose(row["rate_imri_per_myr"], 0.1)
+        assert np.isclose(row["rate_det_per_myr"], 0.1)
+    assert "r_det_entry_cm" in event_frame
+    assert np.allclose(
+        event_frame["intrinsic_rate_contribution_per_myr"].iloc[:2], [0.1, 0.0]
+    )
+    for frame in (repeat_frame, averaged_frame):
+        unavailable_row = frame[np.isclose(frame["m_smbh_msun"], 2.0e5)].iloc[0]
+        assert unavailable_row["rate_status"] == (
+            "incomplete_physical_entry_unavailable"
+        )
+        assert np.isnan(unavailable_row["rate_imri_per_myr"])
+    assert np.isnan(event_frame["intrinsic_rate_contribution_per_myr"].iloc[2])
+    print("\nOutput semantics")
+    print("finite physical entry: n_imri=1; downstream-only eligibility excluded")
+
+
+def _mark_non_evaluated_states(
+    axis,
+    data: pd.DataFrame,
+    used_labels: set[str] | None = None,
+) -> None:
+    styles = (
+        (SNR_STATUS_NO_OVERLAP, "no overlap", "x", "#D55E00", 0.05),
+        (
+            SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE,
+            "unavailable",
+            "s",
+            "0.35",
+            0.10,
+        ),
+        (SNR_STATUS_MODEL_UNAVAILABLE, "unavailable", "s", "0.35", 0.10),
+        (SNR_STATUS_NUMERICAL_FAILURE, "numerical failure", "P", "0.35", 0.15),
+    )
+    labels = used_labels if used_labels is not None else set()
+    for status, label, marker, color, axis_height in styles:
+        rows = data[data["snr_status"].eq(status)]
+        if rows.empty:
+            continue
+        axis.scatter(
+            rows["redshift"],
+            np.full(len(rows), axis_height),
+            transform=axis.get_xaxis_transform(),
+            marker=marker,
+            color=color,
+            s=48,
+            clip_on=False,
+            label=label if label not in labels else None,
+        )
+        labels.add(label)
+
+
+def plot_sensitivity_snr_density(output_dir: Path) -> None:
+    data, grid_snr = build_sensitivity_snr_density_data()
+    save_plot_data(
+        data, output_dir / "data" / "lisa_sensitivity_snr_density.csv"
+    )
+    result = demo_result()
+    fig, axes = new_figure(
+        "LISA sensitivity and demo-source SNR accumulation",
+        nrows=2,
+        ncols=1,
+        figsize=(7.0, 8.0),
+    )
+    sensitivity_axis = axes[0, 0]
+    density_axis = axes[1, 0]
+    sensitivity_axis.loglog(
+        data["frequency_hz"],
+        data["instrument_asd_hz_mhalf"],
+        linewidth=1.7,
+        label=r"$\sqrt{S_{\rm instrument}}$",
+    )
+    sensitivity_axis.loglog(
+        data["frequency_hz"],
+        data["confusion_asd_hz_mhalf"],
+        linewidth=1.7,
+        label=r"$\sqrt{S_{\rm confusion}}$",
+    )
+    sensitivity_axis.loglog(
+        data["frequency_hz"],
+        data["total_asd_hz_mhalf"],
+        color="black",
+        linewidth=2.1,
+        label=r"$\sqrt{S_{\rm total}}$",
+    )
+    sensitivity_axis.axvspan(
+        DEMO_F_MIN_HZ,
+        DEMO_F_MAX_HZ,
+        color="#56B4E9",
+        alpha=0.10,
+        label="detector band",
+    )
+    for frequency, label, color in (
+        (result.f_low_hz, r"$f_{\rm low}$", "#009E73"),
+        (result.f_high_hz, r"$f_{\rm high}$", "#D55E00"),
+        (result.f_isco_observer_hz, r"$f_{\rm ISCO,obs}$", "#CC79A7"),
+    ):
+        sensitivity_axis.axvline(
+            frequency, color=color, linestyle="--", linewidth=1.1, label=label
+        )
+    sensitivity_axis.set_ylabel(r"ASD [Hz$^{-1/2}$]")
+    sensitivity_axis.legend(frameon=False, fontsize=8, ncol=2)
+
+    window = data["in_snr_window"]
+    density_axis.semilogx(
+        data.loc[window, "frequency_hz"],
+        data.loc[window, "snr_squared_density_per_ln_frequency"],
+        color="#0072B2",
+        linewidth=2.0,
+    )
+    density_axis.axvspan(
+        result.f_low_hz, result.f_high_hz, color="#009E73", alpha=0.10
+    )
+    density_axis.set_xlabel("Observed frequency [Hz]")
+    density_axis.set_ylabel(r"$d\rho^2/d\ln f$")
+    density_axis.text(
+        0.03,
+        0.96,
+        (
+            f"integrated $\\rho$ = {grid_snr:.2f}\n"
+            f"threshold = {result.snr_threshold:g}\n{result.observation_case}"
+        ),
+        transform=density_axis.transAxes,
+        ha="left",
+        va="top",
+        fontsize=9,
+    )
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
+    save_figure(fig, output_dir / "lisa_sensitivity_snr_density")
+
+
+def plot_snr_vs_redshift(output_dir: Path) -> None:
+    data = build_redshift_grid_data()
+    save_plot_data(data, output_dir / "data" / "lisa_snr_vs_redshift.csv")
+    fig, axis = new_figure("LISA SNR versus redshift: demo source")
+    evaluated = cast(
+        pd.DataFrame,
+        data.loc[
+            cast(pd.Series, data["snr_status"]).eq(SNR_STATUS_EVALUATED)
+        ],
+    )
+    detectable = cast(
+        pd.DataFrame,
+        evaluated.loc[cast(pd.Series, evaluated["is_detectable"]).eq(True)],
+    )
+    below = cast(
+        pd.DataFrame,
+        evaluated.loc[cast(pd.Series, evaluated["is_detectable"]).eq(False)],
+    )
+    axis.plot(
+        evaluated["redshift"],
+        evaluated["lisa_snr"],
+        color="0.55",
+        linewidth=1.2,
+    )
+    axis.scatter(
+        detectable["redshift"],
+        detectable["lisa_snr"],
+        color="#0072B2",
+        marker="o",
+        label="evaluated: detectable",
+    )
+    axis.scatter(
+        below["redshift"],
+        below["lisa_snr"],
+        facecolors="white",
+        edgecolors="#E69F00",
+        marker="o",
+        label="evaluated: below threshold",
+    )
+    _mark_non_evaluated_states(axis, data)
+    axis.axhline(DEMO_SNR_THRESHOLD, color="black", linestyle="--", label="threshold")
+    axis.set_xlabel("Redshift $z$")
+    axis.set_ylabel(r"LISA SNR $\rho$")
+    axis.set_yscale("log")
+    axis.legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    save_figure(fig, output_dir / "lisa_snr_vs_redshift")
+
+
+def plot_mass_redshift_grid(output_dir: Path) -> None:
+    data = build_mass_redshift_grid_data()
+    save_plot_data(data, output_dir / "data" / "lisa_mass_redshift_grid.csv")
+    colors = ("#0072B2", "#D55E00", "#009E73", "#CC79A7")
+    for m2_source_msun in SECONDARY_MASS_GRID_MSUN:
+        selected = cast(
+            pd.DataFrame,
+            data.loc[
+                np.isclose(
+                    np.asarray(data["m2_source_msun"], dtype=float),
+                    m2_source_msun,
+                )
+            ],
+        )
+        fig, axis = new_figure(
+            f"LISA detectability: secondary mass {m2_source_msun:g} $M_\\odot$"
+        )
+        used_status_labels: set[str] = set()
+        for m1_source_msun, color in zip(
+            PRIMARY_MASS_GRID_MSUN, colors, strict=True
+        ):
+            curve = cast(
+                pd.DataFrame,
+                selected.loc[
+                    np.isclose(
+                        np.asarray(selected["m1_source_msun"], dtype=float),
+                        m1_source_msun,
+                    )
+                ],
+            ).sort_values(by="redshift")
+            evaluated = cast(
+                pd.DataFrame,
+                curve.loc[
+                    cast(pd.Series, curve["snr_status"]).eq(SNR_STATUS_EVALUATED)
+                ],
+            )
+            axis.plot(
+                evaluated["redshift"],
+                evaluated["lisa_snr"],
+                color=color,
+                marker="o",
+                linewidth=1.8,
+                label=rf"$M_1={m1_source_msun:.0e}\,M_\odot$",
+            )
+            _mark_non_evaluated_states(axis, curve, used_status_labels)
+        axis.axhline(
+            DEMO_SNR_THRESHOLD, color="black", linestyle="--", label="threshold"
+        )
+        axis.set_xlabel("Redshift $z$")
+        axis.set_ylabel(r"LISA SNR $\rho$")
+        axis.set_yscale("log")
+        axis.legend(frameon=False, fontsize=8, ncol=2)
+        fig.tight_layout()
+        mass_token = int(m2_source_msun)
+        save_figure(
+            fig, output_dir / f"lisa_detectability_m2_{mass_token}_msun"
+        )
+
+
+def generate_plots(output_dir: Path) -> None:
+    plot_sensitivity_snr_density(output_dir)
+    plot_snr_vs_redshift(output_dir)
+    plot_mass_redshift_grid(output_dir)
+
+
 SECTIONS: dict[str, Callable[[], None]] = {
     "demo": validate_demo,
     "psd": validate_psd,
@@ -558,6 +1048,7 @@ SECTIONS: dict[str, Callable[[], None]] = {
     "grid": validate_mass_redshift_grid,
     "classification": validate_classification,
     "schema": validate_schema,
+    "output": validate_output_semantics,
 }
 
 
@@ -571,14 +1062,27 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="validation section to run",
     )
+    parser.add_argument(
+        "--plots",
+        action="store_true",
+        help="write diagnostic plots and their CSV data",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("diagnostics/lisa_detectability"),
+    )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    section = build_parser().parse_args(argv).section
+    arguments = build_parser().parse_args(argv)
+    section = arguments.section
     selected = SECTIONS.items() if section == "all" else ((section, SECTIONS[section]),)
     for _, validation in selected:
         validation()
+    if arguments.plots:
+        generate_plots(arguments.output_dir)
     print("\nLISA detectability validation passed.")
 
 

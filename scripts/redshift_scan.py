@@ -474,6 +474,13 @@ def run_scan(
             "numpy_seed_sequence(base_seed,smbh_index,nsc_index,repeat_index);"
             "redshift_and_disk_model_excluded"
         ),
+        "rate_normalization": "AGN-duty-cycle-normalized production yield",
+        "gas_time_coordinate": "gas_final_time_myr",
+        "physical_entry_time_coordinate": "detection_time_myr",
+        "duty_cycle_behavior": (
+            "gas termination followed by GW-only evolution when eligible"
+        ),
+        "lisa_entry_boundary": "evolving with redshift",
         "runs": run_records,
         "disk_model_scan_summary": summary_path,
         "disk_model_rate_summary": rate_summary_path,
