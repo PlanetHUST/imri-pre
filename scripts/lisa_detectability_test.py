@@ -21,7 +21,6 @@ if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
 from workflows.lisa_snr import (  # noqa: E402
-    JULIAN_YEAR_S,
     SNR_STATUS_EVALUATED,
     SNR_STATUS_MODEL_UNAVAILABLE,
     SNR_STATUS_NUMERICAL_FAILURE,
@@ -40,6 +39,7 @@ from workflows.lisa_snr import (  # noqa: E402
     source_chirp_mass_msun,
 )
 import physical_process.gw_frequency_radius as gw_helpers  # noqa: E402
+from physical_process.constants import JULIAN_YEAR_S  # noqa: E402
 from workflows.detect_rate import (  # noqa: E402
     DETECTION_CLASS_DETECTABLE,
     DETECTION_CLASS_NOT_EVALUATED,

@@ -12,11 +12,13 @@ from math import cos, exp, isclose, log, pi, sin, sqrt, tanh
 import numpy as np
 from scipy.integrate import quad
 
-SPEED_OF_LIGHT_M_S = 2.99792458e8
-GRAVITATIONAL_CONSTANT_SI = 6.67430e-11
-SOLAR_MASS_KG = 1.98847e30
-MPC_M = 3.085677581491367e22
-JULIAN_YEAR_S = 365.25 * 24.0 * 3600.0
+from physical_process.constants import (
+    GRAVITATIONAL_CONSTANT_SI,
+    JULIAN_YEAR_S,
+    MPC_M,
+    SOLAR_MASS_KG,
+    SPEED_OF_LIGHT_M_S,
+)
 
 LISA_ARM_LENGTH_M = 2.5e9
 LISA_TRANSFER_FREQUENCY_HZ = SPEED_OF_LIGHT_M_S / (2.0 * pi * LISA_ARM_LENGTH_M)

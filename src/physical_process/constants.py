@@ -3,6 +3,10 @@
 The simulation uses cgs internally: grams, centimeters, and seconds. Names
 ending in ``_MYR``, ``_CM``, ``_G``, or ``_S`` make those units explicit.
 Lower-case aliases are retained for compatibility with the existing modules.
+
+The physical detector chain evaluates in SI, so its fundamental constants and
+unit conversions (meters, kilograms, seconds) are defined here as well with
+unit-suffixed names.
 """
 
 HUBBLE_TIME_MYR = 13.6e3
@@ -17,6 +21,13 @@ MEGAYEAR_S = 1.0e6 * YEAR_S
 
 SPEED_OF_LIGHT_FIFTH_CGS = SPEED_OF_LIGHT_CM_S**5
 GRAVITATIONAL_CONSTANT_CUBED_CGS = GRAVITATIONAL_CONSTANT_CGS**3
+
+# SI constants for the physical detector chain (LISA SNR evaluation).
+SPEED_OF_LIGHT_M_S = 2.99792458e8
+GRAVITATIONAL_CONSTANT_SI = 6.67430e-11
+SOLAR_MASS_KG = 1.98847e30
+MPC_M = 3.085677581491367e22
+JULIAN_YEAR_S = 365.25 * 24.0 * 3600.0
 
 # Star-cluster model parameter: central density / half-mass density.
 CENTRAL_TO_HALF_MASS_DENSITY_RATIO = 20.0
