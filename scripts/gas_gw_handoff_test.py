@@ -24,12 +24,12 @@ from workflows.detect_rate import (  # noqa: E402
     classify_detectability,
     solve_time_to_observed_lisa_entry,
 )
+from workflows.cosmology import FlatLambdaCDM  # noqa: E402
 from workflows.event_rate import (  # noqa: E402
     GAS_FINAL_RADIUS_SAMPLES,
     classify_event_rate,
     solve_gas_final_radius_cm,
 )
-from workflows.redshift_evolve import RedshiftEvolution  # noqa: E402
 from workflows.rate_plots import new_figure, save_figure, save_plot_data  # noqa: E402
 
 PRIMARY_MASS_MSUN = 1.0e5
@@ -37,7 +37,9 @@ SECONDARY_MASS_MSUN = 100.0
 LISA_MIN_FREQUENCY_HZ = 1.0e-3
 LISA_MAX_FREQUENCY_HZ = 1.0e-1
 INITIAL_REDSHIFT = 10.0
-HUBBLE_CONSTANT_PER_MYR = 1.0 / 13.6e3
+HUBBLE_CONSTANT_KM_S_MPC = 67.4
+OMEGA_M = 0.315
+MAX_GW_TIME_MYR = 13.6e3
 ECCENTRICITY = 0.0
 MISSION_DURATION_YEARS = 4.0
 SNR_THRESHOLD = 20.0
@@ -242,10 +244,23 @@ def validate_gas_boundaries() -> None:
     assert np.isclose(duty_limited[1], 2.0, rtol=2.0e-8)
     assert diagnostic.cosmic_time_unreachable[-1] == "duty_cycle_limited"
     assert diagnostic.trap_bound[0] == 100.0
-    assert diagnostic.trap_bound[-1] == "migration_trap_bound"
+    assert diagnostic.trap_bound[-1] == "gw_dominates_at_start"
     trap_event = diagnostic.trap_event
-    assert trap_event.gas_stop_reason == "migration_trap_bound"
-    assert trap_event.is_imri_candidate is False
+    assert trap_event.gas_stop_reason == "gw_dominates_at_start"
+    assert trap_event.is_imri_candidate is True
+
+    no_route = solve_gas_final_radius_cm(
+        r_ini_cm=100.0,
+        r_gas_target_cm=10.0,
+        r_entry_cm=10.0,
+        handoff_required=False,
+        gas_start_time_myr=0.0,
+        available_gas_time_myr=10.0,
+        migration_time_myr_call=lambda start_cm, target_cm: np.inf,
+        gw_time_to_entry_myr=lambda radius_cm, absolute_time_myr: np.inf,
+        num_radius_samples=GAS_FINAL_RADIUS_SAMPLES,
+    )
+    assert no_route[-1] == "migration_trap_bound"
 
 
 def _detect(
@@ -253,7 +268,7 @@ def _detect(
     radius_cm: float,
     initial_redshift: float,
     gas_final_time_myr: float = 0.0,
-    cosmic_merge_time_myr: float = np.inf,
+    max_gw_time_myr: float = MAX_GW_TIME_MYR,
 ):
     return classify_detectability(
         is_imri_candidate=True,
@@ -262,17 +277,14 @@ def _detect(
         r_gas_fin_cm=radius_cm,
         gas_final_time_myr=gas_final_time_myr,
         initial_redshift=initial_redshift,
-        hubble_constant_per_myr=HUBBLE_CONSTANT_PER_MYR,
         min_observed_frequency_hz=LISA_MIN_FREQUENCY_HZ,
         max_observed_frequency_hz=LISA_MAX_FREQUENCY_HZ,
+        max_gw_time_myr=max_gw_time_myr,
         eccentricity=ECCENTRICITY,
-        cosmic_merge_time_myr=cosmic_merge_time_myr,
-        cosmic_merge_smbh_mass_factor=2.0,
-        cosmic_merge_radius_factor=2.0,
         snr_threshold=SNR_THRESHOLD,
         mission_duration_years=MISSION_DURATION_YEARS,
-        detector_hubble_constant_km_s_mpc=67.4,
-        detector_omega_m=0.315,
+        detector_hubble_constant_km_s_mpc=HUBBLE_CONSTANT_KM_S_MPC,
+        detector_omega_m=OMEGA_M,
     )
 
 
@@ -342,13 +354,13 @@ def build_duty_handoff_diagnostic() -> DutyHandoffDiagnostic:
             )
         )
     )
-    redshift_model = RedshiftEvolution(HUBBLE_CONSTANT_PER_MYR)
+    redshift_model = FlatLambdaCDM(HUBBLE_CONSTANT_KM_S_MPC, OMEGA_M)
     orbit_radius_cm: list[float] = []
     entry_radius_at_time_cm: list[float] = []
     redshifts: list[float] = []
     phases: list[str] = []
     for time_myr in times:
-        redshift = redshift_model.redshift_evlove_with_time(1.0, float(time_myr))
+        redshift = redshift_model.evolve_redshift(1.0, float(time_myr))
         redshifts.append(redshift)
         entry_radius_at_time_cm.append(
             gw_helpers.lisa_entry_radius_cm(
@@ -432,9 +444,10 @@ def validate_duty_limited_handoff() -> None:
     assert "misses_cosmic_time" in misses_cosmic_time.detect_rate_reason
     assert misses_cosmic_time.detect_rate_reason != "not_imri_candidate"
 
-    redshift_at_gas_fin = RedshiftEvolution(
-        HUBBLE_CONSTANT_PER_MYR
-    ).redshift_evlove_with_time(1.0, event.gas_final_time_myr)
+    redshift_at_gas_fin = FlatLambdaCDM(
+        HUBBLE_CONSTANT_KM_S_MPC,
+        OMEGA_M,
+    ).evolve_redshift(1.0, event.gas_final_time_myr)
     print("\nRepresentative duty-limited gas -> GW case")
     print(f"initial_z={1.0:.9g}")
     print(f"gas_final_time_myr={event.gas_final_time_myr:.9g}")
@@ -452,7 +465,7 @@ def validate_duty_limited_handoff() -> None:
 
 @cache
 def build_moving_entry_diagnostic() -> MovingEntryDiagnostic:
-    redshift_model = RedshiftEvolution(HUBBLE_CONSTANT_PER_MYR)
+    redshift_model = FlatLambdaCDM(HUBBLE_CONSTANT_KM_S_MPC, OMEGA_M)
     high_z_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
         PRIMARY_MASS_MSUN,
         SECONDARY_MASS_MSUN,
@@ -477,7 +490,7 @@ def build_moving_entry_diagnostic() -> MovingEntryDiagnostic:
         redshift_model=redshift_model,
         min_observed_frequency_hz=LISA_MIN_FREQUENCY_HZ,
         eccentricity=ECCENTRICITY,
-        max_elapsed_time_myr=redshift_model.remaining_time_to_zero_redshift_myr(
+        max_elapsed_time_myr=redshift_model.remaining_time_to_z0_myr(
             INITIAL_REDSHIFT
         ),
     )
@@ -506,7 +519,7 @@ def build_moving_entry_diagnostic() -> MovingEntryDiagnostic:
         redshift_model=redshift_model,
         min_observed_frequency_hz=LISA_MIN_FREQUENCY_HZ,
         eccentricity=ECCENTRICITY,
-        max_elapsed_time_myr=redshift_model.remaining_time_to_zero_redshift_myr(
+        max_elapsed_time_myr=redshift_model.remaining_time_to_z0_myr(
             low_redshift
         ),
     )
@@ -543,7 +556,7 @@ def build_moving_entry_diagnostic() -> MovingEntryDiagnostic:
         for time_myr in times
     ]
     redshifts = [
-        redshift_model.redshift_evlove_with_time(INITIAL_REDSHIFT, float(time_myr))
+        redshift_model.evolve_redshift(INITIAL_REDSHIFT, float(time_myr))
         for time_myr in times
     ]
     moving_entry_radius_cm = [
@@ -602,7 +615,7 @@ def validate_moving_entry_boundary() -> None:
     )
 
 
-def validate_cosmic_merger_restart() -> None:
+def validate_single_agn_fixed_primary() -> None:
     initial_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
         PRIMARY_MASS_MSUN,
         SECONDARY_MASS_MSUN,
@@ -610,37 +623,31 @@ def validate_cosmic_merger_restart() -> None:
         INITIAL_REDSHIFT,
     )
     decision = _detect(
-        radius_cm=500.0 * initial_entry_radius_cm,
+        radius_cm=initial_entry_radius_cm,
         initial_redshift=INITIAL_REDSHIFT,
-        cosmic_merge_time_myr=100.0,
     )
-    assert decision.cosmic_merge_applied is True
-    assert decision.final_smbh_mass_msun == 2.0 * PRIMARY_MASS_MSUN
+    assert decision.cosmic_merge_applied is False
+    assert decision.final_smbh_mass_msun == PRIMARY_MASS_MSUN
     assert np.isfinite(decision.detection_time_myr)
-    assert decision.gw_time_after_gas_myr > 100.0
     expected_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
-        decision.final_smbh_mass_msun,
-        SECONDARY_MASS_MSUN,
-        LISA_MIN_FREQUENCY_HZ,
-        decision.detection_redshift,
-    )
-    stale_mass_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
         PRIMARY_MASS_MSUN,
         SECONDARY_MASS_MSUN,
         LISA_MIN_FREQUENCY_HZ,
         decision.detection_redshift,
     )
     assert np.isclose(decision.final_entry_radius_cm, expected_entry_radius_cm)
-    assert not np.isclose(
-        decision.final_entry_radius_cm,
-        stale_mass_entry_radius_cm,
-        rtol=1.0e-3,
-    )
     assert np.isclose(
         decision.observed_frequency_hz,
         LISA_MIN_FREQUENCY_HZ,
         rtol=2.0e-10,
     )
+
+    time_limited = _detect(
+        radius_cm=2.0 * initial_entry_radius_cm,
+        initial_redshift=INITIAL_REDSHIFT,
+        max_gw_time_myr=1.0e-12,
+    )
+    assert time_limited.detect_rate_reason.endswith("misses_gw_time_budget")
 
 
 def _plot_crossover(output_dir: Path) -> None:
@@ -864,7 +871,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     validate_gas_boundaries()
     validate_duty_limited_handoff()
     validate_moving_entry_boundary()
-    validate_cosmic_merger_restart()
+    validate_single_agn_fixed_primary()
     if arguments.plots:
         generate_plots(arguments.output_dir)
     print("\nGas/GW handoff regression checks passed.")

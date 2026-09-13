@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import os
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -27,8 +26,6 @@ class MigrationParameters:
     alpha: float = 0.01
     gamma_adiabat: float = 5.0 / 3.0
     hydrogen_fraction: float = 0.7
-    kappa_t: float = 20.0
-    kappa_norm: float = 25.0
 
 
 @dataclass
@@ -37,9 +34,8 @@ class TorqueProfile:
 
     pAGN solves in SI. Fields ending in ``_si`` are torques [kg m^2 s^-2].
     Radius aliases ending in ``_cm``, ``_rg``, and ``_rs`` are for downstream
-    CGS migration code and plotting. ``gamma_th_si`` is the raw thermal torque
-    component; multiply it by ``1 - gap_attenuation_factor`` when composing the
-    Type-I plus thermal torque used by this project.
+    CGS migration code and plotting. Gap-closed cells use the unattenuated sum
+    of Type-I and thermal torque; gap-open cells use the Type-II torque.
     """
 
     radius_m: np.ndarray
@@ -55,8 +51,6 @@ class TorqueProfile:
     lindblad_coeff: np.ndarray
     thermal_coeff: np.ndarray
     gap_parameter_dimensionless: np.ndarray
-    gap_attenuation_factor: np.ndarray
-    type_i_gap_denominator: np.ndarray
     gamma_0_si: np.ndarray
     gamma_type_i_si: np.ndarray
     gamma_th_si: np.ndarray
@@ -95,9 +89,13 @@ def _constant(ct, *names: str) -> float:
     raise AttributeError(f"pagn.constants is missing one of: {', '.join(names)}")
 
 
-def _sorted_disk_view(disk) -> SimpleNamespace:
+def _sorted_disk_view(disk, max_radius_m: float | None = None) -> SimpleNamespace:
     radius_m = np.asarray(disk.R, dtype=float)
     order = np.argsort(radius_m)
+    if max_radius_m is not None:
+        order = order[radius_m[order] <= max_radius_m]
+        if order.size < 2:
+            raise ValueError("torque radius crop leaves fewer than two disk samples")
     data = {"Mbh": disk.Mbh, "Rs": disk.Rs}
     for name in ["R", "rho", "T", "h", "cs", "Omega", "tauV", "kappa", "Teff4"]:
         arr = np.asarray(getattr(disk, name), dtype=float)
@@ -151,6 +149,19 @@ def surface_density_kg_m2(disk):
     return 2.0 * disk.rho * disk.h
 
 
+def migration_electron_scattering_opacity_m2_kg(
+    hydrogen_fraction: float = 0.7,
+) -> float:
+    """Return the migration-model electron-scattering opacity [m^2/kg]."""
+    if not np.isfinite(hydrogen_fraction) or not 0.0 <= hydrogen_fraction <= 1.0:
+        raise ValueError("hydrogen fraction must satisfy 0 <= X <= 1")
+    _, electron_scattering_opacity = _require_pagn_bits()
+    opacity_m2_kg = float(electron_scattering_opacity(X=hydrogen_fraction))
+    if not np.isfinite(opacity_m2_kg) or opacity_m2_kg <= 0.0:
+        raise ValueError("electron-scattering opacity must be finite and positive")
+    return opacity_m2_kg
+
+
 def comp_corot(
     dlog_surface_density_dlog_radius, dlog_temperature_dlog_radius, gamma_adiabat
 ):
@@ -161,22 +172,34 @@ def comp_corot(
     ) / gamma_adiabat
 
 
-def thermal_diffusivity_m2_s(disk, gamma_adiabat):
+def thermal_diffusivity_m2_s(disk, gamma_adiabat, hydrogen_fraction=0.7):
+    """Return migration thermal diffusivity using electron scattering [m^2/s]."""
     ct, _ = _require_pagn_bits()
+    opacity_m2_kg = migration_electron_scattering_opacity_m2_kg(
+        hydrogen_fraction
+    )
     return (
         16.0
         * gamma_adiabat
         * (gamma_adiabat - 1.0)
         * ct.sigmaSB
         * disk.T**4
-        / (3.0 * disk.kappa * disk.rho**2 * disk.h**2 * disk.Omega**2)
+        / (3.0 * opacity_m2_kg * disk.rho**2 * disk.h**2 * disk.Omega**2)
     )
 
 
 def comp_lind(
-    dlog_surface_density_dlog_radius, dlog_temperature_dlog_radius, disk, gamma_adiabat
+    dlog_surface_density_dlog_radius,
+    dlog_temperature_dlog_radius,
+    disk,
+    gamma_adiabat,
+    hydrogen_fraction=0.7,
 ):
-    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(disk, gamma_adiabat)
+    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(
+        disk,
+        gamma_adiabat,
+        hydrogen_fraction,
+    )
     scale_height_m = disk.h
     orbital_frequency_rad_s = disk.Omega
     critical_diffusivity_m2_s = scale_height_m**2 * orbital_frequency_rad_s
@@ -220,27 +243,58 @@ def comp_gamma_th_coeff(
     migrator_mass_kg,
     params,
 ):
-    """Return the dimensionless thermal torque coefficient."""
-    ct, electron_scattering_opacity = _require_pagn_bits()
+    """Return the G24 dimensionless thermal-torque coefficient.
+
+    This implements the selected reference equation using signed ``x_c``,
+    ``m_c = c_s chi / G``, and vertical optical-depth suppression.
+    """
+    ct, _ = _require_pagn_bits()
     gamma_adiabat = params.gamma_adiabat
 
-    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(disk, gamma_adiabat)
+    thermal_diffusivity_values_m2_s = thermal_diffusivity_m2_s(
+        disk,
+        gamma_adiabat,
+        params.hydrogen_fraction,
+    )
     sound_speed_m_s = disk.cs
     radius_m = disk.R
     scale_height_m = disk.h
     orbital_frequency_rad_s = disk.Omega
     density_kg_m3 = disk.rho
+    required_positive = (
+        thermal_diffusivity_values_m2_s,
+        sound_speed_m_s,
+        radius_m,
+        scale_height_m,
+        orbital_frequency_rad_s,
+        density_kg_m3,
+    )
+    if not all(
+        np.all(np.isfinite(values) & (values > 0.0))
+        for values in required_positive
+    ):
+        raise ValueError("thermal torque profile contains invalid positive quantities")
+    optical_depth = np.asarray(disk.tauV, dtype=float)
+    if not np.all(np.isfinite(optical_depth) & (optical_depth >= 0.0)):
+        raise ValueError("thermal torque optical depth must be finite and nonnegative")
+    pressure_slope = np.asarray(dlog_pressure_dlog_radius, dtype=float)
+    if not np.all(np.isfinite(pressure_slope)):
+        raise ValueError("thermal torque pressure slope must be finite")
 
+    critical_mass_kg = sound_speed_m_s * thermal_diffusivity_values_m2_s / ct.G
     corotation_radius_m = (
-        np.abs(dlog_pressure_dlog_radius)
-        * sound_speed_m_s**2
-        / (3.0 * gamma_adiabat * radius_m * orbital_frequency_rad_s**2)
+        -(scale_height_m**2)
+        / (3.0 * gamma_adiabat * radius_m)
+        * pressure_slope
     )
-
-    electron_scattering_opacity_m2_kg = electron_scattering_opacity(
-        X=params.hydrogen_fraction
+    thermal_length_m = np.sqrt(
+        2.0
+        * thermal_diffusivity_values_m2_s
+        / (3.0 * gamma_adiabat * orbital_frequency_rad_s)
     )
-
+    electron_scattering_opacity_m2_kg = (
+        migration_electron_scattering_opacity_m2_kg(params.hydrogen_fraction)
+    )
     eddington_luminosity_w = (
         4.0 * np.pi * ct.G * ct.c * migrator_mass_kg / electron_scattering_opacity_m2_kg
     )
@@ -253,38 +307,30 @@ def comp_gamma_th_coeff(
         * thermal_diffusivity_values_m2_s
         / gamma_adiabat
     )
-
-    thermal_length_m = np.sqrt(
-        2.0
-        * thermal_diffusivity_values_m2_s
-        / (3.0 * gamma_adiabat * orbital_frequency_rad_s)
+    luminosity_bracket = (
+        safe_divide(eddington_luminosity_w, critical_luminosity_w)
+        * safe_divide(
+            4.0 * critical_mass_kg,
+            migrator_mass_kg + 4.0 * critical_mass_kg,
+        )
+        - safe_divide(
+            2.0 * critical_mass_kg,
+            migrator_mass_kg + 2.0 * critical_mass_kg,
+        )
     )
-
-    bondi_radius_m = ct.G * migrator_mass_kg / sound_speed_m_s**2
-
-    thermal_saturation_parameter = thermal_diffusivity_values_m2_s / (
-        sound_speed_m_s * np.minimum(scale_height_m, bondi_radius_m)
+    thin_suppression = -np.expm1(
+        -thermal_length_m * optical_depth / scale_height_m
     )
-
-    unsaturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) * (
-        4.0 * thermal_saturation_parameter / (1.0 + 4.0 * thermal_saturation_parameter)
-    ) - (
-        2.0 * thermal_saturation_parameter / (1.0 + 2.0 * thermal_saturation_parameter)
-    )
-    saturated = safe_divide(eddington_luminosity_w, critical_luminosity_w) - 1.0
-
     prefactor = (
         1.61
         * (gamma_adiabat - 1.0)
         * safe_divide(corotation_radius_m, gamma_adiabat * thermal_length_m)
         * (radius_m / scale_height_m)
     )
-
-    return np.where(
-        thermal_saturation_parameter < 1.0,
-        prefactor * unsaturated,
-        prefactor * saturated,
-    )
+    coefficient = prefactor * luminosity_bracket * thin_suppression
+    if not np.all(np.isfinite(coefficient)):
+        raise ValueError("thermal torque coefficient contains nonfinite values")
+    return coefficient
 
 
 def comp_gamma_type_ii_si(
@@ -315,22 +361,25 @@ def compute_torque_profile(
     params = MigrationParameters() if params is None else params
     ct, _ = _require_pagn_bits()
 
+    max_radius_m = float(np.nanmax(np.asarray(disk.R, dtype=float)))
+    for outer_radius_name in ("Rout", "R_out"):
+        if not hasattr(disk, outer_radius_name):
+            continue
+        outer_radius_value = np.asarray(
+            getattr(disk, outer_radius_name),
+            dtype=float,
+        )
+        if outer_radius_value.shape == () and np.isfinite(outer_radius_value):
+            max_radius_m = min(max_radius_m, float(outer_radius_value))
     if max_radius_rg is not None:
-        radius_m = np.asarray(disk.R, dtype=float)
-        max_radius_m = 0.5 * float(max_radius_rg) * float(disk.Rs)
+        if not np.isfinite(max_radius_rg) or max_radius_rg <= 0.0:
+            raise ValueError("maximum torque radius must be finite and positive")
+        requested_max_radius_m = 0.5 * float(max_radius_rg) * float(disk.Rs)
+        max_radius_m = min(max_radius_m, requested_max_radius_m)
 
-        if max_radius_m > float(np.nanmax(radius_m)):
-            for name in ("Rmax", "Rout", "R_out"):
-                if hasattr(disk, name):
-                    setattr(disk, name, max_radius_m)
-                    break
-            for name, value in (("i", 0), ("isf", -1), ("Mdisk", 0.0)):
-                if hasattr(disk, name):
-                    setattr(disk, name, value)
-            with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull):
-                disk.solve_disk(N=radius_m.size)
-
-    disk_view = _sorted_disk_view(disk)
+    # The solved pAGN domain ends at the physical Q=1 boundary. A requested
+    # maximum may crop that domain, but must never mutate or extend it.
+    disk_view = _sorted_disk_view(disk, max_radius_m)
     migrator_mass_kg = float(migrator_mass_msun) * ct.MSun
     radius_m, scale_height_m, density_kg_m3 = disk_view.R, disk_view.h, disk_view.rho
     temperature_k, orbital_frequency_rad_s = disk_view.T, disk_view.Omega
@@ -352,9 +401,6 @@ def compute_torque_profile(
         aspect_ratio,
         params.alpha,
     )
-    gap_attenuation_factor = np.exp(-gap_parameter_dimensionless / params.kappa_t)
-    type_i_gap_denominator = 1.0 + gap_parameter_dimensionless / params.kappa_norm
-
     corot = comp_corot(
         dlog_surface_density_dlog_radius,
         dlog_temperature_dlog_radius,
@@ -366,6 +412,7 @@ def compute_torque_profile(
         dlog_temperature_dlog_radius,
         disk_view,
         params.gamma_adiabat,
+        params.hydrogen_fraction,
     )
 
     gamma_0_si = comp_gamma_0_si(
@@ -383,9 +430,7 @@ def compute_torque_profile(
         params,
     )
 
-    gamma_i_si = (
-        (corot * gap_attenuation_factor + lind) / type_i_gap_denominator * gamma_0_si
-    )
+    gamma_i_si = (corot + lind) * gamma_0_si
 
     gamma_th_si = gamma_0_si * gamma_th_coeff
 
@@ -415,8 +460,6 @@ def compute_torque_profile(
         lindblad_coeff=lind,
         thermal_coeff=gamma_th_coeff,
         gap_parameter_dimensionless=gap_parameter_dimensionless,
-        gap_attenuation_factor=gap_attenuation_factor,
-        type_i_gap_denominator=type_i_gap_denominator,
         gamma_0_si=gamma_0_si,
         gamma_type_i_si=gamma_i_si,
         gamma_th_si=gamma_th_si,

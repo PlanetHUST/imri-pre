@@ -27,14 +27,10 @@ IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
 IMRI_MAX_GW_TIME_MYR = 13.6e3
 IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
-IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
 IMRI_SNR_THRESHOLD = 20.0
 IMRI_LISA_MISSION_DURATION_YEARS = 4.0
 IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
 IMRI_DETECTOR_OMEGA_M = 0.315
-IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
-IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
-IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
 DEFAULT_GAP_OPENING_CONDITION = "kii"
 TORQUE_WITH_TRAP = "torque_with_trap"
 SEMI_WITHOUT_TRAP = "semi_without_trap"
@@ -73,14 +69,10 @@ class IMRIDynConfig:
         max_gw_time_myr: float,
         gw_eccentricity: float,
         redshift: float,
-        hubble_constant_per_myr: float,
         snr_threshold: float,
         lisa_mission_duration_years: float,
         detector_hubble_constant_km_s_mpc: float,
         detector_omega_m: float,
-        cosmic_merge_time_myr: float,
-        cosmic_merge_smbh_mass_factor: float,
-        cosmic_merge_radius_factor: float,
         # Execution controls
         damping_cpu_count: int | None,
         checkpoint_grid_interval: int,
@@ -113,14 +105,12 @@ class IMRIDynConfig:
                 raise ValueError("base seed must be nonnegative")
         if not 0.0 < lisa_min_gw_frequency_hz < lisa_max_gw_frequency_hz:
             raise ValueError("LISA frequencies must satisfy 0 < f_min < f_max")
-        if max_gw_time_myr <= 0.0:
-            raise ValueError("maximum GW time must be positive")
+        if not np.isfinite(max_gw_time_myr) or max_gw_time_myr <= 0.0:
+            raise ValueError("maximum GW time must be finite and positive")
         if not 0.0 <= gw_eccentricity < 1.0:
             raise ValueError("GW eccentricity must satisfy 0 <= e < 1")
         if not np.isfinite(redshift) or redshift < 0.0:
             raise ValueError("redshift must be nonnegative")
-        if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
-            raise ValueError("Hubble constant must be positive")
         if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
             raise ValueError("SNR threshold must be positive")
         if lisa_mission_duration_years not in (0.5, 1.0, 2.0, 4.0):
@@ -132,20 +122,6 @@ class IMRIDynConfig:
             raise ValueError("detector H0 must be finite and positive")
         if not np.isfinite(detector_omega_m) or not 0.0 < detector_omega_m < 1.0:
             raise ValueError("detector Omega_m must satisfy 0 < Omega_m < 1")
-        if not np.isfinite(cosmic_merge_time_myr) and cosmic_merge_time_myr != np.inf:
-            raise ValueError("cosmic merge time must be finite or infinity")
-        if cosmic_merge_time_myr <= 0.0:
-            raise ValueError("cosmic merge time must be positive")
-        if (
-            not np.isfinite(cosmic_merge_smbh_mass_factor)
-            or cosmic_merge_smbh_mass_factor <= 0.0
-        ):
-            raise ValueError("cosmic merger SMBH mass factor must be positive")
-        if (
-            not np.isfinite(cosmic_merge_radius_factor)
-            or cosmic_merge_radius_factor <= 0.0
-        ):
-            raise ValueError("cosmic merger radius factor must be positive")
         if gap_opening_condition not in GAP_OPENING_CONDITIONS:
             raise ValueError(
                 f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
@@ -174,16 +150,12 @@ class IMRIDynConfig:
         self.max_gw_time_myr = max_gw_time_myr
         self.gw_eccentricity = gw_eccentricity
         self.redshift = redshift
-        self.hubble_constant_per_myr = hubble_constant_per_myr
         self.snr_threshold = snr_threshold
         self.lisa_mission_duration_years = lisa_mission_duration_years
         self.detector_hubble_constant_km_s_mpc = (
             detector_hubble_constant_km_s_mpc
         )
         self.detector_omega_m = detector_omega_m
-        self.cosmic_merge_time_myr = cosmic_merge_time_myr
-        self.cosmic_merge_smbh_mass_factor = cosmic_merge_smbh_mass_factor
-        self.cosmic_merge_radius_factor = cosmic_merge_radius_factor
 
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval

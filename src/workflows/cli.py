@@ -15,15 +15,11 @@ from .config import (
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
-    IMRI_HUBBLE_CONSTANT_PER_MYR,
     IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
     IMRI_DETECTOR_OMEGA_M,
     IMRI_LISA_MISSION_DURATION_YEARS,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
-    IMRI_COSMIC_MERGE_RADIUS_FACTOR,
-    IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
-    IMRI_COSMIC_MERGE_TIME_MYR,
     IMRIDynConfig,
     SECONDS_PER_MINUTE,
 )
@@ -165,12 +161,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="source redshift used for LISA frequency and time-budget conversion",
     )
     parser.add_argument(
-        "--hubble-constant-per-myr",
-        type=float,
-        default=IMRI_HUBBLE_CONSTANT_PER_MYR,
-        help="linear redshift-time coefficient H0 in 1/Myr",
-    )
-    parser.add_argument(
         "--snr-threshold",
         type=float,
         default=IMRI_SNR_THRESHOLD,
@@ -187,31 +177,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--detector-hubble-constant-km-s-mpc",
         type=float,
         default=IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
-        help="flat-LambdaCDM H0 used only for detector luminosity distance",
+        help="flat-LambdaCDM H0 used for cosmic time and luminosity distance",
     )
     parser.add_argument(
         "--detector-omega-m",
         type=float,
         default=IMRI_DETECTOR_OMEGA_M,
-        help="flat-LambdaCDM matter density used only for detector distance",
-    )
-    parser.add_argument(
-        "--cosmic-merge-time-myr",
-        type=float,
-        default=IMRI_COSMIC_MERGE_TIME_MYR,
-        help="source-frame time for one simplified central-SMBH merger",
-    )
-    parser.add_argument(
-        "--cosmic-merge-smbh-mass-factor",
-        type=float,
-        default=IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
-        help="central-SMBH mass multiplier applied by the simplified merger",
-    )
-    parser.add_argument(
-        "--cosmic-merge-radius-factor",
-        type=float,
-        default=IMRI_COSMIC_MERGE_RADIUS_FACTOR,
-        help="orbital-radius multiplier applied by the simplified merger",
+        help="flat-LambdaCDM matter density used for time and distance",
     )
     parser.add_argument(
         "--checkpoint-interval",
@@ -253,16 +225,12 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         max_gw_time_myr=arguments.max_gw_time_myr,
         gw_eccentricity=arguments.gw_eccentricity,
         redshift=arguments.redshift,
-        hubble_constant_per_myr=arguments.hubble_constant_per_myr,
         snr_threshold=arguments.snr_threshold,
         lisa_mission_duration_years=arguments.lisa_mission_duration_years,
         detector_hubble_constant_km_s_mpc=(
             arguments.detector_hubble_constant_km_s_mpc
         ),
         detector_omega_m=arguments.detector_omega_m,
-        cosmic_merge_time_myr=arguments.cosmic_merge_time_myr,
-        cosmic_merge_smbh_mass_factor=arguments.cosmic_merge_smbh_mass_factor,
-        cosmic_merge_radius_factor=arguments.cosmic_merge_radius_factor,
         damping_cpu_count=arguments.damping_cpu_count,
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,

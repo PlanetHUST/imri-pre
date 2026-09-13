@@ -25,6 +25,7 @@ import numpy as np
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
     classify_torque_traps,
+    comp_gap_parameter_dimensionless,
     compute_torque_profile,
     torque_si_to_cgs,
 )
@@ -154,8 +155,10 @@ def _migration_series(
     )
     torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
     local_aspect_ratio = np.interp(torque_radius_cm, disk.radius_cm, disk.aspect_ratio)
-    gap_parameter = migrator_mass_g**2 / (
-        PAGN_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+    gap_parameter = comp_gap_parameter_dimensionless(
+        mass_ratio,
+        local_aspect_ratio,
+        PAGN_ALPHA,
     )
     hill_ratio = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
     crida_parameter = (
@@ -416,8 +419,6 @@ def main(gap_opening_condition: str) -> None:
         alpha=PAGN_ALPHA,
         gamma_adiabat=5.0 / 3.0,
         hydrogen_fraction=0.7,
-        kappa_t=20.0,
-        kappa_norm=25.0,
     )
     series = [
         _migration_series(

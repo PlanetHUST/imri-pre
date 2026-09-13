@@ -142,8 +142,6 @@ def _disk_torque_payload(
         alpha=alpha,
         gamma_adiabat=5.0 / 3.0,
         hydrogen_fraction=0.7,
-        kappa_t=20.0,
-        kappa_norm=25.0,
     )
 
     torque_profile = compute_torque_profile(

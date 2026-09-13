@@ -7,10 +7,16 @@ import numpy as np
 import numpy.typing as npt
 
 if __package__ == "src.physical_process":
-    from ..disk_quantity.migration_torque import TorqueProfile
+    from ..disk_quantity.migration_torque import (
+        TorqueProfile,
+        comp_gap_parameter_dimensionless,
+    )
     from . import constants as const
 else:
-    from disk_quantity.migration_torque import TorqueProfile
+    from disk_quantity.migration_torque import (
+        TorqueProfile,
+        comp_gap_parameter_dimensionless,
+    )
     import physical_process.constants as const
 
 FloatArray = npt.NDArray[np.float64]
@@ -69,7 +75,11 @@ def gap_opening_mask(
     local_aspect_ratio = np.asarray(aspect_ratio, dtype=float)
     valid = np.isfinite(local_aspect_ratio) & (local_aspect_ratio > 0.0)
     if condition == "kii":
-        gap_parameter = mass_ratio**2 / (alpha * local_aspect_ratio**2)
+        gap_parameter = comp_gap_parameter_dimensionless(
+            mass_ratio,
+            local_aspect_ratio,
+            alpha,
+        )
         return valid & (gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD)
 
     hill_radius_over_scale_height = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
@@ -96,8 +106,7 @@ def select_migration_torque_si(
 ) -> MigrationTorqueSelection:
     """Compose the caller-selected migration torque in SI units [N m]."""
     type_i_thermal_torque_si = np.asarray(
-        torque_profile.gamma_type_i_si
-        + (1.0 - torque_profile.gap_attenuation_factor) * torque_profile.gamma_th_si,
+        torque_profile.gamma_type_i_si + torque_profile.gamma_th_si,
         dtype=float,
     )
     if consider_type_ii_migration:

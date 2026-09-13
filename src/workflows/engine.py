@@ -60,6 +60,10 @@ class IMRIDynEngine:
                     pagn_disk.surface_density_g_cm2,
                     dtype=float,
                 ),
+                "density_g_cm3": np.asarray(
+                    pagn_disk.density_g_cm3,
+                    dtype=float,
+                ),
                 "aspect_ratio": np.asarray(pagn_disk.aspect_ratio, dtype=float),
                 "gravitational_radius_cm": pagn_disk.gravitational_radius_cm,
             }

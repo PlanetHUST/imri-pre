@@ -112,6 +112,7 @@ class IMRISingleWorkflow:
                 agn_properties,
                 disk_data["radius_cm"],
                 disk_data["surface_density_g_cm2"],
+                disk_data["density_g_cm3"],
                 disk_data["aspect_ratio"],
                 disk_data["inner_radius_cm"],
                 disk_data["outer_radius_cm"],

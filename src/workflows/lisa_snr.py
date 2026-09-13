@@ -19,6 +19,10 @@ from physical_process.constants import (
     SOLAR_MASS_KG,
     SPEED_OF_LIGHT_M_S,
 )
+from .cosmology import (
+    COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
+    FlatLambdaCDM,
+)
 
 LISA_ARM_LENGTH_M = 2.5e9
 LISA_TRANSFER_FREQUENCY_HZ = SPEED_OF_LIGHT_M_S / (2.0 * pi * LISA_ARM_LENGTH_M)
@@ -31,7 +35,6 @@ LISA_COSMOLOGY_MODEL = "flat_lcdm_matter_lambda"
 LISA_ISCO_MODEL = "schwarzschild_isco_6gm_over_c2"
 SNR_QUADRATURE_METHOD = "scipy_quad_log_frequency"
 SNR_QUADRATURE_RELATIVE_TOLERANCE = 1.0e-8
-COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE = 1.0e-11
 
 DEFAULT_DETECTOR_H0_KM_S_MPC = 67.4
 DEFAULT_DETECTOR_OMEGA_M = 0.315
@@ -113,41 +116,11 @@ def luminosity_distance_mpc(
     hubble_constant_km_s_mpc: float = DEFAULT_DETECTOR_H0_KM_S_MPC,
     omega_m: float = DEFAULT_DETECTOR_OMEGA_M,
 ) -> float:
-    """Return flat matter-plus-Lambda luminosity distance in Mpc."""
-    if not np.isfinite(redshift) or redshift < 0.0:
-        raise ValueError("redshift must be finite and nonnegative")
-    if (
-        not np.isfinite(hubble_constant_km_s_mpc)
-        or hubble_constant_km_s_mpc <= 0.0
-    ):
-        raise ValueError("detector H0 must be finite and positive")
-    if not np.isfinite(omega_m) or not 0.0 < omega_m < 1.0:
-        raise ValueError("Omega_m must satisfy 0 < Omega_m < 1")
-    if redshift == 0.0:
-        return 0.0
-
-    omega_lambda = 1.0 - omega_m
-
-    def inverse_expansion_rate(integration_redshift: float) -> float:
-        return 1.0 / sqrt(
-            omega_m * (1.0 + integration_redshift) ** 3 + omega_lambda
-        )
-
-    comoving_integral, _ = quad(
-        inverse_expansion_rate,
-        0.0,
-        redshift,
-        epsabs=0.0,
-        epsrel=COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
-        limit=200,
-    )
-    speed_of_light_km_s = SPEED_OF_LIGHT_M_S / 1000.0
-    return float(
-        (1.0 + redshift)
-        * speed_of_light_km_s
-        / hubble_constant_km_s_mpc
-        * comoving_integral
-    )
+    """Return shared flat matter-plus-Lambda luminosity distance [Mpc]."""
+    return FlatLambdaCDM(
+        hubble_constant_km_s_mpc=hubble_constant_km_s_mpc,
+        omega_m=omega_m,
+    ).luminosity_distance_mpc(redshift)
 
 
 def schwarzschild_isco_gw_frequency_source_hz(

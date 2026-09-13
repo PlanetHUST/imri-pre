@@ -24,6 +24,7 @@ import numpy as np
 from src.disk_quantity.migration_torque import (
     MigrationParameters,
     classify_torque_traps,
+    comp_gap_parameter_dimensionless,
     compute_torque_profile,
 )
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
@@ -33,7 +34,7 @@ from src.physical_process.disk_migration import (
     select_migration_torque_si,
 )
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
-from src.workflows.config import PAGN_ALPHA
+from src.workflows.config import IMRI_LISA_MIN_GW_FREQUENCY_HZ, PAGN_ALPHA
 
 SMBH_MIN_MSUN = 1.0e3
 SMBH_MAX_MSUN = 1.0e7
@@ -44,7 +45,7 @@ OUTPUT_STEM = "trap_radius_2d"
 
 TORQUE_MAX_RADIUS_RG = 1e7
 MIN_TRAP_SEPARATION_CELLS = 1.0
-LISA_MIN_GW_FREQUENCY_HZ = 1e-4
+LISA_MIN_GW_FREQUENCY_HZ = IMRI_LISA_MIN_GW_FREQUENCY_HZ
 REDSHIFT = 10
 
 plt.rcParams.update(
@@ -149,8 +150,10 @@ def _trap_point(
         solved_disk_aspect_ratio[disk_order],
     )
 
-    gap_parameter = migrator_mass_g**2 / (
-        PAGN_ALPHA * local_aspect_ratio**2 * smbh_mass_g**2
+    gap_parameter = comp_gap_parameter_dimensionless(
+        mass_ratio,
+        local_aspect_ratio,
+        PAGN_ALPHA,
     )
     hill_ratio = np.cbrt(mass_ratio / 3.0) / local_aspect_ratio
     crida_parameter = (

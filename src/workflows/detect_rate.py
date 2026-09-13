@@ -6,9 +6,8 @@ import numpy as np
 
 import physical_process.gw_frequency_radius as gw_helpers
 
-from .cosmic_merge import CosmicMergeModel
+from .cosmology import FlatLambdaCDM
 from .lisa_snr import evaluate_lisa_inspiral_snr
-from .redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
 DETECTION_CLASS_NOT_DETECTABLE = "non-detectable"
@@ -67,7 +66,7 @@ def solve_time_to_observed_lisa_entry(
     initial_radius_cm: float,
     initial_redshift: float,
     start_time_myr: float,
-    redshift_model: RedshiftEvolution,
+    redshift_model: FlatLambdaCDM,
     min_observed_frequency_hz: float,
     eccentricity: float,
     max_elapsed_time_myr: float,
@@ -81,7 +80,7 @@ def solve_time_to_observed_lisa_entry(
     if not np.isfinite(initial_radius_cm) or initial_radius_cm <= 0.0:
         raise ValueError("GW segment initial radius must be finite and positive")
 
-    start_redshift = redshift_model.redshift_evlove_with_time(
+    start_redshift = redshift_model.evolve_redshift(
         initial_redshift,
         start_time_myr,
     )
@@ -140,7 +139,7 @@ def solve_time_to_observed_lisa_entry(
         eccentricity,
     )
     time_to_isco_myr = max(0.0, start_merger_time_myr - isco_merger_time_myr)
-    remaining_cosmic_time_myr = redshift_model.remaining_time_to_zero_redshift_myr(
+    remaining_cosmic_time_myr = redshift_model.remaining_time_to_z0_myr(
         start_redshift
     )
     elapsed_limit_myr = min(
@@ -150,7 +149,7 @@ def solve_time_to_observed_lisa_entry(
     )
 
     def fixed_boundary_time_myr(elapsed_time_myr: float) -> float:
-        redshift = redshift_model.redshift_evlove_with_time(
+        redshift = redshift_model.evolve_redshift(
             initial_redshift,
             start_time_myr + elapsed_time_myr,
         )
@@ -184,7 +183,7 @@ def solve_time_to_observed_lisa_entry(
 
         time_to_entry_myr = upper_time_myr
         arrival_time_myr = start_time_myr + time_to_entry_myr
-        arrival_redshift = redshift_model.redshift_evlove_with_time(
+        arrival_redshift = redshift_model.evolve_redshift(
             initial_redshift,
             arrival_time_myr,
         )
@@ -218,7 +217,7 @@ def solve_time_to_observed_lisa_entry(
         )
 
     final_time_myr = start_time_myr + elapsed_limit_myr
-    final_redshift = redshift_model.redshift_evlove_with_time(
+    final_redshift = redshift_model.evolve_redshift(
         initial_redshift,
         final_time_myr,
     )
@@ -299,19 +298,16 @@ def classify_detectability(
     r_gas_fin_cm: float,
     gas_final_time_myr: float,
     initial_redshift: float,
-    hubble_constant_per_myr: float,
     min_observed_frequency_hz: float,
     max_observed_frequency_hz: float,
+    max_gw_time_myr: float,
     eccentricity: float,
-    cosmic_merge_time_myr: float,
-    cosmic_merge_smbh_mass_factor: float,
-    cosmic_merge_radius_factor: float,
     snr_threshold: float,
     mission_duration_years: float,
     detector_hubble_constant_km_s_mpc: float,
     detector_omega_m: float,
 ) -> DetectRateDecision:
-    """Classify one IMRI candidate after gas delivery and cosmic evolution."""
+    """Classify one single-AGN IMRI candidate after fixed-mass GW evolution."""
     if not is_imri_candidate:
         return DetectRateDecision(
             detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
@@ -368,27 +364,23 @@ def classify_detectability(
             snr_status="required_input_unavailable",
         )
 
-    redshift_model = RedshiftEvolution(hubble_constant_per_myr)
-    merge_model = CosmicMergeModel(
-        merge_time_myr=cosmic_merge_time_myr,
-        smbh_mass_growth_factor=cosmic_merge_smbh_mass_factor,
-        radius_growth_factor=cosmic_merge_radius_factor,
+    redshift_model = FlatLambdaCDM(
+        hubble_constant_km_s_mpc=detector_hubble_constant_km_s_mpc,
+        omega_m=detector_omega_m,
     )
     current_time_myr = float(gas_final_time_myr)
-    current_redshift = redshift_model.redshift_evlove_with_time(
+    current_redshift = redshift_model.evolve_redshift(
         initial_redshift,
         current_time_myr,
     )
     current_smbh_mass_msun = float(primary_mass_msun)
     current_radius_cm = float(r_gas_fin_cm)
-    cosmic_merge_applied = False
-    remaining_cosmic_time_myr = redshift_model.remaining_time_to_zero_redshift_myr(
+    remaining_cosmic_time_myr = redshift_model.remaining_time_to_z0_myr(
         current_redshift
     )
-    time_to_merge_myr = merge_model.merge_time_myr
-    initial_segment_limit_myr = min(
+    gw_elapsed_limit_myr = min(
+        max_gw_time_myr,
         remaining_cosmic_time_myr,
-        time_to_merge_myr if merge_model.is_active else remaining_cosmic_time_myr,
     )
     entry_outcome = solve_time_to_observed_lisa_entry(
         primary_mass_msun=current_smbh_mass_msun,
@@ -399,7 +391,7 @@ def classify_detectability(
         redshift_model=redshift_model,
         min_observed_frequency_hz=min_observed_frequency_hz,
         eccentricity=eccentricity,
-        max_elapsed_time_myr=initial_segment_limit_myr,
+        max_elapsed_time_myr=gw_elapsed_limit_myr,
     )
 
     entry_statuses = {"already_inside_band", "entry_reached"}
@@ -412,90 +404,20 @@ def classify_detectability(
                 mission_duration_years=mission_duration_years,
             )
 
-        merger_occurs_first = (
-            merge_model.is_active and time_to_merge_myr < remaining_cosmic_time_myr
-        )
-        if not merger_occurs_first:
-            return _not_detected_due_to_time(
-                primary_mass_msun=current_smbh_mass_msun,
-                radius_cm=entry_outcome.state_radius_cm,
-                entry_radius_cm=entry_outcome.entry_radius_cm,
-                gw_time_after_gas_myr=np.inf,
-                detection_redshift=entry_outcome.state_redshift,
-                cosmic_merge_applied=False,
-                reason=(
-                    "misses_cosmic_time_before_merge"
-                    if merge_model.is_active
-                    else "misses_cosmic_time_budget"
-                ),
-                mission_duration_years=mission_duration_years,
-            )
-
-        pre_merge_boundary = gw_helpers.circular_band_boundary(
-            current_smbh_mass_msun,
-            secondary_mass_msun,
-            min_observed_frequency_hz,
-            current_redshift,
-        )
-        radius_at_merge_cm = gw_helpers.peters_radius_after_time_cm(
-            current_smbh_mass_msun,
-            secondary_mass_msun,
-            current_radius_cm,
-            time_to_merge_myr,
-            eccentricity,
-            pre_merge_boundary.isco_radius_cm,
-        )
-        current_time_myr += time_to_merge_myr
-        current_redshift = redshift_model.redshift_evlove_with_time(
-            initial_redshift,
-            current_time_myr,
-        )
-        current_smbh_mass_msun = merge_model.post_merge_smbh_mass_msun(
-            current_smbh_mass_msun,
-        )
-        current_radius_cm = merge_model.post_merge_radius_cm(radius_at_merge_cm)
-        if (
-            not np.isfinite(current_smbh_mass_msun)
-            or current_smbh_mass_msun <= 0.0
-            or not np.isfinite(current_radius_cm)
-            or current_radius_cm <= 0.0
-            or not np.isfinite(current_redshift)
-            or current_redshift < 0.0
-        ):
-            raise RuntimeError("cosmic merger produced an invalid orbital state")
-        cosmic_merge_applied = True
-        remaining_cosmic_time_myr = (
-            redshift_model.remaining_time_to_zero_redshift_myr(current_redshift)
-        )
-        entry_outcome = solve_time_to_observed_lisa_entry(
+        return _not_detected_due_to_time(
             primary_mass_msun=current_smbh_mass_msun,
-            secondary_mass_msun=secondary_mass_msun,
-            initial_radius_cm=current_radius_cm,
-            initial_redshift=initial_redshift,
-            start_time_myr=current_time_myr,
-            redshift_model=redshift_model,
-            min_observed_frequency_hz=min_observed_frequency_hz,
-            eccentricity=eccentricity,
-            max_elapsed_time_myr=remaining_cosmic_time_myr,
+            radius_cm=entry_outcome.state_radius_cm,
+            entry_radius_cm=entry_outcome.entry_radius_cm,
+            gw_time_after_gas_myr=np.inf,
+            detection_redshift=entry_outcome.state_redshift,
+            cosmic_merge_applied=False,
+            reason=(
+                "misses_gw_time_budget"
+                if max_gw_time_myr <= remaining_cosmic_time_myr
+                else "misses_cosmic_time_budget"
+            ),
+            mission_duration_years=mission_duration_years,
         )
-        if entry_outcome.status not in entry_statuses:
-            if entry_outcome.status == "entry_not_reached_before_isco":
-                return _gw_evolution_unavailable(
-                    primary_mass_msun=current_smbh_mass_msun,
-                    outcome=entry_outcome,
-                    cosmic_merge_applied=True,
-                    mission_duration_years=mission_duration_years,
-                )
-            return _not_detected_due_to_time(
-                primary_mass_msun=current_smbh_mass_msun,
-                radius_cm=entry_outcome.state_radius_cm,
-                entry_radius_cm=entry_outcome.entry_radius_cm,
-                gw_time_after_gas_myr=np.inf,
-                detection_redshift=entry_outcome.state_redshift,
-                cosmic_merge_applied=True,
-                reason="misses_cosmic_time_budget",
-                mission_duration_years=mission_duration_years,
-            )
 
     detection_time_myr = entry_outcome.state_time_myr
     detection_redshift = entry_outcome.state_redshift
@@ -537,7 +459,7 @@ def classify_detectability(
         final_radius_cm=final_radius_cm,
         final_entry_radius_cm=final_entry_radius_cm,
         gw_time_after_gas_myr=gw_time_after_gas_myr,
-        cosmic_merge_applied=cosmic_merge_applied,
+        cosmic_merge_applied=False,
         detect_rate_reason=snr_result.reason,
         lisa_snr=snr_result.lisa_snr,
         snr_status=snr_result.status,

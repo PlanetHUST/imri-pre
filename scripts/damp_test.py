@@ -67,7 +67,7 @@ SCAN_MAX_ITER = 20000
 
 PHASE_AXIS_INITIAL_MIN_RG = 1.0e5
 PHASE_AXIS_INITIAL_MAX_RG = 1.0e7
-PHASE_AXIS_PLOT_MIN_RG = 3.0e3
+PHASE_AXIS_PLOT_MIN_RG = 2.5e3
 PHASE_AXIS_PLOT_MAX_RG = 1.2e7
 PHASE_ECCENTRICITY_MIN = 0.0
 PHASE_ECCENTRICITY_MAX = 0.95
@@ -359,7 +359,7 @@ CASES = (
         inclination_deg=HIGH_INCLINATION_DEG,
         cos_omega=0.5,
         expected_node_flags=(True, True),
-        expected_status=DampingStatus.EMBEDDED_STAR,
+        expected_status=DampingStatus.DAMPING_INCOMPLETE,
         max_iter=50000,
     ),
 )
@@ -393,6 +393,7 @@ def _build_disk() -> DiagnosticDisk:
         verbose=False,
         radius_grid_cm=np.asarray(profile.radius_cm, dtype=float),
         surface_density_g_cm2=np.asarray(profile.surface_density_g_cm2, dtype=float),
+        density_g_cm3=np.asarray(profile.density_g_cm3, dtype=float),
         aspect_ratio=np.asarray(profile.aspect_ratio, dtype=float),
         disk_inner_radius_cm=profile.inner_radius_cm,
         disk_outer_radius_cm=profile.outer_radius_cm,
@@ -768,6 +769,7 @@ def _assert_worker_serialization(
         disk.agn,
         np.asarray(disk.profile.radius_cm, dtype=float),
         np.asarray(disk.profile.surface_density_g_cm2, dtype=float),
+        np.asarray(disk.profile.density_g_cm3, dtype=float),
         np.asarray(disk.profile.aspect_ratio, dtype=float),
         disk.profile.inner_radius_cm,
         disk.profile.outer_radius_cm,

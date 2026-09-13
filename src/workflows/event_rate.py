@@ -157,18 +157,10 @@ def solve_gas_final_radius_cm(
             "damping_misses_duty_cycle",
         )
 
-    if not np.isfinite(total_migration_time_myr):
-        return (
-            r_ini_cm,
-            0.0,
-            total_migration_time_myr,
-            total_gw_time_myr,
-            gw_time_gas_target_to_entry_myr,
-            "migration_trap_bound",
-        )
-
     gas_assisted_time_to_entry_myr = (
         total_migration_time_myr + gw_time_gas_target_to_entry_myr
+        if np.isfinite(total_migration_time_myr)
+        else np.inf
     )
     if (
         np.isfinite(total_gw_time_myr)
@@ -181,6 +173,16 @@ def solve_gas_final_radius_cm(
             total_gw_time_myr,
             gw_time_gas_target_to_entry_myr,
             "gw_dominates_at_start",
+        )
+
+    if not np.isfinite(total_migration_time_myr):
+        return (
+            r_ini_cm,
+            0.0,
+            total_migration_time_myr,
+            total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
+            "migration_trap_bound",
         )
 
     sample_count = max(2, int(num_radius_samples))

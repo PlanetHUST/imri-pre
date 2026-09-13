@@ -50,6 +50,7 @@ class DiskProfiles(TypedDict):
     outer_radius_cm: float
     radius_cm: FloatArray
     surface_density_g_cm2: FloatArray
+    density_g_cm3: FloatArray
     aspect_ratio: FloatArray
     gravitational_radius_cm: float
     torque_disk: NotRequired[object]

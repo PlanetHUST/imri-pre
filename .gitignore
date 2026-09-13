@@ -14,11 +14,13 @@ env/
 # Generated scientific outputs
 # ============================================================
 output/
+input/
 
 # Legacy generated-output locations
 imri_redshift_scan_results/
 imri_dyn_results/
 figs/
+docs/
 
 lisa_ref/
 # ============================================================

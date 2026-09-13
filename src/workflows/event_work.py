@@ -13,6 +13,7 @@ from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
 from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
+from .cosmology import FlatLambdaCDM
 from .detect_rate import (
     classify_detectability,
     solve_time_to_observed_lisa_entry,
@@ -40,7 +41,6 @@ from .models import (
     IMRIDynSingleResult,
     MigrationErrorRecord,
 )
-from .redshift_evolve import RedshiftEvolution
 from .runtime import vprint
 
 BAND_ENTRY_IN_MIGRATION_DOMAIN = "entry_in_migration_domain"
@@ -280,7 +280,12 @@ class IMRIEventEvaluator:
         boundary: gw_helpers.CircularBandBoundary,
     ) -> IMRIEventRecord:
         redshift = self.config.redshift
-        redshift_model = RedshiftEvolution(self.config.hubble_constant_per_myr)
+        redshift_model = FlatLambdaCDM(
+            hubble_constant_km_s_mpc=(
+                self.config.detector_hubble_constant_km_s_mpc
+            ),
+            omega_m=self.config.detector_omega_m,
+        )
         migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + migrator_mass_msun
@@ -389,7 +394,7 @@ class IMRIEventEvaluator:
                 radius_cm: float,
                 absolute_time_myr: float,
             ) -> float:
-                current_redshift = redshift_model.redshift_evlove_with_time(
+                current_redshift = redshift_model.evolve_redshift(
                     redshift,
                     absolute_time_myr,
                 )
@@ -405,8 +410,11 @@ class IMRIEventEvaluator:
                     ),
                     eccentricity=self.config.gw_eccentricity,
                     max_elapsed_time_myr=(
-                        redshift_model.remaining_time_to_zero_redshift_myr(
-                            current_redshift
+                        min(
+                            self.config.max_gw_time_myr,
+                            redshift_model.remaining_time_to_z0_myr(
+                                current_redshift
+                            ),
                         )
                     ),
                 )
@@ -435,15 +443,10 @@ class IMRIEventEvaluator:
                 r_gas_fin_cm=event_decision.r_gas_fin_cm,
                 gas_final_time_myr=event_decision.gas_final_time_myr,
                 initial_redshift=redshift,
-                hubble_constant_per_myr=self.config.hubble_constant_per_myr,
                 min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
                 max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
+                max_gw_time_myr=self.config.max_gw_time_myr,
                 eccentricity=self.config.gw_eccentricity,
-                cosmic_merge_time_myr=self.config.cosmic_merge_time_myr,
-                cosmic_merge_smbh_mass_factor=(
-                    self.config.cosmic_merge_smbh_mass_factor
-                ),
-                cosmic_merge_radius_factor=self.config.cosmic_merge_radius_factor,
                 snr_threshold=self.config.snr_threshold,
                 mission_duration_years=self.config.lisa_mission_duration_years,
                 detector_hubble_constant_km_s_mpc=(
@@ -461,7 +464,7 @@ class IMRIEventEvaluator:
         #     f"r_gas_fin is {event_decision.r_gas_fin_cm:.3e} cm"
         # )
 
-        redshift_at_gas_fin = redshift_model.redshift_evlove_with_time(
+        redshift_at_gas_fin = redshift_model.evolve_redshift(
             redshift, event_decision.gas_final_time_myr
         )
 

@@ -34,14 +34,10 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "lisa_max_gw_frequency_hz": 1.0e-1,
     "max_gw_time_myr": 13.6e3,
     "gw_eccentricity": 0.0,
-    "hubble_constant_per_myr": 1.0 / 13.6e3,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
-    "cosmic_merge_time_myr": 1.0e3,
-    "cosmic_merge_smbh_mass_factor": 2.0,
-    "cosmic_merge_radius_factor": 2.0,
     "damping_cpu_count": None,
     "checkpoint_grid_interval": 5,
     "print_debug_results": False,
@@ -93,14 +89,10 @@ CONFIG_TEMPLATE_FIELDS = (
     "lisa_max_gw_frequency_hz",
     "max_gw_time_myr",
     "gw_eccentricity",
-    "hubble_constant_per_myr",
     "snr_threshold",
     "lisa_mission_duration_years",
     "detector_hubble_constant_km_s_mpc",
     "detector_omega_m",
-    "cosmic_merge_time_myr",
-    "cosmic_merge_smbh_mass_factor",
-    "cosmic_merge_radius_factor",
     "damping_cpu_count",
     "checkpoint_grid_interval",
     "print_debug_results",
@@ -198,12 +190,26 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
             f"explicitly inferring defaults for {missing_detector_fields}",
             stacklevel=2,
         )
+    legacy_fields = sorted(
+        field
+        for field in (
+            "hubble_constant_per_myr",
+            "cosmic_merge_time_myr",
+            "cosmic_merge_smbh_mass_factor",
+            "cosmic_merge_radius_factor",
+        )
+        if field in source
+    )
+    if legacy_fields:
+        warnings.warn(
+            "ignoring legacy single-AGN-incompatible configuration fields: "
+            f"{legacy_fields}",
+            stacklevel=2,
+        )
     missing = [field for field in CONFIG_TEMPLATE_FIELDS if field not in source]
     if missing:
         raise ValueError(f"config JSON is missing explicit fields: {missing}")
     template = {field: source[field] for field in CONFIG_TEMPLATE_FIELDS}
-    if template["cosmic_merge_time_myr"] is None:
-        template["cosmic_merge_time_myr"] = np.inf
     return template
 
 

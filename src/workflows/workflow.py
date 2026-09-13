@@ -78,7 +78,6 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         f"{source_lisa_min_hz:.3e} to "
         f"{source_lisa_max_hz:.3e} Hz"
     )
-    print("Cosmic merge time: " f"{config.cosmic_merge_time_myr:.3e} Myr")
     print(f"Output directory: {config.output_dir}")
     print(
         "Damping CPU count: "
