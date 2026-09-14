@@ -703,5 +703,6 @@ class IMRIEventEvaluator:
             torque_alpha,
             self.config.gap_opening_condition,
             self.config.consider_type_ii_migration,
+            migration_model=self.config.migration_model,
         )
         return torque_si_to_cgs(selection.torque_si)

@@ -125,10 +125,10 @@ TRANSPORT_STATUS_BY_GAS_STOP_REASON = {
 # not-evaluable outcome; inside-ISCO and blank/null reasons remain excluded.
 TRANSPORT_EXCLUDED_REASONS = {"band_entry_inside_isco"}
 STATUS_VARIABLE_LABELS = {
-    "band_entry_status": "Band-entry geometry",
-    "transport_status": "Gas/GW transport outcome\n(including invalid states)",
-    "event_outcome": "IMRI event outcome",
-    "detectability_outcome": "Detectability outcome",
+    "band_entry_status": "Band entry",
+    "transport_status": "Transport",
+    "event_outcome": "Event",
+    "detectability_outcome": "Detectability",
 }
 STATUS_CATEGORY_LABELS = {
     "band_entry_status": {
@@ -1173,30 +1173,8 @@ def _plot_status_fractions(
                 )
 
     dimension_label = "redshift" if scan_column == "redshift" else "SMBH mass"
-    fig.suptitle(
-        f"IMRI classification fractions across {dimension_label}\n"
-        + rf"NSC mass $={_mass_label(nsc_mass).strip('$')}$",
-        fontsize=13,
-    )
-    aggregation_note = (
-        "Each redshift bar aggregates configured SMBH masses."
-        if scan_column == "redshift"
-        else "Each SMBH-mass bar aggregates requested redshifts."
-    )
-    fig.text(
-        0.01,
-        0.01,
-        "Denominators: geometry = attempted band-entry classifications; transport = "
-        "persisted transport outcomes, including invalid states but excluding "
-        "inside-ISCO geometry and blank/null reasons; event and detectability = all "
-        "persisted event rows.\n"
-        + aggregation_note
-        + " Status fractions are diagnostic and may include outcomes from repeats "
-        "excluded from rate estimation.",
-        fontsize=8.0,
-        color="0.3",
-    )
-    fig.tight_layout(rect=(0.0, 0.065, 1.0, 0.95))
+    fig.suptitle(f"Classification fractions vs {dimension_label}", fontsize=13)
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
     return _save_figure(fig, Path(output_stem))
 
 
@@ -1245,14 +1223,12 @@ def _plot_time_series(
 
     fig, axis = _new_figure(f"{title}: {_disk_model_label(disk_model)}")
     colors = _color_map(selected["m_smbh_msun"].unique())
-    unavailable: list[str] = []
     for mass, color in colors.items():
         curve = selected[np.isclose(selected["m_smbh_msun"], mass)].sort_values(
             "time_myr"
         )
         y = curve["cumulative_rate_mean_per_myr"].to_numpy(dtype=float)
         if not np.isfinite(y).any():
-            unavailable.append(_mass_label(mass))
             continue
         x = curve["time_myr"].to_numpy(dtype=float)
         axis.step(
@@ -1290,17 +1266,6 @@ def _plot_time_series(
     # axis.set_yscale("log")
     if axis.lines:
         axis.legend(frameon=False, fontsize=10, loc="best")
-    if unavailable:
-        axis.text(
-            0.98,
-            0.04,
-            "Unavailable: " + ", ".join(unavailable),
-            transform=axis.transAxes,
-            ha="right",
-            va="bottom",
-            fontsize=9,
-            color="0.35",
-        )
     fig.tight_layout()
     return _save_figure(fig, Path(output_stem))
 
@@ -1314,9 +1279,9 @@ def plot_transport_time(
     return _plot_time_series(
         time_data,
         output_stem,
-        title="AGN-assisted transport through one active episode",
+        title="Gas transport",
         x_label="AGN elapsed time [Myr]",
-        y_label="Cumulative transport-completion rate [Myr$^{-1}$]",
+        y_label="Cumulative rate [Myr$^{-1}$]",
         rate_ylim=rate_ylim,
     )
 
@@ -1330,9 +1295,9 @@ def plot_physical_entry_time(
     return _plot_time_series(
         time_data,
         output_stem,
-        title="Physical LISA-entry IMRI production",
-        x_label="Elapsed time to physical entry [Myr]",
-        y_label="Cumulative IMRI-entry rate [Myr$^{-1}$]",
+        title="LISA entry",
+        x_label="Time to entry [Myr]",
+        y_label="Cumulative rate [Myr$^{-1}$]",
         rate_ylim=rate_ylim,
     )
 
@@ -1366,10 +1331,7 @@ def _plot_rate_dependence(
     colors = _color_map(nsc_data[curve_column].unique())
 
     fig, axis = _new_figure(f"{title}: {_disk_model_label(disk_model)}")
-    has_unavailable = False
-    has_partial = False
     unavailable_positions: list[float] = []
-    unavailable_curves: list[str] = []
     line_styles = ("-", "--", ":", "-.")
     for curve_index, (curve_value, color) in enumerate(colors.items()):
         curve = nsc_data[np.isclose(nsc_data[curve_column], curve_value)].sort_values(
@@ -1390,8 +1352,6 @@ def _plot_rate_dependence(
                 label=curve_label(float(curve_value)),
                 clip_on=False,
             )
-        else:
-            unavailable_curves.append(curve_label(float(curve_value)))
 
         valid_band = (
             curve["n_repeats_valid"].to_numpy(dtype=int) >= MIN_REPEATS_FOR_BAND
@@ -1408,7 +1368,6 @@ def _plot_rate_dependence(
 
         partial = curve["result_state"].eq("partial").to_numpy()
         if partial.any():
-            has_partial = True
             axis.scatter(
                 x[partial],
                 y[partial],
@@ -1421,7 +1380,6 @@ def _plot_rate_dependence(
             )
         unavailable = curve["result_state"].eq("unavailable").to_numpy()
         if unavailable.any():
-            has_unavailable = True
             unavailable_positions.extend(float(value) for value in x[unavailable])
 
     if unavailable_positions:
@@ -1438,7 +1396,7 @@ def _plot_rate_dependence(
         )
 
     axis.set_xlabel(x_label, fontsize=12)
-    axis.set_ylabel("Physical LISA-entry IMRI rate [Myr$^{-1}$]", fontsize=12)
+    axis.set_ylabel("IMRI rate [Myr$^{-1}$]", fontsize=12)
     if rate_ylim is not None:
         axis.set_ylim(*rate_ylim)
     # axis.set_ylim(bottom=0.0)
@@ -1446,25 +1404,6 @@ def _plot_rate_dependence(
         axis.set_xscale("log")
     # axis.set_yscale("log")
     axis.legend(frameon=False, fontsize=10, loc="best")
-    notes: list[str] = []
-    if has_partial:
-        notes.append("open marker: partial repeats")
-    if has_unavailable:
-        unavailable_note = "x: unavailable"
-        if unavailable_curves:
-            unavailable_note += " (" + ", ".join(unavailable_curves) + ")"
-        notes.append(unavailable_note)
-    if notes:
-        axis.text(
-            0.98,
-            0.04,
-            "; ".join(notes),
-            transform=axis.transAxes,
-            ha="right",
-            va="bottom",
-            fontsize=9,
-            color="0.35",
-        )
     fig.tight_layout()
     return _save_figure(fig, output_stem)
 
@@ -1482,7 +1421,7 @@ def plot_rate_vs_redshift(
         x_column="redshift",
         curve_column="m_smbh_msun",
         curve_label=_mass_label,
-        title="Physical LISA-entry IMRI rate versus redshift",
+        title="IMRI rate vs redshift",
         x_label="Redshift $z$",
         log_x=False,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
@@ -1503,7 +1442,7 @@ def plot_rate_vs_smbh_mass(
         x_column="m_smbh_msun",
         curve_column="redshift",
         curve_label=lambda redshift: f"$z={redshift:g}$",
-        title="Physical LISA-entry IMRI rate versus SMBH mass",
+        title="IMRI rate vs SMBH mass",
         x_label=r"SMBH mass [$M_\odot$]",
         log_x=True,
         selected_nsc_mass_msun=selected_nsc_mass_msun,
@@ -1544,6 +1483,11 @@ def write_figure_captions(
             "This is an exploratory result with fewer than "
             f"{MIN_REPEATS_FOR_BAND} valid repeats; no uncertainty band is shown."
         )
+    marker_text = (
+        "Open markers denote bins with partial repeats and a cross marks an "
+        "unavailable result; unavailable bins are never drawn as zero. Series "
+        "without any valid repeat are omitted, and the companion CSV records NaN."
+    )
 
     captions = ["# Figure captions", "", f"Migration scenario: {scenario_text}.", ""]
     if time_redshift is not None:
@@ -1560,7 +1504,7 @@ def write_figure_captions(
                     f"${_caption_mass_label(nsc_mass).strip('$')}$. Curves distinguish "
                     f"SMBH mass and summarize {repeat_text} Monte Carlo repeats. "
                     "Gas completion is not physical LISA entry. "
-                    f"{band_text}"
+                    f"{band_text} {marker_text}"
                 ),
                 "",
                 "## Physical LISA-entry IMRI production",
@@ -1571,7 +1515,7 @@ def write_figure_captions(
                     f"$z={time_redshift:g}$. The time coordinate is the persisted "
                     "`detection_time_myr`, and the curve may extend beyond the AGN "
                     f"duty cycle. Rates retain the {duties[0]:g} Myr AGN-episode "
-                    f"denominator. {band_text}"
+                    f"denominator. {band_text} {marker_text}"
                 ),
                 "",
             ]
@@ -1588,7 +1532,7 @@ def write_figure_captions(
                     f"Colors distinguish SMBH mass; each bin uses {repeat_text} "
                     f"Monte Carlo repeats and a {duties[0]:g} Myr AGN-duty rate "
                     "denominator, including entries that occur later. "
-                    f"{band_text} A cross marks an unavailable result, not zero."
+                    f"{band_text} {marker_text}"
                 ),
                 "",
             ]
@@ -1604,7 +1548,7 @@ def write_figure_captions(
                 f"Colors distinguish redshift; each bin uses {repeat_text} Monte "
                 f"Carlo repeats and a {duties[0]:g} Myr AGN-duty rate denominator, "
                 "including entries that occur later. "
-                f"{band_text} A cross marks an unavailable result, not zero."
+                f"{band_text} {marker_text}"
             ),
             "",
             (

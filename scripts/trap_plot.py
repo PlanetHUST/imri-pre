@@ -30,11 +30,17 @@ from src.disk_quantity.migration_torque import (
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
+    DEFAULT_MIGRATION_MODEL,
     GAP_OPENING_CONDITIONS,
+    MIGRATION_MODELS,
     select_migration_torque_si,
 )
 from src.physical_process.gw_frequency_radius import lisa_entry_radius_cm
-from src.workflows.config import IMRI_LISA_MIN_GW_FREQUENCY_HZ, PAGN_ALPHA
+from src.workflows.config import (
+    DISK_ACCRETION_RATE_G_S_PER_MSUN,
+    IMRI_LISA_MIN_GW_FREQUENCY_HZ,
+    PAGN_ALPHA,
+)
 
 SMBH_MIN_MSUN = 1.0e3
 SMBH_MAX_MSUN = 1.0e7
@@ -43,7 +49,7 @@ MIGRATOR_MASS_MSUN = 10.0
 OUTPUT_DIR = Path("figs")
 OUTPUT_STEM = "trap_radius_2d"
 
-TORQUE_MAX_RADIUS_RG = 1e7
+TORQUE_MAX_RADIUS_RG = None
 MIN_TRAP_SEPARATION_CELLS = 1.0
 LISA_MIN_GW_FREQUENCY_HZ = IMRI_LISA_MIN_GW_FREQUENCY_HZ
 REDSHIFT = 10
@@ -100,6 +106,11 @@ def _parse_args() -> argparse.Namespace:
         default="kii",
         help="kii: KII > 11; crida: P < 1 and R_H/H > 1",
     )
+    parser.add_argument(
+        "--migration-model",
+        choices=MIGRATION_MODELS,
+        default=DEFAULT_MIGRATION_MODEL,
+    )
     return parser.parse_args()
 
 
@@ -113,13 +124,20 @@ def _trap_point(
     migrator_mass_msun: float,
     gap_opening_condition: str,
     params: MigrationParameters,
+    migration_model: str,
 ) -> TrapPoint:
     smbh_mass_g = smbh_mass_msun * const.msun
     migrator_mass_g = migrator_mass_msun * const.msun
     mass_ratio = migrator_mass_g / smbh_mass_g
     rg_cm = const.G * smbh_mass_g / const.c**2
 
-    disk_profile = build_pagn_disk_profile(smbh_mass_msun, PAGN_ALPHA)
+    disk_profile = build_pagn_disk_profile(
+        smbh_mass_msun,
+        PAGN_ALPHA,
+        accretion_rate_g_s=(
+            DISK_ACCRETION_RATE_G_S_PER_MSUN * smbh_mass_msun
+        ),
+    )
     entry_radius_cm = lisa_entry_radius_cm(
         primary_mass_msun=smbh_mass_msun,
         secondary_mass_msun=migrator_mass_msun,
@@ -166,6 +184,7 @@ def _trap_point(
         PAGN_ALPHA,
         gap_opening_condition,
         consider_type_ii_migration=True,
+        migration_model=migration_model,
     ).torque_si
     trap_radii = classify_torque_traps(
         torque_profile.radius_rg,
@@ -193,7 +212,10 @@ def _trap_point(
     )
 
 
-def _compute_results(gap_opening_condition: str) -> TrapResults:
+def _compute_results(
+    gap_opening_condition: str,
+    migration_model: str,
+) -> TrapResults:
     smbh_masses_msun = np.logspace(
         np.log10(SMBH_MIN_MSUN), np.log10(SMBH_MAX_MSUN), SMBH_COUNT
     )
@@ -204,6 +226,7 @@ def _compute_results(gap_opening_condition: str) -> TrapResults:
             float(MIGRATOR_MASS_MSUN),
             gap_opening_condition,
             params,
+            migration_model,
         )
         for smbh_mass_msun in smbh_masses_msun
     ]
@@ -378,6 +401,7 @@ def _print_range(label: str, values: np.ndarray) -> None:
 def _print_results(
     results: TrapResults,
     gap_opening_condition: str,
+    migration_model: str,
     figure_path: Path,
 ) -> None:
     masses = results.smbh_masses_msun
@@ -388,9 +412,9 @@ def _print_results(
     )
     print(f"  migrator_mass_msun: {MIGRATOR_MASS_MSUN:.6g}")
     print(f"  gap_opening_condition: {gap_opening_condition}")
-    print("  gap_open_torque: type_ii_only")
+    print(f"  migration_model: {migration_model}")
     _print_range("disk_outer_radius_rg_range", results.disk_outer_radius_rg)
-    _print_range("max_gap_open_parameter_range", results.max_gap_parameter)
+    _print_range("max_gap_parameter_K_range", results.max_gap_parameter)
     _print_range("min_crida_gap_parameter_range", results.min_crida_parameter)
     _print_range("max_hill_radius_over_scale_height_range", results.max_hill_ratio)
     print(
@@ -405,11 +429,15 @@ def _print_results(
     print(f"  figure: {figure_path}")
 
 
-def main(gap_opening_condition: str) -> None:
-    results = _compute_results(gap_opening_condition)
+def main(
+    gap_opening_condition: str,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
+) -> None:
+    results = _compute_results(gap_opening_condition, migration_model)
     figure_path = _plot_results(results)
-    _print_results(results, gap_opening_condition, figure_path)
+    _print_results(results, gap_opening_condition, migration_model, figure_path)
 
 
 if __name__ == "__main__":
-    main(_parse_args().gap_open_condition)
+    arguments = _parse_args()
+    main(arguments.gap_open_condition, arguments.migration_model)

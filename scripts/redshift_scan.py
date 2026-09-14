@@ -29,6 +29,7 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "initial_stellar_density_gamma": 7.0 / 4.0,
     "use_disk_inner_radius": True,
     "consider_type_ii_migration": True,
+    "migration_model": "continuous_gap",
     "disk_model": "torque_with_trap",
     "lisa_min_gw_frequency_hz": 1.0e-3,
     "lisa_max_gw_frequency_hz": 1.0e-1,
@@ -59,6 +60,7 @@ from workflows.config import (
     TORQUE_WITH_TRAP,
     IMRIDynConfig,
 )
+from physical_process.disk_migration import DEFAULT_MIGRATION_MODEL, MIGRATION_MODELS
 from workflows.rate_plots import (
     STATUS_VARIABLE_ORDER,
     RunResults,
@@ -84,6 +86,7 @@ CONFIG_TEMPLATE_FIELDS = (
     "initial_stellar_density_gamma",
     "use_disk_inner_radius",
     "consider_type_ii_migration",
+    "migration_model",
     "disk_model",
     "lisa_min_gw_frequency_hz",
     "lisa_max_gw_frequency_hz",
@@ -135,6 +138,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="ordered migration scenarios; defaults to the paired comparison",
     )
     parser.add_argument(
+        "--migration-model",
+        choices=MIGRATION_MODELS,
+        default=DEFAULT_MIGRATION_MODEL,
+        help="torque composition model shared by every scan run",
+    )
+    parser.add_argument(
         "--base-seed",
         type=int,
         default=DEFAULT_BASE_SEED,
@@ -171,6 +180,14 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
         warnings.warn(
             "historical simulation metadata has no disk_model; explicitly "
             f"inferring {DEFAULT_DISK_MODEL}",
+            stacklevel=2,
+        )
+    if "migration_model" not in source:
+        source = dict(source)
+        source["migration_model"] = DEFAULT_MIGRATION_MODEL
+        warnings.warn(
+            "configuration has no migration_model; explicitly inferring "
+            f"{DEFAULT_MIGRATION_MODEL}",
             stacklevel=2,
         )
     historical_detector_defaults = {
@@ -361,6 +378,7 @@ def run_scan(
     output_dir: Path,
     selected_nsc_mass_msun: float | None = None,
     overwrite_existing: bool = False,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
 ) -> dict[str, Any]:
     """Run a paired scan and return the strict metadata payload."""
     redshift_values = [float(value) for value in redshifts]
@@ -380,6 +398,8 @@ def run_scan(
     invalid_models = sorted(set(model_values).difference(DISK_MODELS))
     if invalid_models:
         raise ValueError(f"unsupported disk models: {invalid_models}")
+    if migration_model not in MIGRATION_MODELS:
+        raise ValueError(f"migration model must be one of {MIGRATION_MODELS}")
     _prepare_output_dir(output_dir, overwrite_existing=overwrite_existing)
 
     template = load_config_template(config_json)
@@ -392,6 +412,7 @@ def run_scan(
             run_dir = output_dir / disk_model / _redshift_token(index, redshift)
             config_values = dict(template)
             config_values["disk_model"] = disk_model
+            config_values["migration_model"] = migration_model
             config = IMRIDynConfig(
                 **config_values,
                 output_dir=run_dir,
@@ -489,6 +510,7 @@ def run_scan(
         ),
         "rate_normalization": "AGN-duty-cycle-normalized production yield",
         "gas_time_coordinate": "gas_final_time_myr",
+        "migration_model": migration_model,
         "physical_entry_time_coordinate": "detection_time_myr",
         "duty_cycle_behavior": (
             "gas termination followed by GW-only evolution when eligible"
@@ -541,6 +563,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         output_dir=arguments.output_dir,
         selected_nsc_mass_msun=arguments.nsc_mass_msun,
         overwrite_existing=overwrite_existing,
+        migration_model=arguments.migration_model,
     )
     print(f"saved scan summary: {outputs['disk_model_scan_summary']}")
     print(f"saved comparison: {outputs['disk_model_rate_comparison']}")

@@ -18,7 +18,12 @@ from src.disk_quantity.migration_torque import (
 )
 from src.disk_quantity.disk_solve import radial_structure
 from src.disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
-from src.physical_process.disk_migration import select_migration_torque_si
+from src.physical_process.disk_migration import (
+    DEFAULT_MIGRATION_MODEL,
+    GAP_DEPTH_COEFFICIENT,
+    TYPE_II_GAP_PARAMETER_THRESHOLD,
+    migration_torque_diagnostics,
+)
 
 RADIAL_AXIS_LABELSIZE = 26
 LEGEND_FONTSIZE = 18
@@ -51,15 +56,23 @@ def _save(fig: Figure, outdir: str | Path, stem: str, dpi: int = 300) -> None:
 def _disk_profile_payload(
     smbh_mass: float,
     alpha: float,
+    *,
+    accretion_rate_g_s_per_msun: float | None = None,
+    n_resolution: int = PAGN_PROFILE_N_RESOLUTION,
 ) -> Dict[str, np.ndarray | float | str]:
 
     disk_profile = build_pagn_disk_profile(
         smbh_mass,
         alpha=alpha,
         model=PAGN_DISK_MODEL,
-        n_resolution=PAGN_PROFILE_N_RESOLUTION,
+        n_resolution=n_resolution,
         eddington_ratio=PAGN_EDDINGTON_RATIO,
         b=PAGN_B,
+        accretion_rate_g_s=(
+            None
+            if accretion_rate_g_s_per_msun is None
+            else accretion_rate_g_s_per_msun * smbh_mass
+        ),
         suppress_pagn_output=True,
     )
 
@@ -127,15 +140,25 @@ def _disk_torque_payload(
     migrator_mass_msun: float = 10.0,
     min_trap_separation_cells: float = 1.0,
     gap_opening_condition: str = "kii",
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
+    accretion_rate_g_s_per_msun: float | None = None,
+    n_resolution: int = PAGN_TORQUE_N_RESOLUTION,
+    torque_smoothing: float = TORQUE_SMOOTHING,
+    max_radius_rg: float | None = TORQUE_MAX_RADIUS_RG,
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute a pAGN torque profile using the main simulation torque model."""
     disk_profile = build_pagn_disk_profile(
         smbh_mass,
         alpha=alpha,
         model=PAGN_DISK_MODEL,
-        n_resolution=PAGN_TORQUE_N_RESOLUTION,
+        n_resolution=n_resolution,
         eddington_ratio=PAGN_EDDINGTON_RATIO,
         b=PAGN_B,
+        accretion_rate_g_s=(
+            None
+            if accretion_rate_g_s_per_msun is None
+            else accretion_rate_g_s_per_msun * smbh_mass
+        ),
         suppress_pagn_output=True,
     )
     params = MigrationParameters(
@@ -147,8 +170,8 @@ def _disk_torque_payload(
     torque_profile = compute_torque_profile(
         disk_profile.disk,
         migrator_mass_msun=migrator_mass_msun,
-        max_radius_rg=TORQUE_MAX_RADIUS_RG,
-        smoothing=TORQUE_SMOOTHING,
+        max_radius_rg=max_radius_rg,
+        smoothing=torque_smoothing,
         params=params,
     )
 
@@ -167,14 +190,17 @@ def _disk_torque_payload(
         solved_disk_radius_m[solved_order],
         solved_disk_aspect_ratio[solved_order],
     )
-    migration_torque_si = select_migration_torque_si(
+    diagnostics = migration_torque_diagnostics(
         torque_profile,
         float(migrator_mass_msun) / float(smbh_mass),
         local_aspect_ratio,
         alpha,
         gap_opening_condition,
         consider_type_ii_migration=True,
-    ).torque_si
+        migration_model=migration_model,
+        migrator_mass_kg=migrator_mass_msun * const.msun * 1.0e-3,
+    )
+    migration_torque_si = diagnostics.gamma_total_si
     trap_radii = classify_torque_traps(
         torque_profile.radius_rg,
         migration_torque_si,
@@ -192,10 +218,18 @@ def _disk_torque_payload(
         "disk_model": disk_profile.model_name,
         "r_over_rg": torque_radius_over_rg,
         "r_out_over_rg": r_out_over_rg,
+        "aspect_ratio": local_aspect_ratio,
+        "gap_parameter": diagnostics.gap_parameter_dimensionless,
+        "gap_depth_factor": diagnostics.gap_depth_factor,
+        "local_disk_mass_ratio": diagnostics.local_disk_mass_ratio,
         "gamma_i_si": np.asarray(torque_profile.gamma_type_i_si, dtype=float),
+        "gamma_grav_ungapped_si": diagnostics.gamma_grav_ungapped_si,
+        "gamma_grav_gap_si": diagnostics.gamma_grav_gap_si,
         "gamma_th_si": np.asarray(torque_profile.gamma_th_si, dtype=float),
         "gamma_migration_si": migration_torque_si,
         "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+        "deep_gap_mask": diagnostics.deep_gap_mask,
+        "type_ii_mask": diagnostics.type_ii_mask,
         "trap_radii_over_rg": np.asarray(trap_radii.stable_radius_rg, dtype=float),
         "anti_trap_radii_over_rg": np.asarray(
             trap_radii.anti_trap_radius_rg,
@@ -272,12 +306,17 @@ def plot_agn_disk_parameter_profiles(
     output_dir: str,
     alpha: float,
     smbh_masses: Sequence[float],
+    *,
+    accretion_rate_g_s_per_msun: float | None = None,
+    n_resolution: int = PAGN_PROFILE_N_RESOLUTION,
 ) -> None:
     """Plot useful pAGN AGN disk parameters versus radius."""
     disk_profiles = [
         _disk_profile_payload(
             float(mass),
             alpha,
+            accretion_rate_g_s_per_msun=accretion_rate_g_s_per_msun,
+            n_resolution=n_resolution,
         )
         for mass in smbh_masses
     ]
@@ -603,6 +642,108 @@ def _plot_signed_torque_component(
     plt.close(fig)
 
 
+def _mask_crossing_radii_rg(
+    radius_rg: np.ndarray,
+    threshold_mask: np.ndarray,
+) -> np.ndarray:
+    """Return geometric-midpoint radii where a diagnostic mask changes state."""
+    crossing_indices = np.flatnonzero(np.diff(threshold_mask.astype(np.int8)) != 0)
+    return np.sqrt(radius_rg[crossing_indices] * radius_rg[crossing_indices + 1])
+
+
+@mpl.rc_context(PLOT_STYLE)
+def _plot_gap_diagnostics(
+    torque_profiles: Sequence[Mapping[str, np.ndarray | float | str]],
+    colors: Sequence[str],
+    *,
+    output_dir: str | Path,
+) -> None:
+    """Plot the continuous-gap factors and local disk-mass diagnostic."""
+    fig, axes = plt.subplots(4, 1, figsize=(14, 18), sharex=True)
+    panels = (
+        ("aspect_ratio", r"$h=H/R$"),
+        ("gap_parameter", r"$K=q^2/(\alpha h^5)$"),
+        ("gap_depth_factor", r"$f_{\rm gap}=(1+0.04K)^{-1}$"),
+        ("local_disk_mass_ratio", r"$B=4\pi\Sigma R^2/m$"),
+    )
+
+    for profile, color in zip(torque_profiles, colors):
+        radius_rg = np.asarray(profile["r_over_rg"], dtype=float)
+        mass = float(profile["smbh_mass"])
+        label = rf"$M_\bullet=10^{{{int(np.log10(mass))}}}\,M_\odot$"
+        for axis, (key, ylabel) in zip(axes, panels):
+            values = np.asarray(profile[key], dtype=float)
+            valid = (
+                np.isfinite(radius_rg)
+                & np.isfinite(values)
+                & (radius_rg > 0.0)
+                & (values > 0.0)
+            )
+            axis.plot(
+                radius_rg[valid],
+                values[valid],
+                color=color,
+                lw=2.5,
+                alpha=0.9,
+                label=label if key == "aspect_ratio" else None,
+            )
+            if key == "gap_parameter":
+                crossing_radii = _mask_crossing_radii_rg(
+                    radius_rg,
+                    np.asarray(profile["deep_gap_mask"], dtype=bool),
+                )
+                axis.scatter(
+                    crossing_radii,
+                    np.full(crossing_radii.shape, TYPE_II_GAP_PARAMETER_THRESHOLD),
+                    color=color,
+                    marker="o",
+                    s=28,
+                    zorder=4,
+                )
+            elif key == "local_disk_mass_ratio":
+                crossing_radii = _mask_crossing_radii_rg(radius_rg, values > 1.0)
+                axis.scatter(
+                    crossing_radii,
+                    np.ones(crossing_radii.shape),
+                    color=color,
+                    marker="s",
+                    s=28,
+                    zorder=4,
+                )
+            axis.set_ylabel(ylabel, fontsize=RADIAL_AXIS_LABELSIZE)
+            axis.set_xscale("log")
+            axis.set_yscale("log")
+            axis.grid(True, alpha=0.25, linestyle="--", which="both")
+
+    axes[1].axhline(
+        TYPE_II_GAP_PARAMETER_THRESHOLD,
+        color="0.25",
+        lw=1.5,
+        ls="--",
+        label=r"deep-gap diagnostic $K=11$",
+    )
+    axes[2].axhline(
+        1.0 / (1.0 + GAP_DEPTH_COEFFICIENT * TYPE_II_GAP_PARAMETER_THRESHOLD),
+        color="0.25",
+        lw=1.5,
+        ls="--",
+    )
+    axes[3].axhline(
+        1.0,
+        color="0.25",
+        lw=1.5,
+        ls="--",
+        label=r"local disk mass $=m$",
+    )
+    axes[0].legend(loc="best", framealpha=0.85, fontsize=LEGEND_FONTSIZE)
+    axes[1].legend(loc="best", framealpha=0.85, fontsize=LEGEND_FONTSIZE)
+    axes[3].legend(loc="best", framealpha=0.85, fontsize=LEGEND_FONTSIZE)
+    axes[-1].set_xlabel(r"$R/r_g$", fontsize=RADIAL_AXIS_LABELSIZE)
+    fig.tight_layout()
+    _save(fig, output_dir, "gap_migration_diagnostics")
+    plt.close(fig)
+
+
 @mpl.rc_context(PLOT_STYLE)
 def plot_agn_disk_torque_profiles(
     output_dir: str,
@@ -611,6 +752,12 @@ def plot_agn_disk_torque_profiles(
     migrator_mass_msun: float = 10.0,
     min_trap_separation_cells: float = 1.0,
     gap_opening_condition: str = "kii",
+    *,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
+    accretion_rate_g_s_per_msun: float | None = None,
+    n_resolution: int = PAGN_TORQUE_N_RESOLUTION,
+    torque_smoothing: float = TORQUE_SMOOTHING,
+    max_radius_rg: float | None = TORQUE_MAX_RADIUS_RG,
 ) -> None:
     """Plot pAGN migration torque magnitudes using the main simulation model."""
 
@@ -621,11 +768,22 @@ def plot_agn_disk_torque_profiles(
             migrator_mass_msun=migrator_mass_msun,
             min_trap_separation_cells=min_trap_separation_cells,
             gap_opening_condition=gap_opening_condition,
+            migration_model=migration_model,
+            accretion_rate_g_s_per_msun=accretion_rate_g_s_per_msun,
+            n_resolution=n_resolution,
+            torque_smoothing=torque_smoothing,
+            max_radius_rg=max_radius_rg,
         )
         for smbh_mass in smbh_masses
     ]
 
     colors = COLORS_SERIS
+
+    _plot_gap_diagnostics(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+    )
 
     _plot_signed_torque_component(
         torque_profiles,
@@ -643,16 +801,25 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_ii_si",
         ylabel=r"$|\Gamma_{\mathrm{II}}|\;(\mathrm{N\,m})$",
         stem="type_ii_torque_profiles",
-        show_traps=True,
+        show_traps=False,
     )
     _plot_signed_torque_component(
         torque_profiles,
         colors,
         output_dir=output_dir,
-        component_key="gamma_i_si",
-        ylabel=r"$|\Gamma_{\mathrm{I}}|\;(\mathrm{N\,m})$",
-        stem="type_i_torque_profiles",
-        show_traps=True,
+        component_key="gamma_grav_ungapped_si",
+        ylabel=r"$|\Gamma_{\mathrm{grav,ungapped}}|\;(\mathrm{N\,m})$",
+        stem="ungapped_gravitational_torque_profiles",
+        show_traps=False,
+    )
+    _plot_signed_torque_component(
+        torque_profiles,
+        colors,
+        output_dir=output_dir,
+        component_key="gamma_grav_gap_si",
+        ylabel=r"$|\Gamma_{\mathrm{grav,gap}}|\;(\mathrm{N\,m})$",
+        stem="gap_reduced_gravitational_torque_profiles",
+        show_traps=False,
     )
     _plot_signed_torque_component(
         torque_profiles,
@@ -661,5 +828,5 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_th_si",
         ylabel=r"$|\Gamma_{\mathrm{th}}|\;(\mathrm{N\,m})$",
         stem="thermal_torque_profiles",
-        show_traps=True,
+        show_traps=False,
     )

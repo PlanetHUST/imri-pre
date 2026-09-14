@@ -1063,6 +1063,7 @@ def save_migration_diagnostics(
         "m_nsc_msun": json_float(result.m_nsc_msun),
         "repeat": result.repeat_idx,
         "disk_model": result.disk_model,
+        "migration_model": config.migration_model,
         "redshift": json_float(config.redshift),
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,

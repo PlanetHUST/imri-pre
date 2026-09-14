@@ -1,4 +1,4 @@
-"""Compare integrated semi-analytic and torque-based migration timescales."""
+"""Inspect selected torque migration and its applicable classical reference."""
 
 from __future__ import annotations
 
@@ -32,9 +32,11 @@ from src.disk_quantity.migration_torque import (
 from src.disk_quantity.pagn_disk_adapter import PagnDiskProfile, build_pagn_disk_profile
 from src.physical_process import constants as const
 from src.physical_process.disk_migration import (
+    CLASSICAL_TYPE2,
+    DEFAULT_MIGRATION_MODEL,
     GAP_OPENING_CONDITIONS,
+    MIGRATION_MODELS,
     TYPE_II_GAP_PARAMETER_THRESHOLD,
-    gap_opening_mask,
     migration_time_from_semi_analytic,
     migration_time_from_torque,
     select_migration_torque_si,
@@ -91,13 +93,13 @@ class MigrationDisk:
 @dataclass
 class MigrationSeries:
     migrator_mass_msun: float
-    integrated_semi_times_myr: np.ndarray
+    classical_semi_times_myr: np.ndarray | None
     torque_times_myr: np.ndarray
     gap_parameter: np.ndarray
     crida_parameter: np.ndarray
     hill_radius_over_scale_height: np.ndarray
     stable_trap_radii_rg: np.ndarray
-    gap_open_path_points: int
+    deep_gap_path_points: int
     nonfinite_torque_points: int
 
 
@@ -108,6 +110,17 @@ def _parse_args() -> argparse.Namespace:
         choices=GAP_OPENING_CONDITIONS,
         default="kii",
         help="kii: KII > 11; crida: P < 1 and R_H/H > 1",
+    )
+    parser.add_argument(
+        "--migration-model",
+        choices=MIGRATION_MODELS,
+        default=DEFAULT_MIGRATION_MODEL,
+        help="torque composition model",
+    )
+    parser.add_argument(
+        "--trap-scan",
+        action="store_true",
+        help="also run the companion trap-radius scan diagnostic",
     )
     return parser.parse_args()
 
@@ -142,6 +155,7 @@ def _migration_series(
     sample_radii_cm: np.ndarray,
     gap_opening_condition: str,
     params: MigrationParameters,
+    migration_model: str,
 ) -> MigrationSeries:
     migrator_mass_g = migrator_mass_msun * const.msun
     smbh_mass_g = SMBH_MASS_MSUN * const.msun
@@ -171,29 +185,32 @@ def _migration_series(
         PAGN_ALPHA,
         gap_opening_condition,
         consider_type_ii_migration=True,
+        migration_model=migration_model,
     )
     torque_si = selection.torque_si
     torque_cgs = torque_si_to_cgs(torque_si)
 
     target_radius_cm = TARGET_RADIUS_RG * disk.rg_cm
-    integrated_semi_times_myr = np.asarray(
-        [
-            migration_time_from_semi_analytic(
-                disk.radius_cm,
-                disk.surface_density_g_cm2,
-                disk.aspect_ratio,
-                migrator_mass_g,
-                float(start_radius_cm),
-                target_radius_cm,
-                SMBH_MASS_MSUN,
-                PAGN_ALPHA,
-                gap_opening_condition,
-                True,
-            )
-            for start_radius_cm in sample_radii_cm
-        ],
-        dtype=float,
-    )
+    classical_semi_times_myr = None
+    if migration_model == CLASSICAL_TYPE2:
+        classical_semi_times_myr = np.asarray(
+            [
+                migration_time_from_semi_analytic(
+                    disk.radius_cm,
+                    disk.surface_density_g_cm2,
+                    disk.aspect_ratio,
+                    migrator_mass_g,
+                    float(start_radius_cm),
+                    target_radius_cm,
+                    SMBH_MASS_MSUN,
+                    PAGN_ALPHA,
+                    gap_opening_condition,
+                    True,
+                )
+                for start_radius_cm in sample_radii_cm
+            ],
+            dtype=float,
+        )
     torque_times_myr = np.asarray(
         [
             migration_time_from_torque(
@@ -225,7 +242,7 @@ def _migration_series(
     )
     return MigrationSeries(
         migrator_mass_msun=migrator_mass_msun,
-        integrated_semi_times_myr=integrated_semi_times_myr,
+        classical_semi_times_myr=classical_semi_times_myr,
         torque_times_myr=torque_times_myr,
         gap_parameter=np.interp(sample_radii_cm, torque_radius_cm, gap_parameter),
         crida_parameter=np.interp(sample_radii_cm, torque_radius_cm, crida_parameter),
@@ -233,14 +250,14 @@ def _migration_series(
             sample_radii_cm, torque_radius_cm, hill_ratio
         ),
         stable_trap_radii_rg=stable_trap_radii_rg,
-        gap_open_path_points=int(
+        deep_gap_path_points=int(
             np.count_nonzero(
-                gap_opening_mask(
+                comp_gap_parameter_dimensionless(
                     mass_ratio,
                     sampled_aspect_ratio,
                     PAGN_ALPHA,
-                    gap_opening_condition,
                 )
+                > TYPE_II_GAP_PARAMETER_THRESHOLD
             )
         ),
         nonfinite_torque_points=int(np.count_nonzero(~np.isfinite(torque_times_myr))),
@@ -250,6 +267,7 @@ def _migration_series(
 def _plot_results(
     sample_radii_rg: np.ndarray,
     series: list[MigrationSeries],
+    migration_model: str,
 ) -> Path:
     # fig, (ax, gap_ax) = plt.subplots(
     #     2,
@@ -264,23 +282,26 @@ def _plot_results(
     )
 
     has_visible_trap = False
+    has_classical_reference = False
 
     for index, result in enumerate(series):
         color = COLORS[index % len(COLORS)]
-        semi_mask = np.isfinite(result.integrated_semi_times_myr) & (
-            result.integrated_semi_times_myr > 0.0
-        )
         torque_mask = np.isfinite(result.torque_times_myr) & (
             result.torque_times_myr > 0.0
         )
-        ax.plot(
-            sample_radii_rg[semi_mask],
-            result.integrated_semi_times_myr[semi_mask],
-            color=color,
-            lw=2.8,
-            ls="--",
-            alpha=0.9,
-        )
+        if result.classical_semi_times_myr is not None:
+            semi_mask = np.isfinite(result.classical_semi_times_myr) & (
+                result.classical_semi_times_myr > 0.0
+            )
+            ax.plot(
+                sample_radii_rg[semi_mask],
+                result.classical_semi_times_myr[semi_mask],
+                color=color,
+                lw=2.8,
+                ls="--",
+                alpha=0.9,
+            )
+            has_classical_reference = True
         ax.plot(
             sample_radii_rg[torque_mask],
             result.torque_times_myr[torque_mask],
@@ -321,6 +342,7 @@ def _plot_results(
     ax.set_title(
         rf"$M_\bullet={SMBH_MASS_MSUN:.0e}\,M_\odot$, "
         rf"$R_\mathrm{{target}}={TARGET_RADIUS_RG:.0e}\,r_g$"
+        f"\nTorque model: {migration_model}"
     )
     ax.grid(True, alpha=0.25, linestyle="--", which="both")
 
@@ -335,11 +357,22 @@ def _plot_results(
         for index, mass in enumerate(MIGRATOR_MASSES_MSUN)
     ]
     method_handles = [
-        Line2D([0], [0], color="0.2", lw=2.8, ls="-", label="torque"),
-        Line2D([0], [0], color="0.2", lw=2.8, ls="--", label="int-semi"),
+        Line2D([0], [0], color="0.2", lw=2.8, ls="-", label="selected torque"),
         Line2D([0], [0], color="0.35", lw=1.5, ls=":", label="target radius"),
         Line2D([0], [0], color="0.35", lw=1.5, ls="-.", label="start radius"),
     ]
+    if has_classical_reference:
+        method_handles.insert(
+            1,
+            Line2D(
+                [0],
+                [0],
+                color="0.2",
+                lw=2.8,
+                ls="--",
+                label="legacy classical semi",
+            ),
+        )
     if has_visible_trap:
         method_handles.append(
             Line2D([0], [0], color="0.2", lw=1.3, ls=":", label="stable trap")
@@ -375,10 +408,17 @@ def _format_time(value_myr: float) -> str:
     return f"{value_myr:.6e}" if np.isfinite(value_myr) else "inf"
 
 
+def _format_classical_semi_terminal(result: MigrationSeries) -> str:
+    if result.classical_semi_times_myr is None:
+        return "n/a"
+    return _format_time(float(result.classical_semi_times_myr[-1]))
+
+
 def _print_results(
     disk: MigrationDisk,
     series: list[MigrationSeries],
     gap_opening_condition: str,
+    migration_model: str,
     figure_path: Path,
 ) -> None:
     print("Disk migration timescale comparison")
@@ -391,25 +431,36 @@ def _print_results(
     )
     print(f"  path_rg: {START_RADIUS_RG:.6e} -> {TARGET_RADIUS_RG:.6e}")
     print(f"  gap_opening_condition: {gap_opening_condition}")
-    print("  gap_open_torque: type_ii_only")
+    print(f"  migration_model: {migration_model}")
+    if migration_model == CLASSICAL_TYPE2:
+        print("  semi_reference: legacy classical Type-I/Type-II local timescale")
+    else:
+        print(
+            "  semi_reference: n/a (legacy hard-switch estimate is only "
+            "comparable to classical_type2)"
+        )
     print("  terminal_times_myr:")
     print(
-        "    mass_msun  int-semi  torque  max_gap_parameter  "
-        "gap_open_path_points  nonfinite_torque_points"
+        "    mass_msun  classical_semi  selected_torque  max_gap_parameter  "
+        "deep_gap_path_points  nonfinite_torque_points"
     )
     for result in series:
         print(
             f"    {result.migrator_mass_msun:9.3g}  "
-            f"{_format_time(float(result.integrated_semi_times_myr[-1])):>13}  "
+            f"{_format_classical_semi_terminal(result):>14}  "
             f"{_format_time(float(result.torque_times_myr[-1])):>13}  "
             f"{float(np.max(result.gap_parameter)):>17.6e}  "
-            f"{result.gap_open_path_points:>13d}  "
+            f"{result.deep_gap_path_points:>13d}  "
             f"{result.nonfinite_torque_points:>23d}"
         )
     print(f"  figure: {figure_path}")
 
 
-def main(gap_opening_condition: str) -> None:
+def main(
+    gap_opening_condition: str,
+    with_trap_scan: bool = False,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
+) -> None:
     disk = _build_disk()
     sample_radii_rg = np.logspace(
         np.log10(TARGET_RADIUS_RG), np.log10(START_RADIUS_RG), 120
@@ -427,12 +478,28 @@ def main(gap_opening_condition: str) -> None:
             sample_radii_cm,
             gap_opening_condition,
             params,
+            migration_model,
         )
         for migrator_mass_msun in MIGRATOR_MASSES_MSUN
     ]
-    figure_path = _plot_results(sample_radii_rg, series)
-    _print_results(disk, series, gap_opening_condition, figure_path)
+    figure_path = _plot_results(sample_radii_rg, series, migration_model)
+    _print_results(
+        disk,
+        series,
+        gap_opening_condition,
+        migration_model,
+        figure_path,
+    )
+    if with_trap_scan:
+        import trap_plot
+
+        trap_plot.main(gap_opening_condition, migration_model)
 
 
 if __name__ == "__main__":
-    main(_parse_args().gap_open_condition)
+    arguments = _parse_args()
+    main(
+        arguments.gap_open_condition,
+        arguments.trap_scan,
+        arguments.migration_model,
+    )

@@ -25,7 +25,8 @@ in `docs/reference/`. Start at `docs/README.md`.
   `workflow.py` (`run_simulation` grid driver), `engine.py` (cached
   disk/torque resources), `single_work.py` (one realization),
   `event_rate.py`/`detect_rate.py` (classification), `outputs.py` (CSV
-  formatting), `rate_plots.py` (all scan figures).
+  formatting), `rate_plots.py` (scan/rate figures), `run_figures.py`
+  (production run figures: disk/population/migration/entry/lisa).
 - `src/physical_process/` — physics, imported as top-level `physical_process.*`:
   `disk_migration.py`, `damp.py`, `gw_frequency_radius.py`, `nsc_orbital.py`,
   `constants.py`.
@@ -39,17 +40,22 @@ in `docs/reference/`. Start at `docs/README.md`.
 
 ## Running
 
-- Single grid run: `scripts/main.py [repeats] [output_dir] [workers]` plus
-  flags (`--disk-model`, `--smbh-masses`, `--gap-open-condition`, ...). See
-  `--help`. Default output is `output/dyn_results/`.
+- Single grid run: `scripts/main.py` (positional `[repeats] [output_dir]
+  [workers]`, plus `--n-repeats`/`--output-dir`/`--workers` overrides and
+  `--disk-model`, `--smbh-masses`, `--gap-open-condition`, ...). See `--help`.
+  Default output is `output/dyn_results/`. It uses fixed default seed
+  `20260913` (`--seed` overrides) and generates production figures under
+  `<output_dir>/figures/` by default (`--plots` / `--no-plots`).
 - Paired redshift × disk-model scan: `scripts/redshift_scan.py`. Defaults:
   redshifts `10 13 15`, both disk models, `base_seed 12345`, output
   `output/redshift_scan_results/`. It refuses to overwrite a non-empty output
   dir unless you type `yes`, and validates the target is not a repo/system dir.
 - Deterministic figure harness: `scripts/imri_rate_visualization_test.py
   --output-dir figs/`.
-- Diagnostics: `scripts/migration_test.py`, `scripts/trap_plot.py`,
-  `scripts/disk_plot.py`, `scripts/damp_test.py`, `scripts/final_analysis.py`.
+- Diagnostics: `scripts/disk_test.py`, `scripts/damp_test.py`,
+  `scripts/migration_test.py` (`--trap-scan` runs `scripts/trap_plot.py`),
+  `scripts/gas_gw_handoff_test.py`, `scripts/lisa_detectability_test.py`,
+  `scripts/imri_physics_consistency_test.py`, `scripts/final_analysis.py`.
 
 ## Verification (established convention)
 
@@ -75,7 +81,12 @@ in `docs/reference/`. Start at `docs/README.md`.
   errors, never zeros.
 - Deterministic paired seeds: `numpy SeedSequence(base_seed, smbh_index,
   nsc_index, repeat_index)` `workflow.derive_task_seed`. Redshift and disk
-  model are intentionally excluded so matched tasks share draws.
+  model are intentionally excluded so matched tasks share draws. `main.py`
+  defaults `base_seed` to `DEFAULT_BASE_SEED = 20260913`.
+- Production figures (`workflows/run_figures.py`) consume persisted CSVs only,
+  use deterministic sorting for representative subsets, and must not advance
+  the production RNG; `--plots`/`--no-plots` must leave scientific outputs
+  identical.
 - Output CSVs are formatted at save time: `workflows/outputs.py` hides cm
   columns and renames frequency columns per chosen unit, and writes
   `float_format="%.6e"`; `redshift_scan.py` scan-level CSVs use `"%.17g"`.

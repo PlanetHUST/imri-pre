@@ -34,8 +34,8 @@ class TorqueProfile:
 
     pAGN solves in SI. Fields ending in ``_si`` are torques [kg m^2 s^-2].
     Radius aliases ending in ``_cm``, ``_rg``, and ``_rs`` are for downstream
-    CGS migration code and plotting. Gap-closed cells use the unattenuated sum
-    of Type-I and thermal torque; gap-open cells use the Type-II torque.
+    CGS migration code and plotting. The fields retain raw torque components;
+    ``physical_process.disk_migration`` owns their model-dependent composition.
     """
 
     radius_m: np.ndarray

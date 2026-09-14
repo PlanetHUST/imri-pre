@@ -48,6 +48,7 @@ def build_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "disk_model": config.disk_model,
+            "migration_model": config.migration_model,
             "consider_type_ii_migration": config.consider_type_ii_migration,
             "gap_opening_condition": config.gap_opening_condition,
             "redshift": config.redshift,

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -35,8 +36,15 @@ from physical_process.damp import (  # noqa: E402
     OrbitalState,
 )
 from physical_process.disk_migration import (  # noqa: E402
+    CLASSICAL_TYPE2,
+    CONTINUOUS_GAP,
+    GAP_DEPTH_COEFFICIENT,
+    MIGRATION_MODELS,
     TYPE_II_GAP_PARAMETER_THRESHOLD,
+    UNGAPPED,
+    gap_depth_factor,
     gap_opening_mask,
+    migration_torque_diagnostics,
     select_migration_torque_si,
 )
 from physical_process import gw_frequency_radius as gw_helpers  # noqa: E402
@@ -182,8 +190,65 @@ def validate_migration_equations() -> None:
         gap_opening_mask(mass_ratio, aspect_ratio, alpha, "kii"),
         gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD,
     )
+    expected_gap_depth_factor = 1.0 / (
+        1.0 + GAP_DEPTH_COEFFICIENT * gap_parameter
+    )
+    assert np.allclose(
+        gap_depth_factor(gap_parameter),
+        expected_gap_depth_factor,
+    )
+    assert MIGRATION_MODELS == (CONTINUOUS_GAP, CLASSICAL_TYPE2, UNGAPPED)
 
     profile = _torque_profile_for_selection()
+    migrator_mass_kg = 2.0
+    diagnostics = migration_torque_diagnostics(
+        profile,
+        mass_ratio,
+        aspect_ratio,
+        alpha,
+        "kii",
+        True,
+        migrator_mass_kg=migrator_mass_kg,
+    )
+    assert np.allclose(
+        diagnostics.gap_depth_factor,
+        expected_gap_depth_factor,
+    )
+    assert np.allclose(
+        diagnostics.gamma_grav_gap_si,
+        expected_gap_depth_factor * profile.gamma_type_i_si,
+    )
+    assert np.allclose(
+        diagnostics.gamma_total_si,
+        diagnostics.gamma_grav_gap_si + profile.gamma_th_si,
+    )
+    assert np.allclose(
+        diagnostics.local_disk_mass_ratio,
+        4.0
+        * np.pi
+        * profile.surface_density_kg_m2
+        * profile.radius_m**2
+        / migrator_mass_kg,
+    )
+    assert np.array_equal(
+        diagnostics.deep_gap_mask,
+        gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD,
+    )
+    assert not diagnostics.type_ii_mask.any()
+    for component in (
+        diagnostics.gap_parameter_dimensionless,
+        diagnostics.gap_depth_factor,
+        diagnostics.local_disk_mass_ratio,
+        diagnostics.gamma_grav_ungapped_si,
+        diagnostics.gamma_grav_gap_si,
+        diagnostics.gamma_thermal_si,
+        diagnostics.gamma_type_ii_si,
+        diagnostics.gamma_total_si,
+    ):
+        assert np.all(np.isfinite(component))
+
+    # Legacy six-positional-argument call: same return type and array shape,
+    # with the new continuous model supplied by the optional default.
     selection = select_migration_torque_si(
         profile,
         mass_ratio,
@@ -192,8 +257,76 @@ def validate_migration_equations() -> None:
         "kii",
         True,
     )
-    assert np.isclose(selection.torque_si[0], -1.5)
-    assert np.isclose(selection.torque_si[1], -30.0)
+    assert selection.torque_si.shape == profile.gamma_type_i_si.shape
+    assert np.allclose(selection.torque_si, diagnostics.gamma_total_si)
+    assert not selection.type_ii_mask.any()
+
+    classical = select_migration_torque_si(
+        profile,
+        mass_ratio,
+        aspect_ratio,
+        alpha,
+        "kii",
+        True,
+        migration_model=CLASSICAL_TYPE2,
+    )
+    assert np.isclose(classical.torque_si[0], -1.5)
+    assert np.isclose(classical.torque_si[1], -30.0)
+    assert np.array_equal(classical.type_ii_mask, np.asarray([False, True]))
+    assert np.all(np.isfinite(classical.torque_si))
+
+    ungapped = select_migration_torque_si(
+        profile,
+        mass_ratio,
+        aspect_ratio,
+        alpha,
+        "kii",
+        True,
+        migration_model=UNGAPPED,
+    )
+    expected_ungapped = profile.gamma_type_i_si + profile.gamma_th_si
+    assert np.allclose(ungapped.torque_si, expected_ungapped)
+    assert not ungapped.type_ii_mask.any()
+    assert np.all(np.isfinite(ungapped.torque_si))
+
+    legacy_disabled = select_migration_torque_si(
+        profile,
+        mass_ratio,
+        aspect_ratio,
+        alpha,
+        "kii",
+        False,
+        migration_model=CLASSICAL_TYPE2,
+    )
+    assert np.allclose(legacy_disabled.torque_si, expected_ungapped)
+
+    # The continuous torque has no branch or jump at the old K=11 threshold.
+    near_threshold_k = np.asarray([11.0 - 1.0e-8, 11.0, 11.0 + 1.0e-8])
+    near_threshold_aspect_ratio = (
+        mass_ratio**2 / (alpha * near_threshold_k)
+    ) ** (1.0 / 5.0)
+    continuity_profile = replace(
+        profile,
+        gamma_type_i_si=np.full(3, -2.0),
+        gamma_th_si=np.full(3, 0.5),
+        gamma_type_ii_si=np.full(3, -20.0),
+    )
+    continuous = select_migration_torque_si(
+        continuity_profile,
+        mass_ratio,
+        near_threshold_aspect_ratio,
+        alpha,
+        "kii",
+        True,
+        migration_model=CONTINUOUS_GAP,
+    )
+    expected_continuous = (
+        gap_depth_factor(near_threshold_k) * continuity_profile.gamma_type_i_si
+        + continuity_profile.gamma_th_si
+    )
+    assert np.allclose(continuous.torque_si, expected_continuous)
+    assert np.all(np.isfinite(continuous.torque_si))
+    assert abs(continuous.torque_si[2] - continuous.torque_si[0]) < 1.0e-9
 
     migrator_mass_kg = 2.0e31
     radius_m = np.asarray([3.0e9])

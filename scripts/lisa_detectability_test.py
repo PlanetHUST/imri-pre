@@ -508,6 +508,38 @@ def validate_snr() -> None:
     print(f"200001-point log-grid SNR: {grid_snr:.12f}")
 
 
+def validate_characteristic_strain() -> None:
+    """Verify the plotted characteristic-strain convention matches the SNR density."""
+    result = demo_result()
+    frequencies = np.geomspace(result.f_low_hz, result.f_high_hz, 20001)
+    amplitudes = np.asarray(
+        [
+            fourier_inspiral_amplitude_hz_inverse(
+                frequency,
+                result.chirp_mass_detector_msun,
+                result.luminosity_distance_mpc,
+            )
+            for frequency in frequencies
+        ]
+    )
+    psd = np.asarray(
+        [
+            lisa_effective_strain_psd_hz(frequency, result.mission_duration_years)
+            for frequency in frequencies
+        ]
+    )
+    h_n = np.sqrt(frequencies * psd)
+    h_c_eff = (4.0 / np.sqrt(5.0)) * frequencies * amplitudes
+    density_ratio = (h_c_eff / h_n) ** 2
+    production_density = 16.0 / 5.0 * frequencies * amplitudes**2 / psd
+    assert np.allclose(density_ratio, production_density, rtol=1.0e-12)
+    grid_snr = float(np.sqrt(np.trapezoid(density_ratio, np.log(frequencies))))
+    assert np.isclose(grid_snr, result.lisa_snr, rtol=1.0e-6)
+    print("\nCharacteristic-strain convention")
+    print(f"d rho^2 / d ln f agreement: exact to rtol=1e-12")
+    print(f"strain-density SNR: {grid_snr:.12f} (production {result.lisa_snr:.12f})")
+
+
 def validate_redshift_grid() -> None:
     print("\nFixed source-mass redshift behavior")
     print("z       d_l_mpc       mchirp_z     f_low_hz    f_high_hz   snr       status")
@@ -1038,6 +1070,7 @@ SECTIONS: dict[str, Callable[[], None]] = {
     "cosmology": validate_cosmology,
     "windows": validate_windows,
     "snr": validate_snr,
+    "strain": validate_characteristic_strain,
     "redshift": validate_redshift_grid,
     "grid": validate_mass_redshift_grid,
     "classification": validate_classification,

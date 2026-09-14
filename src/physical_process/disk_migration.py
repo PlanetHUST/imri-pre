@@ -23,7 +23,13 @@ FloatArray = npt.NDArray[np.float64]
 MigrationStatus = Literal["already_at_target", "finite", "trap_bound"]
 
 TYPE_II_GAP_PARAMETER_THRESHOLD = 11.0
+GAP_DEPTH_COEFFICIENT = 0.04
 GAP_OPENING_CONDITIONS = ("kii", "crida")
+CONTINUOUS_GAP = "continuous_gap"
+CLASSICAL_TYPE2 = "classical_type2"
+UNGAPPED = "ungapped"
+MIGRATION_MODELS = (CONTINUOUS_GAP, CLASSICAL_TYPE2, UNGAPPED)
+DEFAULT_MIGRATION_MODEL = CONTINUOUS_GAP
 
 
 class MigrationError(ValueError):
@@ -56,6 +62,139 @@ class MigrationTorqueSelection:
 
     torque_si: FloatArray
     type_ii_mask: npt.NDArray[np.bool_]
+
+
+@dataclass(frozen=True)
+class MigrationTorqueDiagnostics:
+    """Inspectable dimensionless factors and torque components in SI [N m]."""
+
+    gap_parameter_dimensionless: FloatArray
+    gap_depth_factor: FloatArray
+    local_disk_mass_ratio: FloatArray
+    gamma_grav_ungapped_si: FloatArray
+    gamma_grav_gap_si: FloatArray
+    gamma_thermal_si: FloatArray
+    gamma_type_ii_si: FloatArray
+    gamma_total_si: FloatArray
+    deep_gap_mask: npt.NDArray[np.bool_]
+    type_ii_mask: npt.NDArray[np.bool_]
+
+
+def gap_depth_factor(gap_parameter_dimensionless: FloatArray) -> FloatArray:
+    """Return Sigma_gap/Sigma_0 = (1 + 0.04 K)^-1."""
+    gap_parameter = np.asarray(gap_parameter_dimensionless, dtype=float)
+    if np.any(~np.isfinite(gap_parameter)) or np.any(gap_parameter < 0.0):
+        raise ValueError("gap parameter must be finite and nonnegative")
+    return np.asarray(
+        1.0 / (1.0 + GAP_DEPTH_COEFFICIENT * gap_parameter),
+        dtype=float,
+    )
+
+
+def migration_torque_diagnostics(
+    torque_profile: TorqueProfile,
+    mass_ratio: float,
+    local_aspect_ratio: FloatArray,
+    alpha: float,
+    gap_opening_condition: str,
+    consider_type_ii_migration: bool,
+    *,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
+    migrator_mass_kg: float | None = None,
+) -> MigrationTorqueDiagnostics:
+    """Return migration components and gap diagnostics on the torque grid.
+
+    ``migrator_mass_kg`` is optional so legacy synthetic ``TorqueProfile``
+    callers can still select a total torque. When omitted, only the local disk
+    mass ratio diagnostic is unavailable (NaN); production diagnostics pass it
+    explicitly.
+    """
+    if migration_model not in MIGRATION_MODELS:
+        raise ValueError(f"migration model must be one of {MIGRATION_MODELS}")
+    if mass_ratio <= 0.0 or alpha <= 0.0:
+        raise ValueError("mass ratio and alpha must be positive")
+    if (
+        consider_type_ii_migration
+        and gap_opening_condition not in GAP_OPENING_CONDITIONS
+    ):
+        raise ValueError(
+            f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
+        )
+
+    aspect_ratio = np.asarray(local_aspect_ratio, dtype=float)
+    gap_parameter = np.asarray(
+        comp_gap_parameter_dimensionless(mass_ratio, aspect_ratio, alpha),
+        dtype=float,
+    )
+    f_gap = gap_depth_factor(gap_parameter)
+    gamma_grav_ungapped_si = np.asarray(
+        torque_profile.gamma_type_i_si,
+        dtype=float,
+    )
+    gamma_thermal_si = np.asarray(torque_profile.gamma_th_si, dtype=float)
+    gamma_type_ii_si = np.asarray(torque_profile.gamma_type_ii_si, dtype=float)
+    component_shapes = {
+        gap_parameter.shape,
+        gamma_grav_ungapped_si.shape,
+        gamma_thermal_si.shape,
+        gamma_type_ii_si.shape,
+    }
+    if len(component_shapes) != 1:
+        raise ValueError("migration torque components must have the same shape")
+
+    gamma_grav_gap_si = f_gap * gamma_grav_ungapped_si
+    gamma_ungapped_total_si = gamma_grav_ungapped_si + gamma_thermal_si
+    deep_gap_mask = gap_parameter > TYPE_II_GAP_PARAMETER_THRESHOLD
+    type_ii_mask = np.zeros(gap_parameter.shape, dtype=bool)
+
+    effective_model = migration_model if consider_type_ii_migration else UNGAPPED
+    if effective_model == CONTINUOUS_GAP:
+        gamma_total_si = gamma_grav_gap_si + gamma_thermal_si
+    elif effective_model == CLASSICAL_TYPE2:
+        type_ii_mask = gap_opening_mask(
+            mass_ratio,
+            aspect_ratio,
+            alpha,
+            gap_opening_condition,
+        )
+        gamma_total_si = np.where(
+            type_ii_mask,
+            gamma_type_ii_si,
+            gamma_ungapped_total_si,
+        )
+    else:
+        gamma_total_si = gamma_ungapped_total_si
+
+    if migrator_mass_kg is None:
+        local_disk_mass_ratio = np.full(gap_parameter.shape, np.nan, dtype=float)
+    else:
+        if not np.isfinite(migrator_mass_kg) or migrator_mass_kg <= 0.0:
+            raise ValueError("migrator mass must be finite and positive")
+        surface_density_kg_m2 = np.asarray(
+            torque_profile.surface_density_kg_m2,
+            dtype=float,
+        )
+        radius_m = np.asarray(torque_profile.radius_m, dtype=float)
+        if not (
+            surface_density_kg_m2.shape == radius_m.shape == gap_parameter.shape
+        ):
+            raise ValueError("disk-mass diagnostic arrays must have the same shape")
+        local_disk_mass_ratio = (
+            4.0 * np.pi * surface_density_kg_m2 * radius_m**2 / migrator_mass_kg
+        )
+
+    return MigrationTorqueDiagnostics(
+        gap_parameter_dimensionless=gap_parameter,
+        gap_depth_factor=f_gap,
+        local_disk_mass_ratio=np.asarray(local_disk_mass_ratio, dtype=float),
+        gamma_grav_ungapped_si=gamma_grav_ungapped_si,
+        gamma_grav_gap_si=np.asarray(gamma_grav_gap_si, dtype=float),
+        gamma_thermal_si=gamma_thermal_si,
+        gamma_type_ii_si=gamma_type_ii_si,
+        gamma_total_si=np.asarray(gamma_total_si, dtype=float),
+        deep_gap_mask=np.asarray(deep_gap_mask, dtype=bool),
+        type_ii_mask=np.asarray(type_ii_mask, dtype=bool),
+    )
 
 
 def gap_opening_mask(
@@ -103,28 +242,26 @@ def select_migration_torque_si(
     alpha: float,
     gap_opening_condition: str,
     consider_type_ii_migration: bool,
+    *,
+    migration_model: str = DEFAULT_MIGRATION_MODEL,
 ) -> MigrationTorqueSelection:
-    """Compose the caller-selected migration torque in SI units [N m]."""
-    type_i_thermal_torque_si = np.asarray(
-        torque_profile.gamma_type_i_si + torque_profile.gamma_th_si,
-        dtype=float,
+    """Compose the selected migration torque in SI [N m].
+
+    The required positional arguments and return type are retained for legacy
+    callers. ``migration_model`` is a keyword-only extension.
+    """
+    diagnostics = migration_torque_diagnostics(
+        torque_profile,
+        mass_ratio,
+        local_aspect_ratio,
+        alpha,
+        gap_opening_condition,
+        consider_type_ii_migration,
+        migration_model=migration_model,
     )
-    if consider_type_ii_migration:
-        type_ii_mask = gap_opening_mask(
-            mass_ratio,
-            np.asarray(local_aspect_ratio, dtype=float),
-            alpha,
-            gap_opening_condition,
-        )
-    else:
-        type_ii_mask = np.zeros(type_i_thermal_torque_si.shape, dtype=bool)
     return MigrationTorqueSelection(
-        torque_si=np.where(
-            type_ii_mask,
-            np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
-            type_i_thermal_torque_si,
-        ),
-        type_ii_mask=type_ii_mask,
+        torque_si=diagnostics.gamma_total_si,
+        type_ii_mask=diagnostics.type_ii_mask,
     )
 
 

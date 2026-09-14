@@ -58,6 +58,13 @@ from src.workflows.rate_plots import (
     validate_repeat_results,
     validate_physical_entry_time_endpoints,
     validate_status_fraction_data,
+    write_status_fraction_captions,
+)
+from src.workflows.run_figures import (
+    MIGRATION_TIMESCALE_HISTOGRAM_COLUMNS,
+    _balanced_representative_candidates,
+    _primary_mass_styles,
+    build_imri_candidate_migration_histogram,
 )
 from src.workflows.config import SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
 from src.workflows.workflow import derive_task_seed
@@ -378,10 +385,121 @@ def _assert_round_trip(frame: pd.DataFrame, path: Path) -> None:
     )
 
 
+def _assert_imri_candidate_migration_histogram() -> None:
+    events = pd.DataFrame.from_records(
+        [
+            {
+                "m_smbh_msun": 1.0e3,
+                "band_entry_status": "entry_in_migration_domain",
+                "migration_time_to_entry_myr": value,
+                "migration_time_to_handoff_myr": value,
+                "migration_evaluated": True,
+                "migration_status": status,
+                "is_imri_candidate": candidate,
+            }
+            for value, status, candidate in (
+                (0.0, "already_at_target", True),
+                (1.0, "finite", True),
+                (4.0, "finite", True),
+                (9.0, "finite", True),
+                (100.0, "trap_bound", True),
+                (50.0, "finite", False),
+            )
+        ]
+        + [
+            {
+                "m_smbh_msun": 1.0e4,
+                "band_entry_status": "entry_in_migration_domain",
+                "migration_time_to_entry_myr": 0.5,
+                "migration_time_to_handoff_myr": 0.5,
+                "migration_evaluated": True,
+                "migration_status": "finite",
+                "is_imri_candidate": True,
+            },
+            {
+                "m_smbh_msun": 1.0e5,
+                "band_entry_status": (
+                    "entry_below_migration_domain_but_above_isco"
+                ),
+                "migration_time_to_entry_myr": np.nan,
+                "migration_time_to_handoff_myr": 16.0,
+                "migration_evaluated": True,
+                "migration_status": "finite",
+                "is_imri_candidate": True,
+            }
+        ]
+    )
+    histogram = build_imri_candidate_migration_histogram(
+        RunResults(events, pd.DataFrame(), pd.DataFrame(), {})
+    )
+    if tuple(histogram.columns) != MIGRATION_TIMESCALE_HISTOGRAM_COLUMNS:
+        raise AssertionError("migration-timescale histogram schema changed")
+    if set(histogram["m_smbh_msun"]) != {1.0e3, 1.0e4, 1.0e5}:
+        raise AssertionError("candidate-bearing SMBH masses are missing")
+    expected_counts = {1.0e3: 4, 1.0e4: 1, 1.0e5: 1}
+    actual_counts = histogram.groupby("m_smbh_msun")[
+        "imri_candidate_count"
+    ].sum()
+    if actual_counts.to_dict() != expected_counts:
+        raise AssertionError("non-candidates or invalid migrations entered histogram")
+    edges_by_mass = {
+        mass: tuple(zip(group["bin_left_myr"], group["bin_right_myr"], strict=True))
+        for mass, group in histogram.groupby("m_smbh_msun", sort=True)
+    }
+    if len(set(edges_by_mass.values())) != 1:
+        raise AssertionError("SMBH-mass histograms do not share time bins")
+    zero_bin = histogram[
+        np.isclose(histogram["m_smbh_msun"], 1.0e3)
+        & np.isclose(histogram["bin_left_myr"], 0.0)
+    ]
+    if len(zero_bin) != 1 or zero_bin["imri_candidate_count"].iloc[0] != 1:
+        raise AssertionError("valid zero migration time was dropped")
+
+
+def _assert_balanced_lisa_track_selection() -> None:
+    candidates = pd.DataFrame.from_records(
+        [
+            {
+                "event_id": f"mass={mass:.0e}:object={object_index}",
+                "final_smbh_mass_msun": mass,
+                "mass_msun": 20.0 + object_index,
+                "detection_redshift": redshift_start + 0.01 * object_index,
+            }
+            for mass, redshift_start in (
+                (1.0e3, 14.5),
+                (1.0e4, 14.0),
+                (1.0e5, 10.0),
+            )
+            for object_index in range(10)
+        ][::-1]
+    )
+    selected = _balanced_representative_candidates(candidates, max_tracks=7)
+    counts = selected.groupby("final_smbh_mass_msun")["event_id"].size()
+    if counts.to_dict() != {1.0e3: 2, 1.0e4: 2, 1.0e5: 2}:
+        raise AssertionError("representative LISA tracks are not balanced by mass")
+    expected_ids = {
+        f"mass={mass:.0e}:object={object_index}"
+        for mass in (1.0e3, 1.0e4, 1.0e5)
+        for object_index in (0, 1)
+    }
+    if set(selected["event_id"]) != expected_ids:
+        raise AssertionError("representative LISA tracks are not deterministic")
+
+    styles = _primary_mass_styles(
+        np.asarray([1.0e5, 1.0e3, 1.0e4, 1.0e3], dtype=float)
+    )
+    if tuple(styles) != (1.0e3, 1.0e4, 1.0e5):
+        raise AssertionError("primary-mass scatter styles are not deterministic")
+    if len({color for _, color in styles.values()}) != len(styles):
+        raise AssertionError("primary-mass scatter styles reused one color")
+
+
 def run_harness(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     figures_dir = output_dir / "figures"
     events, repeats, averaged = synthetic_tables()
+    _assert_imri_candidate_migration_histogram()
+    _assert_balanced_lisa_track_selection()
     events.to_csv(output_dir / "synthetic_events.csv", index=False)
     repeats.to_csv(output_dir / "synthetic_repeats.csv", index=False)
 
@@ -870,10 +988,21 @@ def run_harness(output_dir: Path) -> None:
             raise AssertionError("status figure row labels are not scholar-facing")
         if "GW faster at start" not in legend_text or "gas_stop_reason" in legend_text:
             raise AssertionError("status figure legend did not use explicit labels")
-        if "Denominators:" not in footer_text or "aggregates" not in footer_text:
+        if "Denominators:" in footer_text or "aggregates" in footer_text:
             raise AssertionError(
-                "status figure omitted denominator/aggregation wording"
+                "status figure should not carry an in-figure footer note; "
+                "denominator wording belongs in the caption file"
             )
+    status_caption_path = write_status_fraction_captions(
+        status_data,
+        mass_status_data,
+        figures_dir / "status_figure_captions.md",
+    )
+    status_caption_text = status_caption_path.read_text()
+    if "Denominators:" not in status_caption_text or "aggregates" not in status_caption_text:
+        raise AssertionError(
+            "status captions omitted denominator/aggregation wording"
+        )
     _assert_round_trip(status_data, status_data_path)
     _assert_round_trip(mass_status_data, mass_status_data_path)
     validate_status_fraction_data(pd.read_csv(status_data_path))

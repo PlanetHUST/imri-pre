@@ -6,7 +6,12 @@ from typing import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from physical_process.disk_migration import GAP_OPENING_CONDITIONS
+from physical_process.disk_migration import (
+    DEFAULT_MIGRATION_MODEL,
+    GAP_OPENING_CONDITIONS,
+    MIGRATION_MODELS,
+    UNGAPPED,
+)
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -31,6 +36,7 @@ IMRI_SNR_THRESHOLD = 20.0
 IMRI_LISA_MISSION_DURATION_YEARS = 4.0
 IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
 IMRI_DETECTOR_OMEGA_M = 0.315
+DEFAULT_BASE_SEED = 20260913
 DEFAULT_GAP_OPENING_CONDITION = "kii"
 TORQUE_WITH_TRAP = "torque_with_trap"
 SEMI_WITHOUT_TRAP = "semi_without_trap"
@@ -83,6 +89,7 @@ class IMRIDynConfig:
         nsc_radius_mass_slope: float = 0.321,
         nsc_radius_reference_mass_msun: float = 3.6e6,
         gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
+        migration_model: str = DEFAULT_MIGRATION_MODEL,
     ) -> None:
         if len(smbh_masses_msun) == 0 or len(nsc_masses_msun) == 0:
             raise ValueError("SMBH and NSC mass vectors must not be empty")
@@ -126,6 +133,8 @@ class IMRIDynConfig:
             raise ValueError(
                 f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
             )
+        if migration_model not in MIGRATION_MODELS:
+            raise ValueError(f"migration model must be one of {MIGRATION_MODELS}")
         if disk_model not in DISK_MODELS:
             raise ValueError(f"disk model must be one of {DISK_MODELS}")
 
@@ -145,6 +154,9 @@ class IMRIDynConfig:
         self.consider_type_ii_migration = consider_type_ii_migration
         self.disk_model = disk_model
         self.gap_opening_condition = gap_opening_condition
+        self.migration_model = (
+            migration_model if consider_type_ii_migration else UNGAPPED
+        )
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr
