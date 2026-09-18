@@ -1,0 +1,32 @@
+{
+  "tree_path": "/home/planet/projects/ding/science/task_003/run/attachment/galaxy_1e12.csv",
+  "output_root": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/F_parallel_reproducibility/workers_4",
+  "jobs_total": 4,
+  "status_counts": {
+    "success": 4,
+    "host_not_selected": 0,
+    "missing_required_input": 0,
+    "invalid_host_input": 0,
+    "outside_local_model_domain": 0,
+    "mapping_unavailable": 0,
+    "simulation_failure": 0,
+    "numerical_failure": 0,
+    "output_failure": 0
+  },
+  "reader_counters": {
+    "rows_seen": 44,
+    "rows_selected": 4,
+    "missing_required_field": 0,
+    "invalid_redshift": 0,
+    "invalid_halo_mass": 0,
+    "invalid_bh_mass": 0,
+    "outside_selection": 39,
+    "truncated_by_max_hosts": 1,
+    "jobs_created": 4
+  },
+  "succeeded_hosts_with_imri_candidates": 2,
+  "succeeded_hosts_with_physical_zero_imri": 2,
+  "runtime_s": 11.908490710000478,
+  "workers": 4,
+  "master_seed": 42
+}

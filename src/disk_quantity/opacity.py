@@ -1,8 +1,25 @@
+"""Rosseland mean opacity tables and interpolation.
+
+Canonical opacity source for the in-repo disk solver
+(:mod:`disk_quantity.disk_solve`).  Data are tabulated ``log10(kappa)`` in
+cm^2 g^-1 on a grid of ``logT = log10(T/K)`` and
+``logR = log10(rho / (T / 1e6 K)^3)`` with rho in g cm^-3, assembled from:
+
+1. Updated OPAL opacities, Iglesias & Rogers (1996), ApJ;
+2. low-temperature Rosseland opacities, Alexander & Ferguson.
+
+Queries outside the tabulated range are **clipped** to the grid edge rather
+than extrapolated; callers that need to know they left the table must check
+the bounds themselves.
+
+This module holds data and interpolation only.  The verification figure lives
+in :mod:`viz.opacity_plots` so that the physics module has no plotting
+dependency.
+"""
+
 import numpy as np
 import numpy.typing as npt
-import matplotlib.pyplot as plt
 from scipy.interpolate import RegularGridInterpolator
-from matplotlib.figure import Figure
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -3139,85 +3156,4 @@ def findopacity(
     return float(log_opacity_cm2_g)
 
 
-def plot_opacity_verification(
-    interpolator: RegularGridInterpolator,
-    logR_vals: FloatArray,
-    logT_vals: FloatArray,
-    kappa_orig: FloatArray,
-    logR_grid: FloatArray,
-    logT_grid: FloatArray,
-) -> Figure:
-    """
-    Plot the interpolated opacity over the full (logR, logT) domain.
-
-    Parameters:
-        interpolator : RegularGridInterpolator
-            The opacity interpolator.
-        logR_vals : array, shape (nR,)
-            The original logR grid points.
-        logT_vals : array, shape (nT,)
-            The original logT grid points.
-        kappa_orig : array, shape (nR, nT)
-            The original opacity values (log10 kappa).
-        logR_grid : array, shape (nR_fine,)
-            Fine logR grid for plotting.
-        logT_grid : array, shape (nT_fine,)
-            Fine logT grid for plotting.
-    """
-    # Create fine mesh
-    R_fine, T_fine = np.meshgrid(logR_grid, logT_grid, indexing="ij")
-    points = np.column_stack((R_fine.ravel(), T_fine.ravel()))
-
-    # Interpolate
-    kappa_fine = interpolator(points).reshape(R_fine.shape)
-
-    # Plot
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
-
-    # Original data (coarse)
-    im1 = ax1.pcolormesh(
-        logR_vals, logT_vals, kappa_orig.T, shading="auto", cmap="viridis"
-    )
-    ax1.set_xlabel("log R")
-    ax1.set_ylabel("log T")
-    ax1.set_title("Original data (coarse grid)")
-    plt.colorbar(im1, ax=ax1, label="log κ")
-
-    # Interpolated data (fine)
-    im2 = ax2.pcolormesh(
-        logR_grid, logT_grid, kappa_fine.T, shading="auto", cmap="viridis"
-    )
-    ax2.set_xlabel("log R")
-    ax2.set_ylabel("log T")
-    ax2.set_title("Interpolated (fine grid)")
-    plt.colorbar(im2, ax=ax2, label="log κ")
-
-    plt.tight_layout()
-    plt.show()
-
-    # Print some sample interpolated values
-    print("Sample interpolation checks:")
-    test_points = np.array([[-6.0, 3.5], [-3.0, 4.0], [0.0, 5.0], [-2.5, 4.5]])
-    for pt in test_points:
-        val = interpolator(pt)[0]
-        print(f"  (logR={pt[0]:.2f}, logT={pt[1]:.2f}) -> logκ = {val:.4f}")
-    return fig
-
-
-if __name__ == "__main__":
-    # Create fine grids for plotting (finer than original)
-    logR_fine = np.linspace(logR_data.min(), logR_data.max(), 200)
-    logT_fine = np.linspace(logT_data.min(), logT_data.max(), 500)
-
-    # Call the plot function with your data
-    plot_opacity_verification(
-        inter, logR_data, logT_data, kappa_data, logR_fine, logT_fine
-    )
-
-    # Optional: test a single point using your findopacity function
-    test_logT = 4.0
-    test_logR = -2.0
-    opacity = findopacity(test_logT, test_logR)
-    print(
-        f"\nUsing findopacity: logκ at (logT={test_logT}, logR={test_logR}) = {opacity:.4f}"
-    )
+__all__ = ["findopacity", "logR_data", "logT_data", "kappa_data", "inter"]

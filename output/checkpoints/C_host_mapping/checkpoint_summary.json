@@ -1,0 +1,203 @@
+{
+  "checkpoint": "C_host_mapping",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "tree MBH source rejects the empty MBH column as invalid_host_input",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "config source: redshift comes from tree z",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "config source: masses are host independent",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "stellar scaling: M_smbh = f * Mstar",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "stellar scaling: M_nsc = f * Mstar",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "stellar scaling: provenance labelled as derived",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "stellar scaling: metallicity stays config (1e-5 Zsun)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "tree metallicity: Z_zsun = Z_massfraction / 0.0145",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "tree metallicity: selects the Pop II regime (>= 1e-4 Zsun)",
+      "result": "PASS",
+      "detail": 0.014065852172027587
+    },
+    {
+      "check": "domain policy: hosts above the SMBH bound are outside_local_model_domain",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "missing Mstar -> missing_required_input",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "tree MBH used verbatim when positive",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "config source with a mass vector -> mapping_unavailable",
+      "result": "PASS",
+      "detail": null
+    }
+  ],
+  "data": {
+    "hosts": [
+      {
+        "host_id": "n000001_b000001_r0000000",
+        "redshift": 6.000003316421832,
+        "record_index": 0,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999999341000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137592052.388361,
+        "metallicity_mass_fraction": 0.0002039548564944
+      },
+      {
+        "host_id": "n000001_b000001_r0000001",
+        "redshift": 6.000007112843664,
+        "record_index": 1,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999998685000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137585988.1633983,
+        "metallicity_mass_fraction": 0.0002039547137514
+      },
+      {
+        "host_id": "n000001_b000001_r0000002",
+        "redshift": 6.000010909265496,
+        "record_index": 2,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999998030000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137579916.765123,
+        "metallicity_mass_fraction": 0.0002039547720078
+      },
+      {
+        "host_id": "n000001_b000001_r0000003",
+        "redshift": 6.000014697728371,
+        "record_index": 3,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999997374000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137573796.2370825,
+        "metallicity_mass_fraction": 0.0002039548255862
+      },
+      {
+        "host_id": "n000001_b000001_r0000004",
+        "redshift": 6.000018494150203,
+        "record_index": 4,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999996719000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137567868.739645,
+        "metallicity_mass_fraction": 0.0002039541040061
+      },
+      {
+        "host_id": "n000001_b000001_r0000005",
+        "redshift": 6.000022290572035,
+        "record_index": 5,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 999996064000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3137562009.964437,
+        "metallicity_mass_fraction": 0.0002039536357145
+      }
+    ],
+    "policies": {
+      "tree_default": {
+        "smbh_mass_source": "tree",
+        "nsc_mass_source": "config",
+        "metallicity_source": "config",
+        "smbh_stellar_mass_fraction": 0.0001,
+        "nsc_stellar_mass_fraction": 0.0001,
+        "domain_smbh_mass_min_msun": 1000.0,
+        "domain_smbh_mass_max_msun": 1000000.0,
+        "domain_nsc_mass_min_msun": 100.0,
+        "domain_nsc_mass_max_msun": 100000000.0,
+        "domain_redshift_max": 30.0
+      },
+      "config_masses": {
+        "smbh_mass_source": "config",
+        "nsc_mass_source": "config",
+        "metallicity_source": "config",
+        "smbh_stellar_mass_fraction": 0.0001,
+        "nsc_stellar_mass_fraction": 0.0001,
+        "domain_smbh_mass_min_msun": 1000.0,
+        "domain_smbh_mass_max_msun": 1000000.0,
+        "domain_nsc_mass_min_msun": 100.0,
+        "domain_nsc_mass_max_msun": 100000000.0,
+        "domain_redshift_max": 30.0
+      },
+      "stellar_scaling": {
+        "smbh_mass_source": "stellar-scaling",
+        "nsc_mass_source": "stellar-scaling",
+        "metallicity_source": "config",
+        "smbh_stellar_mass_fraction": 0.0001,
+        "nsc_stellar_mass_fraction": 0.0001,
+        "domain_smbh_mass_min_msun": 1000.0,
+        "domain_smbh_mass_max_msun": 1000000.0,
+        "domain_nsc_mass_min_msun": 100.0,
+        "domain_nsc_mass_max_msun": 100000000.0,
+        "domain_redshift_max": 30.0
+      },
+      "stellar_scaling_tree_metallicity": {
+        "smbh_mass_source": "stellar-scaling",
+        "nsc_mass_source": "stellar-scaling",
+        "metallicity_source": "tree",
+        "smbh_stellar_mass_fraction": 0.0001,
+        "nsc_stellar_mass_fraction": 0.0001,
+        "domain_smbh_mass_min_msun": 1000.0,
+        "domain_smbh_mass_max_msun": 1000000.0,
+        "domain_nsc_mass_min_msun": 100.0,
+        "domain_nsc_mass_max_msun": 100000000.0,
+        "domain_redshift_max": 30.0
+      },
+      "narrow_domain": {
+        "smbh_mass_source": "stellar-scaling",
+        "nsc_mass_source": "config",
+        "metallicity_source": "config",
+        "smbh_stellar_mass_fraction": 0.0001,
+        "nsc_stellar_mass_fraction": 0.0001,
+        "domain_smbh_mass_min_msun": 1000.0,
+        "domain_smbh_mass_max_msun": 100000.0,
+        "domain_nsc_mass_min_msun": 100.0,
+        "domain_nsc_mass_max_msun": 100000000.0,
+        "domain_redshift_max": 30.0
+      }
+    }
+  }
+}

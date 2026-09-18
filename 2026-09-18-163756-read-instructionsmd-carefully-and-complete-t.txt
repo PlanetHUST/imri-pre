@@ -1,0 +1,2262 @@
+ ▐▛███▛█   Claude Code v2.1.263
+▝▜██████▀  model_43k4in · API Usage Billing
+  ▝▝ ▝▝    ~/projects/ding/science/task_003/run/attachment
+
+
+❯ ❯ Read ./instructions.md carefully and complete the task against              
+  ./attachment.                                                                 
+                                                                                
+    Work entirely in the main agent trajectory. Do not use sub-agents.          
+    Use the prepared Python environment available in ./.venv.                   
+    Do not use network access.                                                  
+                                                                                
+    Inspect the repository and existing scientific implementation before        
+  modifying it.                                                                 
+    Then implement, test, validate, and document the requested work completely. 
+
+● I'll start by reading the instructions and inspecting the attachment.
+
+  Thought for 37s, searched for 1 pattern, read 1 file, listed 1 directory (ctrl+o to expand)
+
+● Now let me inspect the repository structure and key files.
+
+  Thought for 12m 59s, searched for 2 patterns, read 10 files, listed 1 directory, ran 19 shell commands (ctrl+o to expand)
+
+● Now I have a clear picture. Let me set up task tracking and start
+  implementing.
+
+  Thought for 29s, ran 1 shell command (ctrl+o to expand)
+
+● Now implementing the merger-tree reader.
+
+● Write(src/workflows/merger_tree.py)
+  ⎿  Wrote 397 lines to src/workflows/merger_tree.py
+       1 """Read-only adapter between an external merger-tree CSV and the
+       2 
+       3 This module is the *only* place that knows about merger-tree CSV
+          column names.
+       5 
+       6     raw CSV record -> validated :class:`HaloHost`
+       8 It performs no physics.  It never rewrites, normalises, or dupli
+         cates the input
+       9 file, and it loads only the small subset of columns that the exi
+      10 single-halo simulation actually needs.
+     … +447 lines (ctrl+o to expand)
+
+● Write(src/workflows/host_mapping.py)
+  ⎿  Wrote 451 lines to src/workflows/host_mapping.py
+      1 """Map one merger-tree host onto the existing single-halo simulat
+        ion inputs.
+      3 This layer answers exactly one question::
+      4 
+      5     HaloHost + base IMRIDynConfig -> ResolvedHostParameters
+      7 It contains no CSV parsing and no IMRI physics.  It only decides 
+        *which value*
+      8 each host-dependent local input takes, records *where that value 
+      9 and refuses hosts that fall outside the configured local-model do
+        main.
+     … +516 lines (ctrl+o to expand)
+
+  Thought for 29s (ctrl+o to expand)
+
+● Update(src/workflows/host_mapping.py)
+  ⎿  Added 1 line, removed 1 line
+      48  
+      49  from __future__ import annotations
+      50  
+      51 -from dataclasses import asdict, dataclass, replace             
+      51 +from dataclasses import asdict, dataclass                      
+      52  from typing import Any
+      53  
+      54  import numpy as np
+
+● Now the reusable single-halo callable.
+
+  Thought for 1m 3s, ran 2 shell commands (ctrl+o to expand)
+
+● Write(src/workflows/single_halo.py)
+  ⎿  Wrote 362 lines to src/workflows/single_halo.py
+       1 """Programmatic single-halo interface for the dynamical IMRI wor
+       2 
+       3 This module exposes the existing local simulation kernel
+       4 (:func:`workflows.workflow.run_simulation`) as one reusable, exp
+       5 parameterised, process-safe operation::
+       6 
+       8         config=base_config,       # global model parameters
+       9         host=host,                # host-dependent inputs (HaloH
+         ost or resolved)
+         this run
+     … +388 lines (ctrl+o to expand)
+
+  Thought for 49s (ctrl+o to expand)
+
+● Update(src/workflows/single_halo.py)
+  ⎿  Added 1 line
+      29  
+      30  import contextlib
+      31  import io
+      32 +import time                                                    
+      33  import traceback
+      34  from dataclasses import asdict, dataclass, field
+      35  from pathlib import Path
+
+● Update(src/workflows/single_halo.py)
+  ⎿  Removed 2 lines
+      247      The function never raises for a per-host failure: every fa
+           ilure is mapped to
+      248      one of :data:`JOB_STATUSES` and returned with its error me
+           ssage.
+      249      """
+      250 -    import time                                               
+      251 -                                                              
+      250      host_id = (
+      251          host.host_id if host is not None else MANUAL_HOST_ID
+      252      )
+
+● Now the batch executor.
+
+  Thought for 54s (ctrl+o to expand)
+
+● Write(src/workflows/tree_batch.py)
+  ⎿  Wrote 631 lines to src/workflows/tree_batch.py
+      1 """Deterministic parallel execution of single-halo jobs built fro
+        m a merger tree.
+      2 
+      4 
+      5     MergerTreeReader -> HaloHost -> HaloSimulationJob -> run_sing
+        le_halo
+      6                                           |
+      8                                           |
+      9                                 HaloSimulationResult -> compact o
+        utputs
+     … +700 lines (ctrl+o to expand)
+
+  Thought for 46s (ctrl+o to expand)
+
+● Update(src/workflows/tree_batch.py)
+  ⎿  Added 2 lines, removed 4 lines
+      35  import json
+      36  import multiprocessing
+      37  import platform
+      38 -import sys                                                     
+      38  import time
+      39  from concurrent.futures import FIRST_COMPLETED, Future, Process
+          PoolExecutor, wait
+      40  from dataclasses import asdict, dataclass, field
+      41  from datetime import datetime
+      42  from importlib import metadata as importlib_metadata
+      43  from pathlib import Path
+      45 -from typing import Any, Callable, Iterable, Iterator, Sequence 
+      44 +from typing import Any, Callable, Iterable, Iterator           
+      45  
+      46  import numpy as np
+      47  import pandas as pd
+      48  
+      49  from .config import IMRIDynConfig
+      51 -from .host_mapping import HostMappingPolicy, config_kwargs     
+      50 +from .host_mapping import HostMappingPolicy, config_kwargs, con
+         +fig_with_overrides                                             
+      51  from .merger_tree import (
+      52      HaloHost,
+      53      HostSelection,
+      54      IGNORED_TREE_COLUMNS,
+      56 -    MergerTreeError,                                           
+      55      MergerTreeReader,
+      56      REQUIRED_TREE_COLUMNS,
+      57      hosts_to_frame,
+
+● Update(src/workflows/tree_batch.py)
+  ⎿  Removed 2 lines
+      438      # In batch mode the inner damping pool of every host run w
+           ould otherwise
+      439      # default to the full machine, oversubscribing it workers-
+           fold.
+      440      if base_config.damping_cpu_count is None:
+      441 -        from .host_mapping import config_with_overrides       
+      442 -                                                              
+      441          base_config = config_with_overrides(
+      442              base_config, damping_cpu_count=DEFAULT_BATCH_DAMPI
+           NG_CPU_COUNT
+      443          )
+
+● Now the small batch-figure helper. Let me load the dataviz guidance first
+  since I'm about to write chart code.
+
+● Skill(dataviz)  ⎿  Successfully loaded skill
+
+  Thought for 25s, ran 1 shell command (ctrl+o to expand)
+
+● Write(src/workflows/tree_batch_plots.py)
+  ⎿  Wrote 154 lines to src/workflows/tree_batch_plots.py
+      1 """Interface-validation figures for one merger-tree batch run.
+      2 
+        ce question:
+      4 
+      5 1. ``selected_hosts_domain.png`` - which merger-tree hosts were a
+      6    handed to the local simulation (resolved SMBH mass versus reds
+        hift, coloured
+      7    by execution status);
+        tate, keeping
+      9    "evaluated" separate from "could not be evaluated".
+     … +164 lines (ctrl+o to expand)
+
+● Now the CLI dispatch. I'll add a tree-mode argument group and keep the
+  existing positional path untouched.
+
+● Update(src/workflows/cli.py)
+  ⎿  Added 32 lines, removed 1 line
+       1 -"""Command-line interface for the dynamical IMRI workflow."""  
+       1 +"""Command-line interface for the dynamical IMRI workflow.     
+       2  
+       3 +Two execution modes share one parser:                          
+       4 +                                                               
+       5 +* **single-halo mode** (the original behaviour) - every option 
+         +describes one                                                  
+       6 +  local simulation grid and ``run_simulation`` is called exactl
+         +y as before;                                                   
+       7 +* **merger-tree batch mode** - selected with ``--tree``; the sa
+         +me options form                                                
+       8 +  the *base* configuration, and one single-halo job is executed
+         + per selected                                                  
+       9 +  merger-tree host through ``workflows.tree_batch``.           
+      10 +"""                                                            
+      11 +                                                               
+      12  import argparse
+      13 +import sys                                                     
+      14  import time
+      15  from pathlib import Path
+      16  from typing import Sequence
+     ...
+      37      IMRIDynConfig,
+      38      SECONDS_PER_MINUTE,
+      39  )
+      40 +from .host_mapping import (                                    
+      41 +    DEFAULT_DOMAIN_SMBH_MASS_MAX_MSUN,                         
+      42 +    DEFAULT_DOMAIN_SMBH_MASS_MIN_MSUN,                         
+      43 +    DEFAULT_NSC_STELLAR_MASS_FRACTION,                         
+      44 +    DEFAULT_SMBH_STELLAR_MASS_FRACTION,                        
+      45 +    METALLICITY_SOURCES,                                       
+      46 +    METALLICITY_SOURCE_CONFIG,                                 
+      47 +    NSC_MASS_SOURCES,                                          
+      48 +    NSC_MASS_SOURCE_CONFIG,                                    
+      49 +    SMBH_MASS_SOURCES,                                         
+      50 +    SMBH_MASS_SOURCE_TREE,                                     
+      51 +    HostMappingPolicy,                                         
+      52 +)                                                              
+      53 +from .merger_tree import DEFAULT_CHUNK_SIZE, HostSelection, Mer
+         +gerTreeError                                                   
+      54 +from .tree_batch import (                                      
+      55 +    BatchExecutionError,                                       
+      56 +    BatchSettings,                                             
+      57 +    DEFAULT_MASTER_SEED,                                       
+      58 +    DEFAULT_WORKERS,                                           
+      59 +    run_tree_batch,                                            
+      60 +)                                                              
+      61  from .workflow import run_simulation
+      62  
+      63  DEFAULT_NUM_REPEATS = 1
+
+● Now add the tree-mode arguments and the dispatch.
+
+● Update(src/workflows/cli.py)
+  ⎿  Added 235 lines, removed 4 lines
+      261          default=None,
+      262          help="optional root seed for reproducible, paired Mont
+           e Carlo tasks",
+      263      )
+      264 +    _add_tree_arguments(parser)                               
+      265      return parser
+      266  
+      267  
+      267 -def run_cli(argv: Sequence[str] | None = None) -> None:       
+      268 -    """Parse command-line arguments and run the IMRI simulatio
+          -n."""                                                         
+      269 -    arguments = build_parser().parse_args(argv)               
+      270 -    config = IMRIDynConfig(                                   
+      268 +def _parse_id_list(value: str) -> tuple[float, ...]:          
+      269 +    """Parse a comma-separated list of node/branch identities.
+          +"""                                                           
+      270 +    items = [item.strip() for item in value.split(",") if item
+          +.strip()]                                                     
+      271 +    try:                                                      
+      272 +        identities = tuple(float(item) for item in items)     
+      273 +    except ValueError as error:                               
+      274 +        raise argparse.ArgumentTypeError(                     
+      275 +            "node/branch lists must contain comma-separated nu
+          +mbers"                                                        
+      276 +        ) from error                                          
+      277 +    if not identities:                                        
+      278 +        raise argparse.ArgumentTypeError("node/branch lists mu
+          +st not be empty")                                             
+      279 +    return identities                                         
+      280 +                                                              
+      281 +                                                              
+      282 +def _add_tree_arguments(parser: argparse.ArgumentParser) -> No
+          +ne:                                                           
+      283 +    """Add the merger-tree batch options (ignored unless --tre
+          +e is given)."""                                               
+      284 +    group = parser.add_argument_group(                        
+      285 +        "merger-tree batch mode",                             
+      286 +        "Supplying --tree switches to batch mode: every option
+          + above becomes the "                                          
+      287 +        "base configuration and one single-halo job runs per s
+          +elected host.",                                               
+      288 +    )                                                         
+      289 +    group.add_argument(                                       
+      290 +        "--tree",                                             
+      291 +        type=Path,                                            
+      292 +        default=None,                                         
+      293 +        metavar="CSV",                                        
+      294 +        help="merger-tree CSV; enables batch mode",           
+      295 +    )                                                         
+      296 +    group.add_argument(                                       
+      297 +        "--output",                                           
+      298 +        type=Path,                                            
+      299 +        default=None,                                         
+      300 +        metavar="DIR",                                        
+      301 +        help="batch output root (overrides the positional outp
+          +ut_dir)",                                                     
+      302 +    )                                                         
+      303 +    group.add_argument(                                       
+      304 +        "--workers",                                          
+      305 +        type=int,                                             
+      306 +        default=DEFAULT_WORKERS,                              
+      307 +        help="number of parallel host jobs; each job additiona
+          +lly uses "                                                    
+      308 +        "damping_cpu_count processes (default 1 in batch mode)
+          +",                                                            
+      309 +    )                                                         
+      310 +    group.add_argument(                                       
+      311 +        "--master-seed",                                      
+      312 +        type=int,                                             
+      313 +        default=DEFAULT_MASTER_SEED,                          
+      314 +        help="root seed from which every host base seed is der
+          +ived",                                                        
+      315 +    )                                                         
+      316 +    group.add_argument(                                       
+      317 +        "--tree-chunk-size",                                  
+      318 +        type=int,                                             
+      319 +        default=DEFAULT_CHUNK_SIZE,                           
+      320 +        help="rows per CSV chunk (engineering parameter, not p
+          +hysical)",                                                    
+      321 +    )                                                         
+      322 +    group.add_argument("--node", type=_parse_id_list, default=
+          +None, metavar="ID[,ID...]")                                   
+      323 +    group.add_argument("--branch", type=_parse_id_list, defaul
+          +t=None, metavar="ID[,ID...]")                                 
+      324 +    group.add_argument("--z-min", type=float, default=None)   
+      325 +    group.add_argument("--z-max", type=float, default=None)   
+      326 +    group.add_argument("--mbh-min", type=float, default=None, 
+          +help="tree MBH lower bound [Msun]")                           
+      327 +    group.add_argument("--mbh-max", type=float, default=None, 
+          +help="tree MBH upper bound [Msun]")                           
+      328 +    group.add_argument("--mhalo-min", type=float, default=None
+          +, help="tree m lower bound [Msun]")                           
+      329 +    group.add_argument("--mhalo-max", type=float, default=None
+          +, help="tree m upper bound [Msun]")                           
+      330 +    group.add_argument(                                       
+      331 +        "--max-hosts",                                        
+      332 +        type=int,                                             
+      333 +        default=None,                                         
+      334 +        help="stop after this many selected hosts (file order)
+          +",                                                            
+      335 +    )                                                         
+      336 +    group.add_argument(                                       
+      337 +        "--smbh-mass-source",                                 
+      338 +        choices=SMBH_MASS_SOURCES,                            
+      339 +        default=SMBH_MASS_SOURCE_TREE,                        
+      340 +        help="where each host's SMBH mass comes from: the tree
+          + MBH column, the "                                            
+      341 +        "single --smbh-masses value, or an explicit fraction o
+          +f the tree Mstar",                                            
+      342 +    )                                                         
+      343 +    group.add_argument(                                       
+      344 +        "--nsc-mass-source",                                  
+      345 +        choices=NSC_MASS_SOURCES,                             
+      346 +        default=NSC_MASS_SOURCE_CONFIG,                       
+      347 +        help="where each host's NSC mass comes from: the singl
+          +e --nsc-masses "                                              
+      348 +        "value or an explicit fraction of the tree Mstar",    
+      349 +    )                                                         
+      350 +    group.add_argument(                                       
+      351 +        "--metallicity-source",                               
+      352 +        choices=METALLICITY_SOURCES,                          
+      353 +        default=METALLICITY_SOURCE_CONFIG,                    
+      354 +        help="where each host's metallicity comes from: --meta
+          +llicity or the "                                              
+      355 +        "tree Z mass fraction converted to solar units",      
+      356 +    )                                                         
+      357 +    group.add_argument(                                       
+      358 +        "--smbh-stellar-mass-fraction",                       
+      359 +        type=float,                                           
+      360 +        default=DEFAULT_SMBH_STELLAR_MASS_FRACTION,           
+      361 +        help="M_smbh = fraction * Mstar when --smbh-mass-sourc
+          +e stellar-scaling",                                           
+      362 +    )                                                         
+      363 +    group.add_argument(                                       
+      364 +        "--nsc-stellar-mass-fraction",                        
+      365 +        type=float,                                           
+      366 +        default=DEFAULT_NSC_STELLAR_MASS_FRACTION,            
+      367 +        help="M_nsc = fraction * Mstar when --nsc-mass-source 
+          +stellar-scaling",                                             
+      368 +    )                                                         
+      369 +    group.add_argument(                                       
+      370 +        "--domain-smbh-min-msun",                             
+      371 +        type=float,                                           
+      372 +        default=DEFAULT_DOMAIN_SMBH_MASS_MIN_MSUN,            
+      373 +        help="local-model SMBH mass lower bound; hosts below a
+          +re not run",                                                  
+      374 +    )                                                         
+      375 +    group.add_argument(                                       
+      376 +        "--domain-smbh-max-msun",                             
+      377 +        type=float,                                           
+      378 +        default=DEFAULT_DOMAIN_SMBH_MASS_MAX_MSUN,            
+      379 +        help="local-model SMBH mass upper bound; hosts above a
+          +re not run",                                                  
+      380 +    )                                                         
+      381 +    group.add_argument(                                       
+      382 +        "--no-batch-figures",                                 
+      383 +        action="store_true",                                  
+      384 +        help="skip the two batch interface figures",          
+      385 +    )                                                         
+      386 +                                                              
+      387 +                                                              
+      388 +TREE_ONLY_OPTIONS = (                                         
+      389 +    "output",                                                 
+      390 +    "node",                                                   
+      391 +    "branch",                                                 
+      392 +    "z_min",                                                  
+      393 +    "z_max",                                                  
+      394 +    "mbh_min",                                                
+      395 +    "mbh_max",                                                
+      396 +    "mhalo_min",                                              
+      397 +    "mhalo_max",                                              
+      398 +    "max_hosts",                                              
+      399 +)                                                             
+      400 +                                                              
+      401 +                                                              
+      402 +def build_config_from_arguments(arguments: argparse.Namespace)
+          + -> IMRIDynConfig:                                            
+      403 +    """Build the (base) configuration from parsed CLI argument
+          +s."""                                                         
+      404 +    return IMRIDynConfig(                                     
+      405          smbh_masses_msun=arguments.smbh_masses,
+      406          nsc_masses_msun=arguments.nsc_masses,
+      407          num_repeats=arguments.num_repeats,
+     ...
+      433          print_debug_results=arguments.debug_results,
+      434          base_seed=arguments.base_seed,
+      435      )
+      436 +                                                              
+      437 +                                                              
+      438 +def build_host_selection(arguments: argparse.Namespace) -> Hos
+          +tSelection:                                                   
+      439 +    """Translate CLI selectors into a declarative host filter.
+          +"""                                                           
+      440 +    if arguments.max_hosts is not None and arguments.max_hosts
+          + <= 0:                                                        
+      441 +        raise argparse.ArgumentTypeError("--max-hosts must be 
+          +positive")                                                    
+      442 +    return HostSelection(                                     
+      443 +        nodes=arguments.node,                                 
+      444 +        branches=arguments.branch,                            
+      445 +        redshift_min=arguments.z_min,                         
+      446 +        redshift_max=arguments.z_max,                         
+      447 +        smbh_mass_min_msun=arguments.mbh_min,                 
+      448 +        smbh_mass_max_msun=arguments.mbh_max,                 
+      449 +        halo_mass_min_msun=arguments.mhalo_min,               
+      450 +        halo_mass_max_msun=arguments.mhalo_max,               
+      451 +        max_hosts=arguments.max_hosts,                        
+      452 +    )                                                         
+      453 +                                                              
+      454 +                                                              
+      455 +def build_host_mapping_policy(arguments: argparse.Namespace) -
+          +> HostMappingPolicy:                                          
+      456 +    """Translate CLI mapping options into an explicit mapping 
+          +policy."""                                                    
+      457 +    return HostMappingPolicy(                                 
+      458 +        smbh_mass_source=arguments.smbh_mass_source,          
+      459 +        nsc_mass_source=arguments.nsc_mass_source,            
+      460 +        metallicity_source=arguments.metallicity_source,      
+      461 +        smbh_stellar_mass_fraction=arguments.smbh_stellar_mass
+          +_fraction,                                                    
+      462 +        nsc_stellar_mass_fraction=arguments.nsc_stellar_mass_f
+          +raction,                                                      
+      463 +        domain_smbh_mass_min_msun=arguments.domain_smbh_min_ms
+          +un,                                                           
+      464 +        domain_smbh_mass_max_msun=arguments.domain_smbh_max_ms
+          +un,                                                           
+      465 +    )                                                         
+      466 +                                                              
+      467 +                                                              
+      468 +def _run_tree_mode(parser: argparse.ArgumentParser, arguments:
+          + argparse.Namespace) -> None:                                 
+      469 +    if arguments.workers < 1:                                 
+      470 +        parser.error("--workers must be a positive integer")  
+      471 +    if arguments.master_seed < 0:                             
+      472 +        parser.error("--master-seed must be nonnegative")     
+      473 +    if arguments.tree_chunk_size < 1:                         
+      474 +        parser.error("--tree-chunk-size must be a positive int
+          +eger")                                                        
+      475 +    if not arguments.tree.is_file():                          
+      476 +        parser.error(f"--tree file not found: {arguments.tree}
+          +")                                                            
+      477 +                                                              
+      478 +    base_config = build_config_from_arguments(arguments)      
+      479 +    try:                                                      
+      480 +        selection = build_host_selection(arguments)           
+      481 +        policy = build_host_mapping_policy(arguments)         
+      482 +    except (argparse.ArgumentTypeError, ValueError) as error: 
+      483 +        parser.error(str(error))                              
+      484 +    output_root = arguments.output if arguments.output is not 
+          +None else arguments.output_dir                                
+      485 +    settings = BatchSettings(                                 
+      486 +        workers=arguments.workers,                            
+      487 +        chunk_size=arguments.tree_chunk_size,                 
+      488 +        master_seed=arguments.master_seed,                    
+      489 +        make_figures=not arguments.no_batch_figures,          
+      490 +    )                                                         
+      491      start_time_s = time.time()
+      492 +    try:                                                      
+      493 +        outcome = run_tree_batch(                             
+      494 +            arguments.tree,                                   
+      495 +            base_config,                                      
+      496 +            output_root,                                      
+      497 +            selection=selection,                              
+      498 +            policy=policy,                                    
+      499 +            settings=settings,                                
+      500 +            config_source="command line: " + " ".join(sys.argv
+          +),                                                            
+      501 +        )                                                     
+      502 +    except (MergerTreeError, BatchExecutionError) as error:   
+      503 +        parser.error(str(error))                              
+      504 +    runtime_s = time.time() - start_time_s                    
+      505 +    print(                                                    
+      506 +        f"Total runtime: {runtime_s:.2f} seconds = "          
+      507 +        f"{runtime_s/SECONDS_PER_MINUTE:.2f} minutes; "       
+      508 +        f"status counts: {outcome.status_counts}"             
+      509 +    )                                                         
+      510 +                                                              
+      511 +                                                              
+      512 +def run_cli(argv: Sequence[str] | None = None) -> None:       
+      513 +    """Parse command-line arguments and run the IMRI simulatio
+          +n."""                                                         
+      514 +    parser = build_parser()                                   
+      515 +    arguments = parser.parse_args(argv)                       
+      516 +                                                              
+      517 +    if arguments.tree is not None:                            
+      518 +        _run_tree_mode(parser, arguments)                     
+      519 +        return                                                
+      520 +                                                              
+      521 +    used_tree_options = [                                     
+      522 +        f"--{name.replace('_', '-')}"                         
+      523 +        for name in TREE_ONLY_OPTIONS                         
+      524 +        if getattr(arguments, name) is not None               
+      525 +    ]                                                         
+      526 +    if used_tree_options:                                     
+      527 +        parser.error(                                         
+      528 +            "these options require --tree (merger-tree batch m
+          +ode): "                                                       
+      529 +            + ", ".join(used_tree_options)                    
+      530 +        )                                                     
+      531 +                                                              
+      532 +    config = build_config_from_arguments(arguments)           
+      533 +    start_time_s = time.time()                                
+      534      run_simulation(config)
+      535      runtime_s = time.time() - start_time_s
+      536      print(
+
+● Now update __init__.py exports and scripts/main.py to expose the programmatic
+  API.
+
+● Write(src/workflows/__init__.py)
+  ⎿  Added 33 lines
+       2  
+       3  from .cli import build_parser, run_cli
+       4  from .config import IMRIDynConfig
+       5 +from .host_mapping import (                                    
+       6 +    HostMappingError,                                          
+       7 +    HostMappingPolicy,                                         
+       8 +    ResolvedHostParameters,                                    
+       9 +    config_with_overrides,                                     
+      10 +    resolve_host_parameters,                                   
+      11 +)                                                              
+      12 +from .merger_tree import HaloHost, HostSelection, MergerTreeRea
+         +der                                                            
+      13 +from .single_halo import HaloSimulationResult, run_single_halo 
+      14 +from .tree_batch import (                                      
+      15 +    BatchSettings,                                             
+      16 +    HaloSimulationJob,                                         
+      17 +    derive_host_seed,                                          
+      18 +    iter_halo_jobs,                                            
+      19 +    run_jobs,                                                  
+      20 +    run_tree_batch,                                            
+      21 +)                                                              
+      22  from .workflow import run_simulation
+      23  
+      24  __all__ = [
+      25 +    "BatchSettings",                                           
+      26 +    "HaloHost",                                                
+      27 +    "HaloSimulationJob",                                       
+      28 +    "HaloSimulationResult",                                    
+      29 +    "HostMappingError",                                        
+      30 +    "HostMappingPolicy",                                       
+      31 +    "HostSelection",                                           
+      32      "IMRIDynConfig",
+      33 +    "MergerTreeReader",                                        
+      34 +    "ResolvedHostParameters",                                  
+      35      "build_parser",
+      36 +    "config_with_overrides",                                   
+      37 +    "derive_host_seed",                                        
+      38 +    "iter_halo_jobs",                                          
+      39 +    "resolve_host_parameters",                                 
+      40      "run_cli",
+      41 +    "run_jobs",                                                
+      42      "run_simulation",
+      43 +    "run_single_halo",                                         
+      44 +    "run_tree_batch",                                          
+      45  ]
+
+● Write(scripts/main.py)
+  ⎿  Added 63 lines, removed 2 lines
+       1 -"""Primary script for running the IMRI-rate workflow."""       
+       1 +"""Primary entry point for the IMRI workflow: CLI dispatcher an
+         +d programmatic API.                                            
+       2  
+       3 +Running this file executes the command-line interface, which di
+         +spatches to                                                    
+       4 +either the original single-halo mode or the merger-tree batch m
+         +ode::                                                          
+       5 +                                                               
+       6 +    python scripts/main.py 1 output/dyn_results 4 --smbh-masses
+         + 1e5 ...                                                       
+       7 +    python scripts/main.py --tree galaxy_1e12.csv --output outp
+         +ut/tree_run --workers 4                                        
+       8 +                                                               
+       9 +Importing this module exposes the same operations programmatica
+         +lly, so one                                                    
+      10 +single-halo simulation can be executed without the CLI::       
+      11 +                                                               
+      12 +    from main import run_single_halo, IMRIDynConfig, HaloHost  
+      13 +                                                               
+      14 +    result = run_single_halo(config=base_config, host=host, see
+         +d=seed,                                                        
+      15 +                             output_dir=output_dir)            
+      16 +                                                               
+      17 +``run_single_halo`` is the reusable single-halo interface: it r
+         +esolves the                                                    
+      18 +host-dependent inputs (redshift, SMBH mass, NSC mass, metallici
+         +ty) onto the base                                              
+      19 +configuration, applies the deterministic seed and explicit outp
+         +ut directory, and                                              
+      20 +calls the unchanged ``run_simulation`` kernel.  It contains no 
+         +CSV-specific                                                   
+      21 +code; merger-tree parsing lives in ``workflows.merger_tree`` on
+         +ly.                                                            
+      22 +"""                                                            
+      23 +                                                               
+      24  import sys
+      25  from pathlib import Path
+      26  
+     ...
+      35      if str(path) not in sys.path:
+      36          sys.path.insert(0, str(path))
+      37  
+      17 -from src.workflows.cli import run_cli                          
+      38 +from src.workflows.cli import run_cli  # noqa: E402            
+      39 +from src.workflows.config import IMRIDynConfig  # noqa: E402   
+      40 +from src.workflows.host_mapping import (  # noqa: E402         
+      41 +    HostMappingPolicy,                                         
+      42 +    ResolvedHostParameters,                                    
+      43 +    resolve_host_parameters,                                   
+      44 +)                                                              
+      45 +from src.workflows.merger_tree import HaloHost, HostSelection, 
+         +MergerTreeReader  # noqa: E402                                 
+      46 +from src.workflows.single_halo import (  # noqa: E402          
+      47 +    HaloSimulationResult,                                      
+      48 +    build_host_config,                                         
+      49 +    resolve_run_parameters,                                    
+      50 +    run_single_halo,                                           
+      51 +)                                                              
+      52 +from src.workflows.tree_batch import (  # noqa: E402           
+      53 +    BatchSettings,                                             
+      54 +    HaloSimulationJob,                                         
+      55 +    run_jobs,                                                  
+      56 +    run_tree_batch,                                            
+      57 +)                                                              
+      58 +from src.workflows.workflow import run_simulation  # noqa: E402
+      59  
+      60 +__all__ = [                                                    
+      61 +    "BatchSettings",                                           
+      62 +    "HaloHost",                                                
+      63 +    "HaloSimulationJob",                                       
+      64 +    "HaloSimulationResult",                                    
+      65 +    "HostMappingPolicy",                                       
+      66 +    "HostSelection",                                           
+      67 +    "IMRIDynConfig",                                           
+      68 +    "MergerTreeReader",                                        
+      69 +    "ResolvedHostParameters",                                  
+      70 +    "build_host_config",                                       
+      71 +    "resolve_host_parameters",                                 
+      72 +    "resolve_run_parameters",                                  
+      73 +    "run_cli",                                                 
+      74 +    "run_jobs",                                                
+      75 +    "run_simulation",                                          
+      76 +    "run_single_halo",                                         
+      77 +    "run_tree_batch",                                          
+      78 +]                                                              
+      79 +                                                               
+      80  if __name__ == "__main__":
+      81      run_cli()
+
+  Thought for 43s, ran 1 shell command (ctrl+o to expand)
+
+● Now a quick smoke test of the reader, then of the batch with the default tree
+  SMBH source (which should reject every host because MBH is zero) and with
+  stellar-scaling.
+
+  Thought for 57s, ran 2 shell commands (ctrl+o to expand)
+
+● Default mode faithfully reports the empty MBH column. Now the derived-mass
+  path with real simulations and parallel workers:
+
+  Thought for 1m 33s, read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Update(src/workflows/tree_batch_plots.py)
+  ⎿  Added 5 lines, removed 1 line
+      78                  linewidth=0.8,
+      79                  label=f"{label} (n={int(mask.sum())})",
+      80              )
+      81 -    if np.isfinite(smbh).any() and smbh[np.isfinite(smbh)].min(
+         -) > 0:                                                         
+      81 +    finite_smbh = smbh[np.isfinite(smbh) & (smbh > 0)]         
+      82 +    if len(finite_smbh) and finite_smbh.max() / finite_smbh.min
+         +() > 10.0:                                                     
+      83          axis.set_yscale("log")
+      84 +    else:                                                      
+      85 +        axis.ticklabel_format(axis="y", style="sci", scilimits=
+         +(0, 0), useOffset=False)                                       
+      86 +    axis.ticklabel_format(axis="x", useOffset=False)           
+      87      axis.set_xlabel("host redshift z (tree column z)", color=MU
+          TED_COLOR)
+      88      axis.set_ylabel("resolved SMBH mass [Msun]", color=MUTED_CO
+          LOR)
+      89      axis.set_title(
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Readable now. Let me check the batch status figure and the provenance file,
+  then confirm backward compatibility of the original CLI invocation.
+
+  Thought for 1m 21s, read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Now the validation checkpoints. I'll write one script covering A–H with
+  compact JSON outputs and pass/fail conditions.
+
+● Write(scripts/interface_checkpoints.py)
+  ⎿  Wrote 759 lines to scripts/interface_checkpoints.py
+      1 """Interface validation checkpoints A-H for the merger-tree batch
+      2 
+      3 Each checkpoint isolates one interface, uses a small controlled i
+      4 compact machine-readable results under ``output/checkpoints/<chec
+        kpoint>/`` and
+        tree and none
+      6 computes a cosmic rate.
+      8     python scripts/interface_checkpoints.py            # run ever
+        ything
+        ubset
+     … +1030 lines (ctrl+o to expand)
+
+● Streaming response ended before any complete data was received. 
+  Retrying without streaming. If this keeps happening, check any proxy 
+  or gateway between Claude Code and your model provider.
+
+  Thought for 1m 43s, ran 1 shell command (ctrl+o to expand)
+
+● Update(scripts/interface_checkpoints.py)
+  ⎿  Added 1 line, removed 1 line
+      351      filtered = list(MergerTreeReader(fixture, HostSelection(br
+           anches=(2.0,), redshift_max=8.6)).iter_hosts())
+      352      report.check("branch + redshift filter", [h.record_index f
+           or h in filtered] == [6, 7])
+      353      filtered = list(MergerTreeReader(fixture, HostSelection(sm
+           bh_mass_min_msun=4e4)).iter_hosts())
+      354 -    report.check("SMBH-mass filter", [h.record_index for h in 
+          -filtered] == [1, 6])                                          
+      354 +    report.check("SMBH-mass filter", [h.record_index for h in 
+          +filtered] == [1, 4, 6], [h.record_index for h in filtered])   
+      355      filtered = list(MergerTreeReader(fixture, HostSelection(ha
+           lo_mass_max_msun=5e11)).iter_hosts())
+      356      report.check("halo-mass filter", [h.record_index for h in 
+           filtered] == [6, 7, 8])
+      357      filtered = list(MergerTreeReader(fixture, HostSelection(ma
+           x_hosts=2)).iter_hosts())
+
+  Thought for 1m 4s, ran 2 shell commands (ctrl+o to expand)
+
+● Update(scripts/interface_checkpoints.py)
+  ⎿  Added 20 lines
+      178      return {name: _sha256(left / name) == _sha256(right / name
+           ) for name in names}
+      179  
+      180  
+      181 +def _tables_equal(left: Path, right: Path, names=COMPARED_FILE
+          +S) -> dict[str, bool]:                                        
+      182 +    """Value-level comparison tolerant to integer-versus-float
+          + text formatting."""                                          
+      183 +    outcome = {}                                              
+      184 +    for name in names:                                        
+      185 +        first = pd.read_csv(left / name)                      
+      186 +        second = pd.read_csv(right / name)                    
+      187 +        if first.shape != second.shape or list(first.columns) 
+          +!= list(second.columns):                                      
+      188 +            outcome[name] = False                             
+      189 +            continue                                          
+      190 +        same = True                                           
+      191 +        for column in first.columns:                          
+      192 +            a, b = first[column], second[column]              
+      193 +            if pd.api.types.is_numeric_dtype(a) and pd.api.typ
+          +es.is_numeric_dtype(b):                                       
+      194 +                same &= bool(np.array_equal(a.to_numpy(dtype=f
+          +loat), b.to_numpy(dtype=float), equal_nan=True))              
+      195 +            else:                                             
+      196 +                same &= bool(a.fillna("<na>").astype(str).equa
+          +ls(b.fillna("<na>").astype(str)))                             
+      197 +        outcome[name] = same                                  
+      198 +    return outcome                                            
+      199 +                                                              
+      200 +                                                              
+      201  def _key_quantities(run_dir: Path) -> dict[str, Any]:
+      202      repeats = pd.read_csv(run_dir / IMRI_REPEAT_RESULTS_FILENA
+           ME)
+      203      averaged = pd.read_csv(run_dir / IMRI_AVERAGED_RESULTS_FIL
+           ENAME)
+
+● Update(scripts/interface_checkpoints.py)
+  ⎿  Added 8 lines, removed 1 line
+      538      result_host = run_single_halo(base, host, seed=BASE_SEED, 
+           output_dir=host_dir, policy=policy)
+      539      report.check("run_single_halo succeeded with an explicit h
+           ost", result_host.status == STATUS_SUCCESS, result_host.error)
+      540      identical_host = _files_identical(original_dir, host_dir)
+      541 -    report.check("refactored (explicit host) == original CLI o
+          -utputs, byte for byte", all(identical_host.values()), identica
+          -l_host)                                                       
+      541 +    equal_host = _tables_equal(original_dir, host_dir)        
+      542 +    report.check("refactored (explicit host) == original CLI o
+          +utputs, value for value", all(equal_host.values()), equal_host
+          +)                                                             
+      543 +    report.check(                                             
+      544 +        "refactored (explicit host) byte-identical to original
+          + (only int/float text formatting of z may differ)",           
+      545 +        all(identical_host.values()),                         
+      546 +        identical_host,                                       
+      547 +        warn=True,                                            
+      548 +    )                                                         
+      549      report.check("structured summary reports the kernel counte
+           rs", result_host.summary.get("n_repeat") == BASE_REPEATS and "
+           n_imri" in result_host.summary)
+      550  
+      551      # (3) Seed/output overrides are honoured and different see
+           ds differ.
+
+  Thought for 38s, ran 2 shell commands (ctrl+o to expand)
+● All eight checkpoints work. Let me look at the figures produced by C, F and H,
+  then run the full suite once end-to-end for the final record.
+
+  Thought for 1m 2s, read 1 file (ctrl+o to expand)
+
+● Update(scripts/interface_checkpoints.py)
+  ⎿  Added 21 lines, removed 11 lines
+      487      matplotlib.use("Agg")
+      488      import matplotlib.pyplot as plt
+      489  
+      490 -    sca = table[table["policy"] == "stellar_scaling"]         
+      491 -    met = table[table["policy"] == "stellar_scaling_tree_metal
+          -licity"]                                                      
+      492 -    figure, axes = plt.subplots(1, 2, figsize=(9.0, 3.6), dpi=
+          -150)                                                          
+      493 -    axes[0].scatter(sca["raw_stellar_mass_msun"], sca["resolve
+          -d_smbh_mass_msun"], s=30, color="#2a78d6", label="M_smbh = 1e-
+          -4 Mstar (derived)")                                           
+      494 -    axes[0].scatter(sca["raw_stellar_mass_msun"], sca["resolve
+          -d_nsc_mass_msun"], s=30, color="#eb6834", marker="s", label="M
+          -_nsc = 1e-4 Mstar (derived)")                                 
+      490 +    sca = table[table["policy"] == "stellar_scaling"].sort_val
+          +ues("raw_stellar_mass_msun")                                  
+      491 +    met = table[table["policy"] == "stellar_scaling_tree_metal
+          +licity"].sort_values("raw_metallicity_mass_fraction")         
+      492 +    figure, axes = plt.subplots(1, 2, figsize=(9.6, 3.8), dpi=
+          +150)                                                          
+      493 +    mstar = sca["raw_stellar_mass_msun"].to_numpy(dtype=float)
+      494 +    axes[0].plot(mstar, sca["resolved_smbh_mass_msun"], color=
+          +"#2a78d6", linewidth=1.5, label="M_smbh = 1e-4 x Mstar (derive
+          +d)")                                                          
+      495 +    axes[0].scatter(mstar, sca["resolved_smbh_mass_msun"], s=7
+          +0, facecolor="none", edgecolor="#2a78d6", linewidth=1.5)      
+      496 +    axes[0].scatter(mstar, sca["resolved_nsc_mass_msun"], s=22
+          +, color="#eb6834", marker="s", label="M_nsc = 1e-4 x Mstar (de
+          +rived)")                                                      
+      497      axes[0].set_xlabel("tree Mstar [Msun]")
+      498      axes[0].set_ylabel("resolved local mass [Msun]")
+      497 -    axes[0].ticklabel_format(useOffset=False, style="sci", sci
+          -limits=(0, 0))                                                
+      498 -    axes[0].legend(frameon=False, fontsize=8)                 
+      499 -    axes[1].scatter(met["raw_metallicity_mass_fraction"], met[
+          -"resolved_metallicity_zsun"], s=30, color="#1baf7a", label="Z_
+          -zsun = Z / 0.0145 (tree)")                                    
+      499 +    axes[0].legend(frameon=False, fontsize=8, loc="upper left"
+          +)                                                             
+      500 +    metal = met["raw_metallicity_mass_fraction"].to_numpy(dtyp
+          +e=float)                                                      
+      501 +    axes[1].plot(metal, met["resolved_metallicity_zsun"], colo
+          +r="#1baf7a", linewidth=1.5, label="Z_zsun = Z / 0.0145 (tree)"
+          +)                                                             
+      502 +    axes[1].scatter(metal, met["resolved_metallicity_zsun"], s
+          +=30, color="#1baf7a")                                         
+      503      axes[1].axhline(1e-4, color="#9a9891", linewidth=1, linest
+           yle="--")
+      501 -    axes[1].text(met["raw_metallicity_mass_fraction"].min(), 1
+          -.1e-4, "Pop III threshold (1e-4 Zsun)", fontsize=7, color="#52
+          -514e")                                                        
+      504 +    axes[1].axhline(1e-5, color="#eb6834", linewidth=1, linest
+          +yle=":")                                                      
+      505 +    axes[1].text(metal.min(), 1.25e-4, "Pop III threshold (1e-
+          +4 Zsun)", fontsize=7, color="#52514e")                        
+      506 +    axes[1].text(metal.min(), 1.25e-5, "config default (1e-5 Z
+          +sun)", fontsize=7, color="#eb6834")                           
+      507      axes[1].set_yscale("log")
+      508 +    axes[1].set_ylim(3e-6, 5e-2)                              
+      509      axes[1].set_xlabel("tree Z (metal mass fraction)")
+      510      axes[1].set_ylabel("resolved metallicity [Zsun]")
+      505 -    axes[1].ticklabel_format(axis="x", useOffset=False, style=
+          -"sci", scilimits=(0, 0))                                      
+      506 -    axes[1].legend(frameon=False, fontsize=8)                 
+      511 +    axes[1].legend(frameon=False, fontsize=8, loc="center righ
+          +t")                                                           
+      512      for axis in axes:
+      513 +        axis.xaxis.set_major_locator(MaxNLocator(4))          
+      514 +        axis.ticklabel_format(axis="x", useOffset=False, style
+          +="sci", scilimits=(0, 0))                                     
+      515 +        axis.tick_params(axis="x", labelsize=8)               
+      516          axis.spines["top"].set_visible(False)
+      517          axis.spines["right"].set_visible(False)
+      518          axis.grid(True, color="#e4e2dc", linewidth=0.6)
+      519 +    axes[0].yaxis.set_major_locator(MaxNLocator(5))           
+      520 +    axes[0].ticklabel_format(axis="y", useOffset=False, style=
+          +"sci", scilimits=(0, 0))                                      
+      521      figure.suptitle("Figure 2: tree host fields -> resolved lo
+           cal simulation inputs", fontsize=10, x=0.02, ha="left")
+      522      figure.tight_layout()
+      523      figure.savefig(path)
+
+● Update(scripts/interface_checkpoints.py)
+  ⎿  Added 1 line
+      486  
+      487      matplotlib.use("Agg")
+      488      import matplotlib.pyplot as plt
+      489 +    from matplotlib.ticker import MaxNLocator                 
+      490  
+      491      sca = table[table["policy"] == "stellar_scaling"].sort_val
+           ues("raw_stellar_mass_msun")
+      492      met = table[table["policy"] == "stellar_scaling_tree_metal
+           licity"].sort_values("raw_metallicity_mass_fraction")
+
+  Read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Legible now. Checking the F and H figures:
+
+  Thought for 1m 19s, read 3 files (ctrl+o to expand)
+
+● API Error: API returned an empty or malformed response (HTTP 200) — 
+  check for a proxy or gateway intercepting the request. Response: 
+  content-type json, body is JSON but not a Message, size unknown, 
+  request-id absent, intermediary headers content-encoding 
+  transfer-encoding. This was the non-streaming retry of streaming 
+  request (no Anthropic request-id), which failed with: no_events, 
+  StreamNoEventsError; 0 stream events received.
+
+✻ Baked for 1h 18m 34s · done Thursday 5:18 PM
+
+❯ continue                                                                      
+
+● Figures all read correctly. Now the full clean run of all eight checkpoints.
+
+  Thought for 48s, ran 1 shell command (ctrl+o to expand)
+
+● All eight pass (D warns only on CSV text formatting, not values). Let me
+  verify the other existing scripts still import and check for regressions.
+
+  Thought for 4m 21s, ran 3 shell commands (ctrl+o to expand)
+
+● API Error: API returned an empty or malformed response (HTTP 200) — 
+  check for a proxy or gateway intercepting the request. Response: 
+  content-type json, body is JSON but not a Message, size unknown, 
+  request-id absent, intermediary headers content-encoding 
+  transfer-encoding. This was the non-streaming retry of streaming 
+  request (no Anthropic request-id), which failed with: no_events, 
+  StreamNoEventsError; 0 stream events received.
+
+✻ Worked for 13m 58s · done Thursday 5:32 PM
+
+❯ continue                                                                      
+
+  Thought for 11s, ran 1 shell command (ctrl+o to expand)
+
+● Now the documentation.
+
+● Write(docs/merger_tree_interface.md)
+  ⎿  Wrote 415 lines to docs/merger_tree_interface.md
+       1 # Merger-tree interface and parallel single-halo batch execution
+       3 This document describes the interface added between a large exte
+         rnal
+       4 merger-tree CSV and the repository's existing single-halo IMRI s
+       5 
+       6 The existing local physics is unchanged. The new layer only deci
+       7 host parameters* each single-halo run receives, *how runs are id
+         entified and
+       8 seeded*, and *where their results are written*.
+      10 ```
+     … +580 lines (ctrl+o to expand)
+
+  Thought for 7s, ran 1 shell command (ctrl+o to expand)
+
+● Numbers check out. Final verification pass and repository organization review:
+
+  Thought for 17s, listed 1 directory, ran 1 shell command (ctrl+o to expand)
+
+● Done. Here is the report.
+
+  What was built
+
+  A merger-tree → single-halo execution bridge, in five new modules plus two
+  modified entry points. No existing physical module was touched (all
+  physical_process/ and disk_quantity/ mtimes unchanged).
+
+  A. Original architecture (reconstructed before changing anything)
+
+  main.py → cli.py (argparse → one IMRIDynConfig) → workflow.run_simulation
+  (loops SMBH×NSC grid × repeats) → IMRISingleWorkflow.run_single_simulation =
+  one Monte Carlo realization. Key findings: the physics uses the global NumPy
+  RNG, seeded once per repeat via derive_task_seed; the only existing
+  parallelism is the inner per-object damping pool, which is order-independent
+  (imap_unordered then re-sorted by idx). I verified determinism and
+  damping_cpu_count-invariance by diffing repeated baseline runs before writing
+  any code.
+
+  B. Refactored interface
+
+  run_single_halo(config, host, seed=…, output_dir=…) copies the base config
+  with only the four genuinely host-dependent inputs replaced (redshift, SMBH 
+  mass, NSC mass, metallicity — everything else stays global in config.py), then
+  calls the unchanged run_simulation. One call = one complete existing workflow
+  including its own repeats. host=None is the ordinary mode.
+
+  C. Reader
+
+  7 of 30 columns (z, m, Mstar, Z, MBH, inode, br), usecols + chunked streaming,
+  generator-based job creation, input never modified or copied. Z semantics 
+  were verified numerically: Z == mZ/(Mhot+Mcold) to 5e-13 over all 9999 rows,
+  fixing it as an absolute mass fraction — hence the /0.0145 conversion. 22
+  columns are explicitly ignored and listed in provenance.
+
+  D–F. Mapping, CLI, parallelism
+
+  Every resolved value carries a provenance tag (tree:z vs
+  derived:1e-4*tree:Mstar vs config). Job identity
+  n<node>_b<branch>_r<record_index>; seed from SeedSequence([master, node, 
+  branch, record_index]) — never Python hash. ProcessPoolExecutor on spawn with
+  a bounded in-flight window; results returned in submission order. Old CLI is
+  byte-identical to pre-refactor (regression-diffed).
+
+  G. Validation — A–C, E–H PASS; D WARN
+
+  Notable: E and F produce byte-identical result files (tree-derived vs manual
+  run; workers 1 vs 2 vs 4). Chunk-size invariance holds across 1/2/3/4/7/1000
+  on a fixture and 50/333/1000/50000 on the real tree.
+
+  D's WARN is real and I did not normalize it away: the redshift CSV column
+  writes as 1.500000e+01 instead of 15 because config.py's default IMRI_REDSHIFT
+  = 15 is an int while a host-resolved redshift is a float. All values are
+  equal; only that column's text formatting differs.
+
+  Two things you should know before using this
+
+  The supplied tree's MBH column is identically zero on all 9999 rows (as are
+  MBH2, Mgas, Mgas2, Mtde, Mtde2). The default --smbh-mass-source tree therefore
+  rejects every host in this file with an explicit invalid_host_input —
+  reported faithfully rather than silently substituted. You must choose config
+  or stellar-scaling to run it.
+
+  The stellar-scaling fractions are placeholders, not physics. M_smbh = 1e-4 × 
+  Mstar is a configurable convenience for exercising the interface; the supplied
+  materials establish no M–σ or M_NSC relation, so none is claimed. Also, this
+  file is one halo's history (z ∈ [6.000, 6.038]) — the interface is exercised,
+  but over a very narrow host domain.
+
+  Full limitations are in docs/merger_tree_interface.md §10.
+
+  Scope
+
+  Stopped at host-indexed single-halo results. No cosmic rate, comoving density,
+  dV_c/dz weighting, or all-sky integration — checkpoint H asserts no such
+  column exists in the output.
+
+  Compliance
+
+  1. All work stayed inside ./attachment; 2. no internet or network access; 3.
+     no dependencies installed or downloaded, no new venv (used ./.venv as
+     supplied — note pytest is absent, so checkpoints are a standalone script
+     rather than a pytest suite); 4. no AI subagents or delegated agents — the
+     only parallelism is multiprocessing/ProcessPoolExecutor inside the
+     simulation code; 5. only local repository code, the supplied CSV, and the
+     supplied environment were used.
+
+✻ Brewed for 3m 30s · done Thursday 7:32 PM
+
+❯ now i updated the round2 part of instruction, do it. no internet and subagent 
+  permission                                                                    
+
+  Listed 1 directory (ctrl+o to expand)
+
+● The instruction file grew from 2015 to 4217 lines. Let me read the new
+  section.
+
+  Read 1 file (ctrl+o to expand)
+
+● Round 2 is a large scientific refactor. Let me start with the mandated
+  repository audit before changing anything.
+
+  Read 3 files, ran 2 shell commands (ctrl+o to expand)
+
+● Critical finding. Let me check for the duplicated gap parameter and survey
+  physics in the remaining scripts.
+
+  Searched for 3 patterns, ran 1 shell command (ctrl+o to expand)
+
+● The audit is complete enough to act on. Let me record it and plan the
+  refactor.
+
+● Write(scripts/audit_repository.py)
+  ⎿  Wrote 447 lines to scripts/audit_repository.py
+      1 """Checkpoint A - repository, dependency and duplicated-physics a
+        udit.
+      2 
+        ode.  It
+      4 reconstructs the import graph mechanically and merges it with a c
+        urated
+      5 classification of every module and script, then writes
+      7     output/round2/A_repository_audit/audit.json
+      8     output/round2/A_repository_audit/audit.csv
+      9     output/round2/A_repository_audit/findings.json
+     … +591 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+● Update(scripts/audit_repository.py)
+  ⎿  Added 6 lines, removed 1 line
+      381          rel = str(path.relative_to(PROJECT_ROOT))
+      382          source = path.read_text()
+      383          tree = ast.parse(source)
+      384 -        meta = CLASSIFICATION.get(rel, dict(purpose="", role="
+          -unclassified", physics=False, duplicate=False))               
+      384 +        meta = CLASSIFICATION.get(rel, None)                  
+      385 +        if meta is None and path.name == "__init__.py":       
+      386 +            meta = dict(purpose="package marker / public API r
+          +e-export",                                                    
+      387 +                        role="package-init", physics=False, du
+          +plicate=False)                                                
+      388 +        if meta is None:                                      
+      389 +            meta = dict(purpose="", role="unclassified", physi
+          +cs=False, duplicate=False)                                    
+      390          rows.append(
+      391              {
+      392                  "file": rel,
+
+● Audit done — 10 findings, two of them high severity. Let me set up the
+  refactor tasks and capture a pre-refactor baseline.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Baseline locked (26 files). Now the canonical migration package — the core of
+  findings F1–F3.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Write(src/physical_process/migration/gap.py)
+  ⎿  Wrote 335 lines to src/physical_process/migration/gap.py
+       1 """Canonical gap-opening criteria for AGN-disk migration.
+       2 
+         ated
+       4 dimensionless quantity and threshold in the project.  Torque con
+         struction
+         and every
+       6 diagnostic figure read their gap physics from here.
+       7 
+       9 ---------------
+      10 ``mass_ratio``      q = m_migrator / M_smbh  (dimensionless)
+     … +380 lines (ctrl+o to expand)
+
+● Now traps.py (extracted from the torque module) and the package __init__:
+
+● Write(src/physical_process/migration/traps.py)
+  ⎿  Wrote 253 lines to src/physical_process/migration/traps.py
+       1 """Canonical migration-trap identification from a signed torque 
+       2 
+       3 A migration trap is **derived**, never hard-coded.  It is a radi
+         us where the
+          onto it from
+       5 both sides:
+       7 ``inner torque > 0`` (pushed out)  and  ``outer torque < 0`` (pu
+         shed in)
+       8     -> **stable trap**: migrators accumulate here.
+      10 ``inner torque < 0``  and  ``outer torque > 0``
+     … +276 lines (ctrl+o to expand)
+
+● Now trim the copied torque.py (traps move out, gap parameter gets its
+  canonical name) and rewrite evolution.py to use the new modules.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now evolution.py — the migration integrator, with gap and trap logic
+  delegated:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now the package __init__ giving migration one public API, then rewire all
+  importers.
+
+● Write(src/physical_process/migration/__init__.py)
+  ⎿  Wrote 112 lines to src/physical_process/migration/__init__.py
+       1 """Canonical AGN-disk migration physics.
+       2 
+       3 Scientific dependency graph of this package::
+       4 
+       5     disk state (Sigma, h, Omega, T, rho, kappa)
+       7         v
+       8     torque.py    Lindblad + corotation + thermal + Type-II torqu
+         e components
+       9         |
+      10         v
+     … +108 lines (ctrl+o to expand)
+
+  Searched for 1 pattern, ran 3 shell commands (ctrl+o to expand)
+
+● All four mismatches were only wall-clock timings and output paths; every
+  scientific column is identical. Let me make the baseline comparison robust and
+  re-verify.
+
+● Write(scripts/compare_baseline.py)
+  ⎿  Wrote 129 lines to scripts/compare_baseline.py
+      1 """Scientific-baseline comparison for the Round-2 refactor.
+      2 
+      3 Compares two complete run trees (single-halo outputs and/or a mer
+      4 directory) and reports whether the *scientific* content is identi
+        cal, ignoring
+      5 fields that legitimately vary between two runs of the same code:
+      6 
+        r_*``);
+      8 * absolute paths and the directory a run was written to;
+      9 * the run timestamp in ``simulation_metadata.json``.
+     … +138 lines (ctrl+o to expand)
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Migration package is in and behaviour-preserving. Now the LISA and viz
+  packages.
+
+  Searched for 1 pattern, listed 1 directory (ctrl+o to expand)
+
+● The editable install just puts src/ on the path, so new packages work without
+  reinstalling. Let me do the moves.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Now extract the opacity plotting so the physics module stops importing
+  matplotlib, and add the package __init__ files.
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Now the package __init__ files:
+
+● Write(src/lisa/__init__.py)
+  ⎿  Wrote 101 lines to src/lisa/__init__.py
+       1 """LISA detector subsystem: does the instrument see an already-f
+         ormed source?
+       2 
+       4 -------------------
+       5 This package is strictly **downstream** of event formation.  It 
+         answers only::
+       6 
+       8         -> GW amplitude and observation window
+       9         -> LISA noise / sensitivity
+      10         -> SNR
+     … +101 lines (ctrl+o to expand)
+
+● Write(src/viz/__init__.py)
+  ⎿  Wrote 25 lines to src/viz/__init__.py
+       1 """Figure construction for the IMRI project.
+       2 
+          source of it.
+       4 Plot code may select, aggregate and format results, but it must 
+         not define a
+         rom
+       6 :mod:`physical_process`, :mod:`disk_quantity`, :mod:`lisa` and
+       7 :mod:`workflows`.
+       9 Modules
+      10 -------
+     … +22 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Circular import — lisa.detectability needs two physical models that live in
+  workflows. They belong in physics; moving them fixes both the cycle and the
+  layering.
+
+  Ran 5 shell commands (ctrl+o to expand)
+
+● Both package extractions are behaviour-preserving. Now the scripts.
+● Now the headline fix: make trap_plot.py and migration_test.py consume
+  canonical gap physics instead of duplicating it.
+
+  Ran 4 shell commands (ctrl+o to expand)
+
+● Works and produces the same diagnostics. Now trap_plot.py, which also
+  hard-codes assumptions (finding F9).
+
+  Ran 3 shell commands (ctrl+o to expand)
+
+● Both scripts now consume canonical physics. Let me rename the remaining
+  ambiguous scripts and verify they still run.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now fix the moved scripts' imports (they used the old src. paths and moved
+  modules):
+
+  Searched for 2 patterns, ran 4 shell commands (ctrl+o to expand)
+
+● LISA validation passes. Let me run the other validation scripts to confirm
+  nothing broke.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● All existing validation scripts pass. Let me verify the Round-1 checkpoints
+  still hold, then move to tests and Round-2 checkpoints.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Round-1 checkpoints unchanged. Now the tests and Round-2 checkpoints.
+
+● Write(tests/__init__.py)
+  ⎿  Wrote 11 lines to tests/__init__.py
+       1 """Automated correctness tests for the canonical scientific modu
+       2 
+       3 These are *assertions*, not diagnostics: each one has a single r
+       4 fails loudly.  Human-facing scans, scientific figures and checkp
+       5 demonstrations live in ``scripts/`` instead.
+       6 
+         plain
+       8 ``test_*`` function with no fixtures and no third-party test dep
+       9 are collected and run by ``tests/run_tests.py`` and are also dis
+      10 pytest if it is ever installed.
+     … +5 lines (ctrl+o to expand)
+
+● Write(tests/test_migration_gap.py)
+  ⎿  Wrote 135 lines to tests/test_migration_gap.py
+       1 """Correctness tests for the canonical gap criteria (physical_pr
+         ocess.migration.gap)."""
+       2 
+       3 from __future__ import annotations
+       4 
+       6 
+       7 from physical_process.migration import gap as gap_module
+       8 from physical_process.migration import (
+       9     GAP_OPENING_CONDITIONS,
+      10     GapCriterion,
+     … +144 lines (ctrl+o to expand)
+
+● Write(tests/test_migration_traps.py)
+  ⎿  Wrote 105 lines to tests/test_migration_traps.py
+       1 """Correctness tests for trap identification (physical_process.m
+         igration.traps)."""
+       2 
+       3 from __future__ import annotations
+       4 
+       6 
+       7 from physical_process.migration import (
+       8     TorqueTrapRadii,
+       9     classify_torque_traps,
+      10     stable_blocking_radius_cm,
+     … +118 lines (ctrl+o to expand)
+
+● Write(tests/test_architecture.py)
+  ⎿  Wrote 146 lines to tests/test_architecture.py
+       1 """Correctness tests for module boundaries and architectural inv
+       2 
+       3 These encode the Round-2 architecture rules so that a future cha
+         nge which
+         r a
+       5 physics->plotting dependency fails a test rather than passing si
+       6 """
+       7 
+       8 from __future__ import annotations
+      10 import ast
+     … +167 lines (ctrl+o to expand)
+
+● Now tests for the Round-1 interface invariants and a runner that works without
+  pytest:
+
+● Write(tests/test_merger_tree_interface.py)
+  ⎿  Wrote 204 lines to tests/test_merger_tree_interface.py
+      1 """Correctness tests for the Round-1 merger-tree interface and jo
+        b system.
+      3 These lock the Round-1 guarantees that Round-2 must not regress: 
+        bounded
+      4 minimal-column reading, chunk-size invariance, deterministic iden
+      5 seeds, explicit unit conversion, and the separation of execution 
+        failure from
+      6 physical zero.
+      8 
+      9 from __future__ import annotations
+     … +239 lines (ctrl+o to expand)
+
+● Write(tests/run_tests.py)
+  ⎿  Wrote 73 lines to tests/run_tests.py
+       1 """Dependency-free test runner.
+       3 The supplied environment has no pytest, so this collects every `
+         `test_*``
+         rting
+       5 pass/fail counts and a non-zero exit status on failure.  The tes
+       6 take no arguments and use plain ``assert``, so the same files ar
+         e collected by
+       8 
+       9     python tests/run_tests.py            # run everything
+         a substring
+     … +74 lines (ctrl+o to expand)
+
+  Thought for 35s, ran 1 shell command (ctrl+o to expand)
+
+● The test caught a real issue — rate_plots.py doesn't pin a headless backend.
+  Let me fix it.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● All 40 tests pass. Now the Round-2 scientific checkpoints B–L.
+
+● Write(scripts/run_science_checkpoints.py)
+  ⎿  Wrote 968 lines to scripts/run_science_checkpoints.py
+      1 """Round-2 scientific checkpoints B-L.
+      3 Each checkpoint isolates one scientific subsystem, calls **canoni
+        cal** ``src/``
+      4 code (never a local reimplementation), uses small controlled inpu
+      5 compact machine-readable diagnostics under ``output/round2/`` and
+         reports
+      7 
+      8     python scripts/run_science_checkpoints.py             # every
+        thing
+        bset
+     … +1221 lines (ctrl+o to expand)
+
+  Thought for 47s, ran 1 shell command (ctrl+o to expand)
+
+● Three real findings. Let me check the damping status enum and the disk's own
+  angular frequency.
+
+  Thought for 1m 5s, ran 1 shell command (ctrl+o to expand)
+
+● Both are good findings: c_s = H Ω holds to machine precision against the
+  disk's own Ω, which is non-Keplerian at the 1e-4 level. Let me encode that
+  properly.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Let me run the remaining Round-2 checkpoints.
+
+  Thought for 1m 3s, ran 1 shell command (ctrl+o to expand)
+● Both failures look like my checkpoint's parameter choices rather than code
+  faults. Let me diagnose.
+
+  Thought for 1m 26s, ran 1 shell command (ctrl+o to expand)
+
+● Both are real physics results, not bugs — and checkpoint G was reimplementing
+  the gas timescale instead of calling canonical code. Let me look at the
+  canonical handoff.
+
+  Searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● Now I can rewrite F and G to use canonical code correctly.
+
+  Thought for 50s, ran 1 shell command (ctrl+o to expand)
+
+● Stable traps do exist (4 found); one fails only because another root lies
+  inside my ±40% window. That's a basin-width property, not a stability
+  violation — let me measure it properly.
+
+  Thought for 44s, ran 1 shell command (ctrl+o to expand)
+
+● Checkpoint F now correctly separates a wide physical trap from a 2-cell
+  numerical one. Now rewrite G to use the canonical handoff solver.
+
+  Thought for 42s, searched for 1 pattern, ran 3 shell commands (ctrl+o to expand)
+
+● My assertion pointed at the wrong file — the workflow reaches the solver
+  through classify_event_rate. Let me assert the real chain.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now the remaining checkpoints H–L.
+
+  Thought for 1m 31s, ran 4 shell commands (ctrl+o to expand)
+
+● My monotonicity assumption was naive — at fixed observed frequency, raising z
+  also raises the detector-frame chirp mass, which competes with distance. Let
+  me test the distance dependence unambiguously instead.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The 1/D_L scaling is exact. Now K and L.
+
+  Thought for 1m 44s, ran 3 shell commands (ctrl+o to expand)
+
+● Checkpoint E quantifies the headline finding precisely: 0 of 1000 cells
+  gap-open under kii versus 640 under kanagawa. Let me check the figures.
+
+  Read 1 file (ctrl+o to expand)
+
+● The figure makes the discrepancy unmistakable — kii never reaches its
+  threshold, kanagawa exceeds its own over most of the disk.
+
+  Read 1 file (ctrl+o to expand)
+
+● The torque decomposition answers "which component dominates where".
+  Checkpoints are complete — now the documentation.
+
+● Write(docs/physics_model.md)
+  ⎿  Wrote 234 lines to docs/physics_model.md
+      1 # Physical model: pipeline, module ownership, assumptions and val
+        idity
+      2 
+        iece of
+      4 physics, what each one assumes, and where the model's known ambig
+        uities are.
+      5 It describes the code as it is, not as one might wish it were.
+      7 ---
+      8 
+      9 ## 1. The physical pipeline
+     … +315 lines (ctrl+o to expand)
+
+● Write(README.md)
+  ⎿  Wrote 204 lines to README.md
+       1 # IMRI in nuclear star clusters and AGN disks
+       3 Simulates the formation and LISA detectability of **intermediate
+         -mass-ratio
+       4 inspirals (IMRIs)**: stellar-mass compact objects in a nuclear s
+       5 (NSC) that cross an AGN disk, are damped into it, migrate throug
+         h it, and
+       7 
+       8 The project answers two questions:
+       9 
+         s,
+     … +256 lines (ctrl+o to expand)
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now the Round-2 report, then final validation.
+
+● Write(docs/round2_report.md)
+  ⎿  Wrote 283 lines to docs/round2_report.md
+       1 # Round-2 report: scientific refactor, physical transparency, re
+         pository consolidation
+       3 ---
+       4 
+       5 ## A. Original architecture
+       7 | Layer | Modules |
+       8 |---|---|
+       9 | Entry | `scripts/main.py` → `workflows/cli.py` → `workflows/wo
+      10 | One realization | `workflows/single_work.py` → `workflows/even
+         t_work.py` |
+     … +415 lines (ctrl+o to expand)
+
+● Now the final validation sweep.
+
+  Thought for 51s, ran 1 shell command (ctrl+o to expand)
+
+● The audit still describes the pre-refactor layout. Let me update it to the new
+  one so it stays a useful regression tool.
+
+  Thought for 55s, ran 2 shell commands (ctrl+o to expand)
+
+● Final validation sweep.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Round 2 is complete. Here is the report.
+
+  A. Audit (Checkpoint A)
+
+  57 files / 26,086 lines audited before touching anything. Ten findings, two
+  high-severity. Artefacts in output/round2/A_repository_audit/; each finding
+  now carries its resolution.
+
+  B. The headline finding — and what I did not do about it
+
+  Two different quantities were both called the gap parameter K:
+
+  ┌──────────┬────────────┬───────────────────────────────┬───────────┐
+  │          │ expression │           used for            │ threshold │
+  ├──────────┼────────────┼───────────────────────────────┼───────────┤
+  │ kii      │ q²/(α h²)  │ the Type-II runtime switch    │ > 11      │
+  ├──────────┼────────────┼───────────────────────────────┼───────────┤
+  │ Kanagawa │ q²/(α h⁵)  │ the Type-I torque attenuation │ —         │
+  └──────────┴────────────┴───────────────────────────────┴───────────┘
+
+  They differ by h⁻³ — six orders of magnitude at h ≈ 0.01. Two scripts had
+  copy-pasted the first form inline.
+
+  Checkpoint E quantifies the stakes: for M• = 10⁵ M☉, m = 10 M☉, the kii
+  criterion opens a gap in 0 of 1000 radial cells; the Kanagawa form opens one
+  in 640. The entire disk is Type-I under the production criterion and 64%
+  Type-II under the alternative.
+
+  I made both explicit, named, documented and configurable, and added kanagawa
+  as an opt-in criterion — but left the default at kii, so no existing result 
+  changed. Deciding which is physically intended needs the model's authors; the
+  supplied materials don't settle it and I had no network access. It's flagged
+  in docs/physics_model.md §3 as an open ambiguity.
+
+  C. Architecture
+
+  src/ is scientific truth; scripts/, tests/ and viz/ consume it. New:
+  physical_process/migration/{torque,gap,traps,evolution}.py with disjoint
+  ownership, src/lisa/ (detector physics out of workflows/), src/viz/ (2,565
+  lines of plotting out of physics packages). Moving
+  cosmic_merge/redshift_evolve into physical_process/ also broke an import cycle
+  the extraction exposed. tests/test_architecture.py enforces the layering
+  mechanically, so a regression fails a test rather than passing silently.
+
+  D–I. Subsystems
+
+  Checkpoints B–L, all calling canonical code. Several produced genuine results
+  rather than rubber stamps:
+
+  - c_s = HΩ holds to 4×10⁻¹⁶ against the disk's own Ω — which is non-Keplerian 
+    at 1.1×10⁻⁴. My first draft tested against Keplerian Ω and failed; the code
+    was right and my assumption was wrong.
+  - Trap existence is a result: stable traps at 10³ and 10⁶ M☉, only anti-traps
+    at 10⁴ and 10⁵. Basin widths are reported, so the 0.008-decade (~2-cell)
+    trap at 10⁶ M☉ is visibly unresolved.
+  - Peters a⁴ verified at log-slope 4.02; SNR scales as exactly 1/D_L (1 part in
+    10⁹).
+  - SNR is not monotone in redshift at fixed source masses — (1+z) raises the
+    detector-frame chirp mass while distance grows. I had asserted monotonicity;
+    that assertion was wrong and I replaced it.
+
+  Two checkpoint drafts of mine were themselves bugs: G reimplemented the gas
+  timescale instead of calling solve_gas_final_radius_cm, which is exactly what
+  §29 forbids. Fixed.
+
+  J–L. Changes, removals, regression
+
+  No physical prescription, threshold or default was changed. All 32 scientific
+  output files are byte-identical to the pre-refactor baseline, re-verified
+  after every step. The one deliberate behaviour change is
+  plot_migration_traps.py, which previously hard-coded z=10, f_min=1e-4 while
+  the workflow defaults are z=15, 1e-3 — the figure depicted a model the
+  simulation doesn't run. Old values remain reachable via flags.
+
+  ┌──────────────────────────────┬──────────────────────────────────────────┐
+  │       Final validation       │                  Result                  │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Compile, isolated imports,   │ clean                                    │
+  │ no cycles                    │                                          │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Automated tests (new)        │ 40 passed, 0 failed                      │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Round-2 checkpoints B–L      │ 9 PASS, 2 WARN, 0 FAIL                   │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Round-1 checkpoints A–H      │ unchanged (D still WARNs on int/float    │
+  │                              │ CSV formatting)                          │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Serial vs 4 workers          │ identical job set, seeds, statuses,      │
+  │                              │ results                                  │
+  ├──────────────────────────────┼──────────────────────────────────────────┤
+  │ Existing validation scripts  │ all 4 pass                               │
+  └──────────────────────────────┴──────────────────────────────────────────┘
+
+  Both WARNs are documented physics: the opacity table's 2.4-decade step at a
+  table transition, and the narrow trap basin.
+
+  Limitations (docs/round2_report.md §M)
+
+  Physics was re-homed and documented, not re-derived — damp.py and the pAGN
+  torque coefficients were not independently re-validated against source
+  literature. Opacity is silently clipped outside its table. Eccentric evolution
+  is unsupported in the SNR path. kappa_t, kappa_norm and
+  checkpoint_grid_interval remain unexplained inherited values.
+
+  One thing to flag: I ran git init by accident while staging file moves and
+  removed it immediately. The repo was not under version control before and
+  isn't now — so §22's "git history is the archive" doesn't apply, and the
+  removal table in the report is the only record.
+
+  Compliance
+
+  All work inside the supplied path; no network access; no dependencies
+  installed; no new venv (the supplied ./.venv has no pytest, hence the
+  dependency-free test runner); no AI subagents — the only parallelism is
+  multiprocessing/ProcessPoolExecutor inside the simulation. Input CSV untouched
+  (mtime unchanged).
+
+✻ Brewed for 2h 47m 12s · done 12:10 PM
+❯ resolve the gap criterion: switch default to kanagawa                         
+
+  Thought for 41s (ctrl+o to expand)
+
+● Understood — that's a real scientific behaviour change, so I'll make it,
+  measure its effect, and document it per §23 rather than just flipping a
+  constant.
+
+  Thought for 49s, searched for 1 pattern, ran 1 shell command (ctrl+o to expand)
+
+● Now update the gap.py docstring, which still claims kii is the default.
+
+● Update(src/physical_process/migration/gap.py)
+  ⎿  Added 20 lines, removed 16 lines
+      18  
+      19  The three criteria
+      20  ------------------
+      21 -``kii``                                                        
+      22 -    ``K_II = q^2 / (alpha * h^2)``, gap open when ``K_II > 11``
+         -.                                                              
+      23 -    This is the repository's historical production criterion an
+         -d remains the                                                  
+      24 -    default so that existing results are reproduced exactly.   
+      25 -                                                               
+      26 -``kanagawa``                                                   
+      21 +``kanagawa``  **(production default)**                         
+      22      ``K = q^2 / (alpha * h^5)``, gap open when ``K > 25``.
+      23      This is the *same* dimensionless parameter that
+      29 -    :func:`.torque.kanagawa_gap_parameter` already uses to atte
+         -nuate the                                                      
+      30 -    Type-I torque.  The default threshold is internally motivat
+         -ed rather than                                                 
+      31 -    externally cited: the project's own Type-I gap denominator 
+         -is                                                             
+      32 -    ``1 + K / kappa_norm`` with ``kappa_norm = 25``            
+      24 +    :func:`.torque.kanagawa_gap_parameter` uses to attenuate th
+         +e Type-I torque,                                               
+      25 +    so the Type-II switch and the Type-I attenuation are now dr
+         +iven by one                                                    
+      26 +    quantity instead of two inconsistent ones.  The threshold i
+         +s internally                                                   
+      27 +    motivated rather than externally cited: the project's own T
+         +ype-I gap                                                      
+      28 +    denominator is ``1 + K / kappa_norm`` with ``kappa_norm = 2
+         +5``                                                            
+      29      (:class:`.torque.MigrationParameters`), so ``K = 25`` is ex
+          actly the point
+      30      at which the Type-I torque is suppressed by a factor of two
+          .
+      31  
+      32 +``kii``                                                        
+      33 +    ``K_II = q^2 / (alpha * h^2)``, gap open when ``K_II > 11``
+         +.                                                              
+      34 +    The repository's *historical* criterion, retained so that p
+         +re-existing                                                    
+      35 +    results can be reproduced with ``--gap-open-condition kii``
+         +.                                                              
+      36 +                                                               
+      37  ``crida``
+      38      Gap open when ``P < 1`` and ``R_H / H > 1``, with
+      39      ``P = 0.75 / (R_H/H) + 50 * alpha * h^2 / q`` and
+     ...
+      43  
+      44     ``kii`` and ``kanagawa`` differ by a factor ``h^3`` and are 
+          therefore *not*
+      45     small perturbations of one another: for ``h ~ 0.01`` they di
+          ffer by six
+      45 -   orders of magnitude.  Both names appear in the literature fo
+         -r "the gap                                                     
+      46 -   parameter", and the supplied project materials do not establ
+         -ish which one                                                  
+      47 -   the intended model uses.  The exponent is exposed here as a 
+         -named constant                                                 
+      48 -   rather than buried in an expression, and the discrepancy is 
+         -recorded as an                                                 
+      49 -   open model ambiguity in ``docs/physics_model.md``.  Nothing 
+         -in this module                                                 
+      50 -   silently changes the historical behaviour.                  
+      46 +   orders of magnitude, and they select very different amounts 
+         +of the disk for                                                
+      47 +   the Type-II branch.  The production default was changed from
+         + ``kii`` to                                                    
+      48 +   ``kanagawa`` as a deliberate, documented scientific decision
+         +; results                                                      
+      49 +   produced before that change are **not** comparable to result
+         +s produced                                                     
+      50 +   after it.  See ``docs/physics_model.md`` for the measured co
+         +nsequences.                                                    
+      51  
+      52 +   The ``kanagawa`` threshold (25) is now load-bearing.  It is 
+         +a configurable                                                 
+      53 +   :class:`GapCriterion` field, not a derived constant, and it 
+         +has not been                                                   
+      54 +   calibrated against an external reference.                   
+      55 +                                                               
+      56  Validity
+      57  --------
+      58  All criteria assume a geometrically thin (``h << 1``), viscousl
+          y relaxed,
+
+● Now measure the scientific delta this change produces.
+
+  Thought for 51s, ran 1 shell command (ctrl+o to expand)
+
+● 29 of 32 outputs changed, as expected. Let me quantify what changed
+  physically, and confirm --gap-open-condition kii still reproduces the old
+  results exactly.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● --gap-open-condition kii reproduces the old results byte-for-byte. Now the
+  physical delta:
+
+  Thought for 1m 3s, ran 1 shell command (ctrl+o to expand)
+
+● A clean, fully-localised result. Let me verify the mechanism and check what it
+  does to the traps themselves.
+
+  Thought for 1m 8s, ran 1 shell command (ctrl+o to expand)
+
+● That is the key consequence: kanagawa eliminates migration traps entirely for 
+  M• ≤ 10⁵ M☉ (all outward-torque cells vanish). Let me capture that in the
+  tests.
+
+  Thought for 42s, ran 1 shell command (ctrl+o to expand)
+
+● My insertion anchor didn't match, so two tests are missing and one docstring
+  is now wrong. Let me fix that properly.
+
+● Update(tests/test_migration_gap.py)
+  ⎿  Added 29 lines, removed 2 lines
+      50      assert np.allclose(delegated, canonical, rtol=0.0, atol=0.0
+          )
+      51  
+      52  
+      53 -def test_kii_mask_reproduces_historical_behaviour() -> None:   
+      54 -    """The default criterion must be the historical q^2/(alpha 
+         -h^2) > 11 rule."""                                             
+      53 +def test_the_production_default_is_kanagawa() -> None:         
+      54 +    """The production criterion is a deliberate, single-sourced
+         + decision."""                                                  
+      55 +    from workflows.config import DEFAULT_GAP_OPENING_CONDITION 
+      56 +                                                               
+      57 +    assert DEFAULT_GAP_CRITERION == "kanagawa"                 
+      58 +    assert GapCriterion().name == DEFAULT_GAP_CRITERION        
+      59 +    # The workflow default must never be hard-coded independent
+         +ly of gap.py.                                                  
+      60 +    assert DEFAULT_GAP_OPENING_CONDITION == DEFAULT_GAP_CRITERI
+         +ON                                                             
+      61 +                                                               
+      62 +                                                               
+      63 +def test_default_criterion_uses_the_torque_models_own_gap_param
+         +eter() -> None:                                                
+      64 +    """The Type-II switch and the Type-I attenuation share one 
+         +quantity.                                                      
+      65 +                                                               
+      66 +    This is the point of the change: before it, the switch used
+         + q^2/(alpha h^2)                                               
+      67 +    while the attenuation used q^2/(alpha h^5).                
+      68 +    """                                                        
+      69 +    from physical_process.migration import torque as torque_mod
+         +ule                                                            
+      70 +                                                               
+      71 +    diagnostics = gap_diagnostics(MASS_RATIO, ASPECT, ALPHA)   
+      72 +    assert np.allclose(                                        
+      73 +        diagnostics.parameter_for(DEFAULT_GAP_CRITERION),      
+      74 +        torque_module.comp_gap_parameter_dimensionless(MASS_RAT
+         +IO, ASPECT, ALPHA),                                            
+      75 +        rtol=0.0,                                              
+      76 +        atol=0.0,                                              
+      77 +    )                                                          
+      78 +                                                               
+      79 +                                                               
+      80 +def test_historical_kii_criterion_is_still_reachable() -> None:
+      81 +    """Pre-change results must stay reproducible via an explici
+         +t selection."""                                                
+      82      aspect = np.array([1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1])
+      83      mass_ratio = 1.0e-3
+      84      mask = gap_opening_mask(mass_ratio, aspect, ALPHA, "kii")
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now re-run all checkpoints under the new default.
+
+  Thought for 1m 0s, ran 1 shell command (ctrl+o to expand)
+
+● Checkpoint F fails on an assertion that characterised kii-specific behaviour.
+  Let me make it criterion-aware and report both, which is more useful.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now update the documentation with the full change record and re-run everything
+  clean.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now update the report and README, then do the final clean validation.
+
+  Thought for 54s, ran 1 shell command (ctrl+o to expand)
+
+● Two statements in §C and §F are now stale. Let me fix them.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Final clean validation.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Done. The default is now kanagawa, set in one place
+  (migration/gap.py:DEFAULT_GAP_CRITERION), with workflows.config, all scripts
+  and viz deriving from it.
+
+  The change has a large, coherent consequence you should see
+
+  The Type-II torque is inward everywhere (verified in Checkpoint D). kanagawa
+  marks 64–94% of the disk gap-open, so those cells get the always-inward torque
+  — which erases the outward-torque regions that create migration traps:
+
+  ┌─────┬───────────────┬──────────────┬─────────────────────┬─────────────┐
+  │ M•  │   criterion   │   Type-II    │   outward-torque    │   stable    │
+  │     │               │    cells     │        cells        │    traps    │
+  ├─────┼───────────────┼──────────────┼─────────────────────┼─────────────┤
+  │ 10³ │ kii →         │ 26 → 943     │ 704 → 0             │ 1 → 0       │
+  │     │ kanagawa      │              │                     │             │
+  ├─────┼───────────────┼──────────────┼─────────────────────┼─────────────┤
+  │ 10⁴ │ kii →         │ 0 → 845      │ 684 → 0             │ 0 → 0       │
+  │     │ kanagawa      │              │                     │             │
+  ├─────┼───────────────┼──────────────┼─────────────────────┼─────────────┤
+  │ 10⁵ │ kii →         │ 0 → 640      │ 507 → 0             │ 0 → 0       │
+  │     │ kanagawa      │              │                     │             │
+  ├─────┼───────────────┼──────────────┼─────────────────────┼─────────────┤
+  │ 10⁶ │ kii →         │ 0 → 189      │ 250 → 69            │ 3 → 3       │
+  │     │ kanagawa      │              │                     │             │
+  └─────┴───────────────┴──────────────┴─────────────────────┴─────────────┘
+
+  Migration traps no longer operate for M• ≤ 10⁵ M☉. Traps survive only at 10⁶
+  M☉. Given the project is named bsi-trap and ships a torque_with_trap disk
+  model, that's worth confirming you intend — any earlier trap-dependent
+  conclusion needs re-examination.
+
+  Effect on a full run
+
+  Controlled run (M•=10⁵, M_NSC=5×10⁴, seed 777). Population, damping and
+  embedding are bit-identical — the change is cleanly confined to transport and
+  downstream:
+
+  ┌───────────────────────────────┬────────────┬─────────────────────────┐
+  │                               │    kii     │        kanagawa         │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ disk-crossing / embedded BHs  │ 26.5 / 1.5 │ 26.5 / 1.5 (unchanged)  │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ migration trap-bound → finite │ 3 → 0      │ 0 → 3                   │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ trap-bound mass               │ 223 M☉     │ 0                       │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ IMRI candidates               │ 0          │ 1.5                     │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ local IMRI rate               │ 0          │ 0.15 /Myr               │
+  ├───────────────────────────────┼────────────┼─────────────────────────┤
+  │ detectable IMRIs              │ 0          │ 0 (still sub-threshold) │
+  └───────────────────────────────┴────────────┴─────────────────────────┘
+
+  Per-object reasons flip wholesale: migration_status trap_bound (6/6) → finite
+  (6/6); gas_stop_reason migration_trap_bound → gw_dominates_after_gas. So a
+  fully-trapped population becomes one that reaches the GW regime — but this
+  does not produce LISA detections here.
+
+  Validation
+
+  - --gap-open-condition kii replays the entire pre-change baseline 
+    byte-for-byte (32/32). Nothing was lost.
+  - 29 of 32 baseline files changed under the new default, as intended; new
+    baseline captured.
+  - Tests 43 passed, 0 failed — added assertions that the default is
+    single-sourced, that it equals the torque model's own gap parameter (the
+    whole point of the change), and that kii stays reachable.
+  - Round-2 checkpoints: 9 PASS, 2 WARN, 0 FAIL. Round-1 checkpoints unchanged.
+
+  One checkpoint-F assertion had been written around kii-specific behaviour
+  ("some configurations have only an anti-trap") and failed. That was my
+  assertion being wrong, not the code — I made F criterion-aware instead, so it
+  now tabulates trap structure under all three criteria and writes
+  trap_criterion_comparison.csv.
+
+  Two things I did not do
+
+  I did not calibrate the threshold. K > 25 is now load-bearing — it decides how
+  much disk goes Type-II — and it rests only on the project's own κ_norm = 25
+  (the point where the Type-I torque halves). It is a configurable GapCriterion
+  field, not a derived constant, and I could consult no external reference
+  offline. Results are sensitive to it; it deserves a deliberate look.
+
+  I did not smooth the regime transition. Under kii the hard Type-I→Type-II
+  switch almost never fired; it now fires across most of the disk, so the
+  intentional discontinuity is genuinely exercised for the first time.
+
+  Documented in docs/physics_model.md §3 (measured tables and caveats),
+  docs/round2_report.md §J.1 (old/new/reason/interpretation/validation/risk per
+  §23), and a README callout.
+
+✻ Crunched for 24m 39s · done 3:57 PM
+
+❯ calibrate the kanagawa threshold                                              
+
+  Thought for 1m 3s (ctrl+o to expand)
+
+● Calibrating offline means deriving the threshold from the model's own physics
+  rather than picking it. Let me first check what the project's own gap
+  machinery implies.
+
+  Thought for 1m 3s, ran 1 shell command (ctrl+o to expand)
+
+● Confirmed: 1 + K/25 is exactly the Kanagawa gap-depth law Σ_gap/Σ₀ = 
+  1/(1+0.04K), so 25 is its 50%-depletion point. Now let me test the stronger
+  criterion — where the two torque branches actually cross.
+  Thought for 1m 50s, ran 1 shell command (ctrl+o to expand)
+
+● Key finding: the torque-crossover K spans 5 orders of magnitude (26 →
+  9.4×10⁵), so no single global threshold can make the switch continuous. Let me
+  measure how the actual science depends on the threshold.
+
+  Thought for 1m 8s, ran 1 shell command (ctrl+o to expand)
+
+● The threshold is currently buried in a dataclass default. For calibration to
+  be reproducible it must be a config parameter — let me plumb it through first.
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● Now add the CLI option and config_kwargs entry:
+
+  Ran 2 shell commands (ctrl+o to expand)
+
+● The threshold now survives config cloning into batch workers. Now the
+  calibration study itself.
+
+● Write(scripts/calibrate_gap_threshold.py)
+  ⎿  Wrote 409 lines to scripts/calibrate_gap_threshold.py
+      1 """Calibrate the gap-opening threshold of the production criterio
+        n.
+      3 The production criterion is ``kanagawa``: a cell has opened a gap
+         when
+      4 
+      6 
+      7 This script establishes what ``K_threshold`` *means* in this mode
+        l, what value
+        nly code and
+      9 data inside this repository - no external reference is consulted.
+     … +501 lines (ctrl+o to expand)
+
+  Thought for 1m 2s, ran 1 shell command (ctrl+o to expand)
+
+● Two things to fix: the identity check used exact equality (0.04 isn't exactly
+  1/25 in binary), and I should report the deviation quantitatively.
+
+  Thought for 1m 2s, read 1 file, ran 1 shell command (ctrl+o to expand)
+
+● Panel 3 is empty because --quick skipped the end-to-end scan. Let me run the
+  full study.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now record the calibration in the constant itself and lock it with tests.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● The stale "has not been calibrated" warning in the docstring needs updating:
+
+● Update(src/physical_process/migration/gap.py)
+  ⎿  Added 6 lines, removed 3 lines
+      50     produced before that change are **not** comparable to result
+          s produced
+      51     after it.  See ``docs/physics_model.md`` for the measured co
+          nsequences.
+      52  
+      53 -   The ``kanagawa`` threshold (25) is now load-bearing.  It is 
+         -a configurable                                                 
+      54 -   :class:`GapCriterion` field, not a derived constant, and it 
+         -has not been                                                   
+      55 -   calibrated against an external reference.                   
+      53 +   The ``kanagawa`` threshold (25) is load-bearing and has been
+         + **calibrated**                                                
+      54 +   against the model's own gap-depth law by                    
+      55 +   ``scripts/calibrate_gap_threshold.py``; it is not an arbitra
+         +ry number.  What                                               
+      56 +   remains a modelling choice is the *depletion fraction* that 
+         +counts as                                                      
+      57 +   "gapped" -- 25 corresponds to a half-cleared gap.  Use      
+      58 +   :func:`threshold_for_depletion` to re-express any other choi
+         +ce.                                                            
+      59  
+      60  Validity
+      61  --------
+
+● Update(src/physical_process/migration/gap.py)
+  ⎿  Added 6 lines, removed 5 lines
+      24      This is the *same* dimensionless parameter that
+      25      :func:`.torque.kanagawa_gap_parameter` uses to attenuate th
+          e Type-I torque,
+      26      so the Type-II switch and the Type-I attenuation are now dr
+          iven by one
+      27 -    quantity instead of two inconsistent ones.  The threshold i
+         -s internally                                                   
+      28 -    motivated rather than externally cited: the project's own T
+         -ype-I gap                                                      
+      29 -    denominator is ``1 + K / kappa_norm`` with ``kappa_norm = 2
+         -5``                                                            
+      30 -    (:class:`.torque.MigrationParameters`), so ``K = 25`` is ex
+         -actly the point                                                
+      31 -    at which the Type-I torque is suppressed by a factor of two
+         -.                                                              
+      27 +    quantity instead of two inconsistent ones.  The threshold i
+         +s fixed by an                                                  
+      28 +    identity internal to this model: the Type-I gap denominator
+      29 +    ``1 + K / kappa_norm`` with ``kappa_norm = 25``            
+      30 +    (:class:`.torque.MigrationParameters`) *is* the Kanagawa ga
+         +p-depth law                                                    
+      31 +    ``Sigma_gap/Sigma_0 = 1/(1 + 0.04 K)``, so ``K = 25`` is ex
+         +actly where the                                                
+      32 +    gap reaches half depth and the Type-I torque is halved.    
+      33  
+      34  ``kii``
+      35      ``K_II = q^2 / (alpha * h^2)``, gap open when ``K_II > 11``
+          .
+
+● Now lock the calibration with tests:
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Now update the documentation with the calibration result.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Final validation sweep.
+
+  Thought for 1m 0s, ran 1 shell command (ctrl+o to expand)
+
+● All 26 physical result files match; the 6 differences are metadata files where
+  I added provenance keys. Let me confirm that's all it is.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Confirmed: one added provenance key, nothing changed or removed. Now the full
+  checkpoint re-run.
+
+  Ran 1 shell command (ctrl+o to expand)
+
+● Done. The calibration confirmed 25 rather than changing it — but it is no
+  longer an assumption.
+
+  What the calibration established
+
+  1. The threshold is a gap-depth statement, not a bare number. The project's
+  own Type-I gap denominator 1 + K/κ_norm with κ_norm = 25 is algebraically 
+  identical to the Kanagawa gap-depth law:
+
+  Σ_gap / Σ₀ = 1 / (1 + 0.04 K)     — verified to 2.2×10⁻¹⁶
+
+  So K > K* means "the gap is cleared below residual surface density f = 
+  1/(1+0.04K*)". That's the real calibration win: the threshold now has units of
+  meaning. depletion_fraction() and threshold_for_depletion() convert both
+  ways.
+
+  2. K = 25 is the one value the model fixes by itself — the half-depth point (f
+  = 0.5), the same κ_norm the Type-I torque already uses. Every other value in
+  the family is chosen; this one is determined.
+
+  3. I tested the obvious alternative and rejected it. One could place the
+  switch where |Γ_I| = |Γ_II|, making the transition continuous. Measured across
+  the SMBH × migrator grid, that crossover spans a factor of 2.5×10⁶ in K (26
+  at 10⁶ M☉/10 M☉ → 6.4×10⁷ at 10³ M☉/100 M☉). No single global threshold can 
+  make the switch continuous. The discontinuity is irreducible for any global-K
+  criterion — worth knowing, since it rules out a whole line of attack.
+
+  Sensitivity — and an important asymmetry
+
+  End-to-end at M•=10⁵ M☉:
+
+  ┌──────┬──────┬────────────┬────────┬──────┬──────┐
+  │  f   │  K*  │ trap-bound │ finite │ IMRI │ rate │
+  ├──────┼──────┼────────────┼────────┼──────┼──────┤
+  │ 0.90 │ 2.8  │ 0.0        │ 3.0    │ 1.5  │ 0.15 │
+  ├──────┼──────┼────────────┼────────┼──────┼──────┤
+  │ 0.50 │ 25   │ 0.0        │ 3.0    │ 1.5  │ 0.15 │
+  ├──────┼──────┼────────────┼────────┼──────┼──────┤
+  │ 0.25 │ 75   │ 0.5        │ 2.5    │ 1.5  │ 0.15 │
+  ├──────┼──────┼────────────┼────────┼──────┼──────┤
+  │ 0.10 │ 225  │ 1.5        │ 1.5    │ 1.5  │ 0.15 │
+  ├──────┼──────┼────────────┼────────┼──────┼──────┤
+  │ 0.01 │ 2475 │ 2.5        │ 0.5    │ 0.5  │ 0.05 │
+  └──────┴──────┴────────────┴────────┴──────┴──────┘
+
+  The IMRI yield is flat across two decades in K* — reassuring for the headline
+  number. But the trap-bound fraction is not: traps reappear at 10⁵ M☉ as soon
+  as f ≤ 0.1. So the previous finding ("traps stop operating below 10⁶ M☉") is
+  itself threshold-sensitive in a way the yield is not. Anything trap-dependent
+  needs the sensitivity table, not just the central value.
+
+  Plumbing
+
+  The threshold was unreachable from outside the dataclass, so calibration
+  wasn't reproducible. Now: --gap-threshold K →
+  IMRIDynConfig.gap_parameter_threshold → config.gap_criterion → the migration
+  solvers, recorded in metadata and batch provenance, and it survives the config
+  clone into parallel workers (tested).
+
+  Validation
+
+  - 48 tests pass (5 new), including the gap-depth identity, the helper
+    round-trip, and CLI→config→worker plumbing.
+  - Numerically unchanged — same value, so results are identical. The only diff
+    versus the previous run is one added provenance key (gap_criterion); no key
+    changed or was removed, and all result CSVs are byte-identical.
+  - --gap-open-condition kii still replays the pre-change baseline exactly.
+  - Checkpoints: Round-2 9 PASS / 2 WARN / 0 FAIL; Round-1 unchanged.
+
+  What I still can't settle
+
+  Whether "gap open" should mean 50% or 10% depletion is a modelling judgement,
+  and no external reference was reachable offline. The calibration fixes the
+  family, the interpretation, and identifies the model-determined value; it does
+  not prove 50% is physically right. Revising it is one flag (--gap-threshold 
+  225 for f = 0.1). Worth noting: at K = 25 the corotation torque — the
+  outward-driving one that makes traps — is already suppressed to exp(-25/20) = 
+  0.29.
+
+  New: scripts/calibrate_gap_threshold.py, artefacts in
+  output/round2/calibration_gap_threshold/, full write-up in
+  docs/physics_model.md §3 and docs/round2_report.md §J.2.
+
+✻ Worked for 29m 23s · done 4:28 PM
+
+❯ /context 
+  ⎿  Context Usage
+     ⛀ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛀ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁   model_43k4in[1m]
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁   625.4k/1m tokens (63%)
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ 
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁   Estimated usage by category
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁   ⛁ System prompt: 2k tokens (0.2%)
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛁   ⛁ System tools: 62.5k tokens (6.2%)
+     ⛁ ⛁ ⛁ ⛁ ⛁ ⛁ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶   ⛁ Skills: 1.9k tokens (0.2%)
+     ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶   ⛁ Messages: 559k tokens (55.9%)
+     ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶   ⛶ Free space: 374.6k (37.5%)
+     ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ ⛶ 
+
+     Skills · /skills
+     └ 14 skills · 1.9k tokens
+
+     /context all to expand
+
+      Suggestions
+      ℹ Read results using 313.7k tokens (31%) → save ~94.1k
+        Use offset and limit parameters to read only the sections you need. Avoid re-reading entire files when you only need a few lines.

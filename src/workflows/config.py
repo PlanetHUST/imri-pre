@@ -6,11 +6,10 @@ from typing import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from physical_process.disk_migration import (
-    DEFAULT_MIGRATION_MODEL,
+from physical_process.migration import (
+    DEFAULT_GAP_CRITERION,
     GAP_OPENING_CONDITIONS,
-    MIGRATION_MODELS,
-    UNGAPPED,
+    GapCriterion,
 )
 
 from .lisa_snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
@@ -34,13 +33,17 @@ IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
 IMRI_MAX_GW_TIME_MYR = 13.6e3
 IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
+IMRI_HUBBLE_CONSTANT_PER_MYR = 1.0 / IMRI_MAX_GW_TIME_MYR
 IMRI_SNR_THRESHOLD = 20.0
 IMRI_LISA_MISSION_DURATION_YEARS = 4.0
 IMRI_SNR_WINDOW_PLACEMENT = DEFAULT_SNR_WINDOW_PLACEMENT
 IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
 IMRI_DETECTOR_OMEGA_M = 0.315
-DEFAULT_BASE_SEED = 20260913
-DEFAULT_GAP_OPENING_CONDITION = "kii"
+IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
+IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
+IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
+# Set in physical_process.migration.gap; never hard-coded here.
+DEFAULT_GAP_OPENING_CONDITION = DEFAULT_GAP_CRITERION
 TORQUE_WITH_TRAP = "torque_with_trap"
 SEMI_WITHOUT_TRAP = "semi_without_trap"
 DISK_MODELS = (TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
@@ -78,11 +81,15 @@ class IMRIDynConfig:
         max_gw_time_myr: float,
         gw_eccentricity: float,
         redshift: float,
+        hubble_constant_per_myr: float,
         snr_threshold: float,
         lisa_mission_duration_years: float,
         snr_window_placement: str,
         detector_hubble_constant_km_s_mpc: float,
         detector_omega_m: float,
+        cosmic_merge_time_myr: float,
+        cosmic_merge_smbh_mass_factor: float,
+        cosmic_merge_radius_factor: float,
         # Execution controls
         damping_cpu_count: int | None,
         checkpoint_grid_interval: int,
@@ -93,7 +100,7 @@ class IMRIDynConfig:
         nsc_radius_mass_slope: float = 0.321,
         nsc_radius_reference_mass_msun: float = 3.6e6,
         gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
-        migration_model: str = DEFAULT_MIGRATION_MODEL,
+        gap_parameter_threshold: float | None = None,
     ) -> None:
         if len(smbh_masses_msun) == 0 or len(nsc_masses_msun) == 0:
             raise ValueError("SMBH and NSC mass vectors must not be empty")
@@ -116,12 +123,14 @@ class IMRIDynConfig:
                 raise ValueError("base seed must be nonnegative")
         if not 0.0 < lisa_min_gw_frequency_hz < lisa_max_gw_frequency_hz:
             raise ValueError("LISA frequencies must satisfy 0 < f_min < f_max")
-        if not np.isfinite(max_gw_time_myr) or max_gw_time_myr <= 0.0:
-            raise ValueError("maximum GW time must be finite and positive")
+        if max_gw_time_myr <= 0.0:
+            raise ValueError("maximum GW time must be positive")
         if not 0.0 <= gw_eccentricity < 1.0:
             raise ValueError("GW eccentricity must satisfy 0 <= e < 1")
         if not np.isfinite(redshift) or redshift < 0.0:
             raise ValueError("redshift must be nonnegative")
+        if not np.isfinite(hubble_constant_per_myr) or hubble_constant_per_myr <= 0.0:
+            raise ValueError("Hubble constant must be positive")
         if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
             raise ValueError("SNR threshold must be positive")
         if lisa_mission_duration_years not in (0.5, 1.0, 2.0, 4.0):
@@ -137,12 +146,28 @@ class IMRIDynConfig:
             raise ValueError("detector H0 must be finite and positive")
         if not np.isfinite(detector_omega_m) or not 0.0 < detector_omega_m < 1.0:
             raise ValueError("detector Omega_m must satisfy 0 < Omega_m < 1")
+        if not np.isfinite(cosmic_merge_time_myr) and cosmic_merge_time_myr != np.inf:
+            raise ValueError("cosmic merge time must be finite or infinity")
+        if cosmic_merge_time_myr <= 0.0:
+            raise ValueError("cosmic merge time must be positive")
+        if (
+            not np.isfinite(cosmic_merge_smbh_mass_factor)
+            or cosmic_merge_smbh_mass_factor <= 0.0
+        ):
+            raise ValueError("cosmic merger SMBH mass factor must be positive")
+        if (
+            not np.isfinite(cosmic_merge_radius_factor)
+            or cosmic_merge_radius_factor <= 0.0
+        ):
+            raise ValueError("cosmic merger radius factor must be positive")
+        if gap_parameter_threshold is not None and (
+            not np.isfinite(gap_parameter_threshold) or gap_parameter_threshold <= 0.0
+        ):
+            raise ValueError("gap parameter threshold must be finite and positive")
         if gap_opening_condition not in GAP_OPENING_CONDITIONS:
             raise ValueError(
                 f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
             )
-        if migration_model not in MIGRATION_MODELS:
-            raise ValueError(f"migration model must be one of {MIGRATION_MODELS}")
         if disk_model not in DISK_MODELS:
             raise ValueError(f"disk model must be one of {DISK_MODELS}")
 
@@ -162,14 +187,17 @@ class IMRIDynConfig:
         self.consider_type_ii_migration = consider_type_ii_migration
         self.disk_model = disk_model
         self.gap_opening_condition = gap_opening_condition
-        self.migration_model = (
-            migration_model if consider_type_ii_migration else UNGAPPED
+        self.gap_parameter_threshold = (
+            float(gap_parameter_threshold)
+            if gap_parameter_threshold is not None
+            else None
         )
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr
         self.gw_eccentricity = gw_eccentricity
         self.redshift = redshift
+        self.hubble_constant_per_myr = hubble_constant_per_myr
         self.snr_threshold = snr_threshold
         self.lisa_mission_duration_years = lisa_mission_duration_years
         self.snr_window_placement = snr_window_placement
@@ -177,11 +205,33 @@ class IMRIDynConfig:
             detector_hubble_constant_km_s_mpc
         )
         self.detector_omega_m = detector_omega_m
+        self.cosmic_merge_time_myr = cosmic_merge_time_myr
+        self.cosmic_merge_smbh_mass_factor = cosmic_merge_smbh_mass_factor
+        self.cosmic_merge_radius_factor = cosmic_merge_radius_factor
 
         self.damping_cpu_count = damping_cpu_count
         self.checkpoint_grid_interval = checkpoint_grid_interval
         self.print_debug_results = print_debug_results
         self.base_seed = int(base_seed) if base_seed is not None else None
+
+    @property
+    def gap_criterion(self) -> GapCriterion:
+        """Return the resolved gap criterion, including any threshold override.
+
+        ``gap_parameter_threshold`` overrides the threshold belonging to the
+        *selected* criterion only; the others keep their canonical defaults.
+        """
+        if self.gap_parameter_threshold is None:
+            return GapCriterion(name=self.gap_opening_condition)
+        field = {
+            "kii": "kii_threshold",
+            "kanagawa": "kanagawa_threshold",
+            "crida": "crida_parameter_threshold",
+        }[self.gap_opening_condition]
+        return GapCriterion(
+            name=self.gap_opening_condition,
+            **{field: self.gap_parameter_threshold},
+        )
 
     def get_param_grid(self) -> tuple[FloatArray, FloatArray]:
         """Return the explicitly selected SMBH and NSC masses [Msun]."""

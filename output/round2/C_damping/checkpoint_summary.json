@@ -1,0 +1,56 @@
+{
+  "checkpoint": "C_damping",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "every damping evaluation returned a status",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "damping times are nonnegative and finite where evaluated",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "damping never increases inclination",
+      "result": "PASS",
+      "detail": 0.0
+    },
+    {
+      "check": "damping never increases eccentricity",
+      "result": "PASS",
+      "detail": 0.3
+    },
+    {
+      "check": "final orbital elements stay physical (0 <= e < 1)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "heavier objects embed no more slowly (expected scaling)",
+      "result": "PASS",
+      "detail": {
+        "1.0": 0.6389220543850536,
+        "10.0": 0.1340159832674116,
+        "100.0": 0.013401598326741166
+      }
+    },
+    {
+      "check": "at least one configuration embeds and one does not",
+      "result": "PASS",
+      "detail": {
+        "True": 16,
+        "False": 11
+      }
+    }
+  ],
+  "data": {
+    "status_counts": {
+      "DampingStatus.EMBEDDED_BH": 16,
+      "DampingStatus.OUTSIDE_DISK": 9,
+      "DampingStatus.DAMPING_INCOMPLETE": 2
+    },
+    "embedded_fraction": 0.5925925925925926
+  }
+}

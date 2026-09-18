@@ -1,0 +1,118 @@
+
+########################################################################
+                          IMRI DYN SIMULATION                           
+########################################################################
+Grid size: 1 x 1 = 1
+Repeats per point: 2
+Duty cycle: 1.000e+01 Myr
+Metallicity: 1.000e-05 Zsun
+Disk migration model: torque_with_trap
+Type-II migration: True
+gap_opening_condition: kanagawa
+Redshift: 1.500e+01
+LISA detector model: mission=4 yr, SNR threshold=20, H0=67.4 km/s/Mpc, Omega_m=0.315
+Observed LISA GW band: 1.000e-03 to 1.000e-01 Hz
+Source-frame LISA GW band: 1.600e-02 to 1.600e+00 Hz
+Cosmic merge time: 1.000e+03 Myr
+Output directory: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed
+Damping CPU count: 2
+
+------------------------------------------------------------------------
+    Grid Point 1/1: smbh_mass_msun=1.00e+05, nsc_mass_msun=5.00e+04     
+------------------------------------------------------------------------
+Repeat 1/2
+AGN initialized done.
+  cached pAGN disk profile for damping and migration work at smbh_mass_msun=1.000e+05
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.944e+02 Msun
+formation time range is 2.256e+00 to 1.171e+01 Myr
+sma range is 6.045e+14 to 2.588e+18 cm
+eccentricity range is 1.365e-02 to 9.993e-01
+inclination range is 1.788e-01 to 2.964e+00 rad
+disk-crossing population 
+mass range is 1.366e+01 to 1.733e+02 Msun
+formation time range is 2.314e+00 to 1.165e+01 Myr
+sma range is 6.045e+14 to 2.332e+18 cm
+eccentricity range is 3.856e-01 to 9.993e-01
+inclination range is 3.888e-01 to 2.957e+00 rad
+Geometry selection: 23/1139 objects selected (f_geo=2.019e-02)
+Relaxation times initialized, mean_trel_myr_geo = 8.091e+01 Myr
+Running 23 damping tasks with cpus=2, chunksize=2
+  total sampled objects : 1.139e+03
+  disk-crossing objects : 2.300e+01
+  f_geo                 : 2.019e-02
+  embedded stars        : 4.000e+00
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 4.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 1.000e+00
+  detector unavailable  : 0.000e+00
+  SNR below threshold   : 1.000e+00
+  no frequency overlap  : 0.000e+00
+  detector input/model/numerical unavailable: 0/0/0
+  Band entry            : evaluated=5, in_domain=0, handoff=5, inside_isco=0, profile_error=0
+  Migration             : evaluated=5, finite=5, trap_bound=0, errors=0
+  Trap-bound mass       : 0.000000e+00 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 1.579e+01 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0000.json
+Repeat 2/2
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.957e+02 Msun
+formation time range is 2.253e+00 to 1.170e+01 Myr
+sma range is 1.607e+16 to 2.587e+18 cm
+eccentricity range is 2.378e-02 to 9.993e-01
+inclination range is 1.798e-01 to 2.965e+00 rad
+disk-crossing population 
+mass range is 1.391e+01 to 1.165e+02 Msun
+formation time range is 2.569e+00 to 1.138e+01 Myr
+sma range is 3.445e+16 to 1.954e+18 cm
+eccentricity range is 9.152e-01 to 9.993e-01
+inclination range is 2.980e-01 to 2.916e+00 rad
+Geometry selection: 22/1186 objects selected (f_geo=1.855e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.079e+02 Myr
+Running 22 damping tasks with cpus=2, chunksize=2
+  total sampled objects : 1.186e+03
+  disk-crossing objects : 2.200e+01
+  f_geo                 : 1.855e-02
+  embedded stars        : 3.000e+00
+  embedded BHs          : 0.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 0.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 3.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  detector unavailable  : 0.000e+00
+  SNR below threshold   : 0.000e+00
+  no frequency overlap  : 0.000e+00
+  detector input/model/numerical unavailable: 0/0/0
+  Band entry            : evaluated=3, in_domain=0, handoff=3, inside_isco=0, profile_error=0
+  Migration             : evaluated=3, finite=3, trap_bound=0, errors=0
+  Trap-bound mass       : 0.000000e+00 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0001.json
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_averaged_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_events.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_repeat_results.csv
+
+########################################################################
+                          SIMULATION COMPLETE                           
+########################################################################
+Total simulations: 2
+Runtime: 1.33 s (0.02 min)
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_averaged_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_events.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/imri_repeat_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/D_single_halo_equivalence/refactored_other_seed/simulation_metadata.json

@@ -1,0 +1,263 @@
+{
+  "checkpoint": "B_tree_reader",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "missing required column is rejected",
+      "result": "PASS",
+      "detail": "merger-tree file is missing required columns: Mstar, Z, MBH, br"
+    },
+    {
+      "check": "missing file is rejected",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "unused junk columns do not break parsing",
+      "result": "PASS",
+      "detail": {
+        "rows_seen": 9,
+        "rows_selected": 6,
+        "missing_required_field": 1,
+        "invalid_redshift": 1,
+        "invalid_halo_mass": 0,
+        "invalid_bh_mass": 1,
+        "outside_selection": 0,
+        "truncated_by_max_hosts": 0
+      }
+    },
+    {
+      "check": "NaN redshift counted as missing_required_field",
+      "result": "PASS",
+      "detail": {
+        "rows_seen": 9,
+        "rows_selected": 6,
+        "missing_required_field": 1,
+        "invalid_redshift": 1,
+        "invalid_halo_mass": 0,
+        "invalid_bh_mass": 1,
+        "outside_selection": 0,
+        "truncated_by_max_hosts": 0
+      }
+    },
+    {
+      "check": "negative redshift counted as invalid_redshift",
+      "result": "PASS",
+      "detail": {
+        "rows_seen": 9,
+        "rows_selected": 6,
+        "missing_required_field": 1,
+        "invalid_redshift": 1,
+        "invalid_halo_mass": 0,
+        "invalid_bh_mass": 1,
+        "outside_selection": 0,
+        "truncated_by_max_hosts": 0
+      }
+    },
+    {
+      "check": "negative MBH counted as invalid_bh_mass",
+      "result": "PASS",
+      "detail": {
+        "rows_seen": 9,
+        "rows_selected": 6,
+        "missing_required_field": 1,
+        "invalid_redshift": 1,
+        "invalid_halo_mass": 0,
+        "invalid_bh_mass": 1,
+        "outside_selection": 0,
+        "truncated_by_max_hosts": 0
+      }
+    },
+    {
+      "check": "valid rows become hosts",
+      "result": "PASS",
+      "detail": 6
+    },
+    {
+      "check": "host identities are unique and deterministic",
+      "result": "PASS",
+      "detail": [
+        "n000001_b000001_r0000000",
+        "n000001_b000001_r0000001",
+        "n000002_b000001_r0000004",
+        "n000003_b000002_r0000006",
+        "n000003_b000002_r0000007",
+        "n000004_b000002_r0000008"
+      ]
+    },
+    {
+      "check": "unparseable Mstar becomes None rather than crashing",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "numeric fields parse to floats",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "node filter",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "branch + redshift filter",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "SMBH-mass filter",
+      "result": "PASS",
+      "detail": [
+        1,
+        4,
+        6
+      ]
+    },
+    {
+      "check": "halo-mass filter",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "max_hosts truncation",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "fixture: chunk-size invariance",
+      "result": "PASS",
+      "detail": {
+        "1": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+        "2": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+        "3": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+        "4": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+        "7": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+        "1000": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00"
+      }
+    },
+    {
+      "check": "fixture: repeated reading is deterministic",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "real tree: chunk-size invariance",
+      "result": "PASS",
+      "detail": {
+        "50": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+        "333": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+        "1000": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+        "50000": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f"
+      }
+    },
+    {
+      "check": "real tree: only required columns requested",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "real tree: MBH column is identically zero in selected rows (documented limitation)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "full streaming pass sees every row once",
+      "result": "PASS",
+      "detail": 9999
+    }
+  ],
+  "data": {
+    "fixture_counters": {
+      "rows_seen": 9,
+      "rows_selected": 6,
+      "missing_required_field": 1,
+      "invalid_redshift": 1,
+      "invalid_halo_mass": 0,
+      "invalid_bh_mass": 1,
+      "outside_selection": 0,
+      "truncated_by_max_hosts": 0
+    },
+    "fixture_hosts": [
+      {
+        "host_id": "n000001_b000001_r0000000",
+        "redshift": 6.0,
+        "record_index": 0,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 1000000000000.0,
+        "smbh_mass_msun": 0.0,
+        "stellar_mass_msun": 3000000000.0,
+        "metallicity_mass_fraction": 0.0002
+      },
+      {
+        "host_id": "n000001_b000001_r0000001",
+        "redshift": 6.5,
+        "record_index": 1,
+        "node_id": 1,
+        "branch_id": 1,
+        "halo_mass_msun": 900000000000.0,
+        "smbh_mass_msun": 100000.0,
+        "stellar_mass_msun": 2000000000.0,
+        "metallicity_mass_fraction": 0.0001
+      },
+      {
+        "host_id": "n000002_b000001_r0000004",
+        "redshift": 7.0,
+        "record_index": 4,
+        "node_id": 2,
+        "branch_id": 1,
+        "halo_mass_msun": 800000000000.0,
+        "smbh_mass_msun": 200000.0,
+        "stellar_mass_msun": null,
+        "metallicity_mass_fraction": 0.0001
+      },
+      {
+        "host_id": "n000003_b000002_r0000006",
+        "redshift": 8.0,
+        "record_index": 6,
+        "node_id": 3,
+        "branch_id": 2,
+        "halo_mass_msun": 500000000000.0,
+        "smbh_mass_msun": 50000.0,
+        "stellar_mass_msun": 1000000000.0,
+        "metallicity_mass_fraction": 5e-05
+      },
+      {
+        "host_id": "n000003_b000002_r0000007",
+        "redshift": 8.5,
+        "record_index": 7,
+        "node_id": 3,
+        "branch_id": 2,
+        "halo_mass_msun": 400000000000.0,
+        "smbh_mass_msun": 30000.0,
+        "stellar_mass_msun": 800000000.0,
+        "metallicity_mass_fraction": 5e-05
+      },
+      {
+        "host_id": "n000004_b000002_r0000008",
+        "redshift": 9.0,
+        "record_index": 8,
+        "node_id": 4,
+        "branch_id": 2,
+        "halo_mass_msun": 300000000000.0,
+        "smbh_mass_msun": 10000.0,
+        "stellar_mass_msun": 500000000.0,
+        "metallicity_mass_fraction": 2e-05
+      }
+    ],
+    "real_read_time_s_total": 0.3097838160010724,
+    "real_counters": {
+      "rows_seen": 2839,
+      "rows_selected": 40,
+      "missing_required_field": 0,
+      "invalid_redshift": 0,
+      "invalid_halo_mass": 0,
+      "invalid_bh_mass": 0,
+      "outside_selection": 2798,
+      "truncated_by_max_hosts": 1
+    },
+    "full_stream_rows": 9999,
+    "full_stream_time_s": 0.07638822900116793
+  }
+}

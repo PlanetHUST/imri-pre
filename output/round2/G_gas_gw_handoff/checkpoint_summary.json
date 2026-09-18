@@ -1,0 +1,98 @@
+{
+  "checkpoint": "G_gas_gw_handoff",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "the LISA entry radius is finite and inside the disk",
+      "result": "PASS",
+      "detail": {
+        "entry_rg": 11.773138594487014,
+        "disk_outer_rg": 674017.0077181674
+      }
+    },
+    {
+      "check": "GW time to entry is finite and increases outward",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "GW time vanishes at the entry radius",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "Peters time approaches the a^4 scaling away from entry",
+      "result": "PASS",
+      "detail": 4.0228512115515755
+    },
+    {
+      "check": "both processes dominate somewhere, or gas dominates throughout (a physical result, not an assumption)",
+      "result": "PASS",
+      "detail": {
+        "gw": 60
+      }
+    },
+    {
+      "check": "the canonical handoff solver returns an explicit stop reason",
+      "result": "PASS",
+      "detail": {
+        "ample_gas_time": {
+          "r_gas_fin_rg": 100000.0,
+          "gas_elapsed_myr": 0.0,
+          "stop_reason": "migration_trap_bound"
+        },
+        "starved_gas_time": {
+          "r_gas_fin_rg": 100000.0,
+          "gas_elapsed_myr": 0.0,
+          "stop_reason": "migration_trap_bound"
+        }
+      }
+    },
+    {
+      "check": "a duty-cycle-starved object stops before reaching entry",
+      "result": "PASS",
+      "detail": {
+        "ample_gas_time": {
+          "r_gas_fin_rg": 100000.0,
+          "gas_elapsed_myr": 0.0,
+          "stop_reason": "migration_trap_bound"
+        },
+        "starved_gas_time": {
+          "r_gas_fin_rg": 100000.0,
+          "gas_elapsed_myr": 0.0,
+          "stop_reason": "migration_trap_bound"
+        }
+      }
+    },
+    {
+      "check": "the workflow reaches the handoff through classify_event_rate",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "the handoff criterion is defined exactly once",
+      "result": "PASS",
+      "detail": [
+        "src/workflows/event_rate.py"
+      ]
+    }
+  ],
+  "data": {
+    "dominant_counts": {
+      "gw": 60
+    },
+    "peters_log_slope_far_from_entry": 4.0228512115515755,
+    "handoff_outcomes": {
+      "ample_gas_time": {
+        "r_gas_fin_rg": 100000.0,
+        "gas_elapsed_myr": 0.0,
+        "stop_reason": "migration_trap_bound"
+      },
+      "starved_gas_time": {
+        "r_gas_fin_rg": 100000.0,
+        "gas_elapsed_myr": 0.0,
+        "stop_reason": "migration_trap_bound"
+      }
+    }
+  }
+}

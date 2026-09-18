@@ -2,9 +2,8 @@
 
 import numpy as np
 
-import disk_quantity.disk_solve as disk
 import physical_process.constants as const
-from disk_quantity.migration_torque import (
+from physical_process.migration import (
     MigrationParameters,
     TorqueProfile,
     compute_torque_profile,
@@ -58,10 +57,6 @@ class IMRIDynEngine:
                 "radius_cm": np.asarray(pagn_disk.radius_cm, dtype=float),
                 "surface_density_g_cm2": np.asarray(
                     pagn_disk.surface_density_g_cm2,
-                    dtype=float,
-                ),
-                "density_g_cm3": np.asarray(
-                    pagn_disk.density_g_cm3,
                     dtype=float,
                 ),
                 "aspect_ratio": np.asarray(pagn_disk.aspect_ratio, dtype=float),

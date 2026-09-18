@@ -1,0 +1,13 @@
+disk_model,redshift,m_smbh_msun,m_nsc_msun,duty_cycle_myr,n_repeats_total,n_repeats_valid,n_detector_repeats_valid,mean_imri_count,imri_rate_mean_per_myr,imri_rate_p16_per_myr,imri_rate_p84_per_myr,mean_lisa_detectable_count,lisa_detectable_rate_mean_per_myr,lisa_detectable_rate_p16_per_myr,lisa_detectable_rate_p84_per_myr,lisa_detectable_fraction,result_state,detector_result_state
+semi_without_trap,10,1000,200000,10,2,2,2,0.5,0.05,0.016,0.084,0.5,0.05,0.016,0.084,1,valid,valid
+semi_without_trap,10,10000,200000,10,2,2,2,0,0,0,0,0,0,0,0,,valid,valid
+semi_without_trap,10,100000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable
+semi_without_trap,10,1000000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable
+semi_without_trap,12,1000,200000,10,2,2,2,0.5,0.05,0.016,0.084,0.5,0.05,0.016,0.084,1,valid,valid
+semi_without_trap,12,10000,200000,10,2,2,2,0,0,0,0,0,0,0,0,,valid,valid
+semi_without_trap,12,100000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable
+semi_without_trap,12,1000000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable
+semi_without_trap,15,1000,200000,10,2,2,2,0.5,0.05,0.016,0.084,0.5,0.05,0.016,0.084,1,valid,valid
+semi_without_trap,15,10000,200000,10,2,2,2,0,0,0,0,0,0,0,0,,valid,valid
+semi_without_trap,15,100000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable
+semi_without_trap,15,1000000,200000,10,2,0,0,,,,,,,,,,unavailable,unavailable

@@ -20,9 +20,9 @@ except ImportError:
     import nsc_orbital
 
 try:
-    from physical_process.disk_migration import find_closest_index
+    from physical_process.migration import find_closest_index
 except ImportError:
-    from disk_migration import find_closest_index
+    from migration import find_closest_index
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -78,16 +78,6 @@ def sigma_gas(
     """Return disk surface density [g/cm^2] at ``radius_cm``."""
     index = find_closest_index(radius_grid_cm, radius_cm)
     return float(surface_density_g_cm2[index])
-
-
-def rho_gas(
-    radius_cm: float,
-    density_g_cm3: FloatArray,
-    radius_grid_cm: FloatArray,
-) -> float:
-    """Return disk midplane density [g/cm^3] at ``radius_cm``."""
-    index = find_closest_index(radius_grid_cm, radius_cm)
-    return float(density_g_cm3[index])
 
 
 # ----------------------------------------------------------------------
@@ -169,7 +159,6 @@ class DiskProperties:
         radius_2_cm: float,
         active_node_mask: tuple[bool, bool],
         surface_density_g_cm2: FloatArray,
-        density_g_cm3: FloatArray,
         aspect_ratio: FloatArray,
         radius_grid_cm: FloatArray,
     ) -> "DiskProperties":
@@ -195,10 +184,10 @@ class DiskProperties:
             else np.nan,
         )
         density_values_g_cm3 = (
-            rho_gas(radius_1_cm, density_g_cm3, radius_grid_cm)
+            surface_density_values_g_cm2[0] / scale_height_cm
             if active_node_mask[0]
             else np.nan,
-            rho_gas(radius_2_cm, density_g_cm3, radius_grid_cm)
+            surface_density_values_g_cm2[1] / scale_height_cm
             if active_node_mask[1]
             else np.nan,
         )
@@ -317,7 +306,6 @@ class TimescaleCalculator:
         agn_properties: AGNProperties,
         radius_grid_cm: FloatArray,
         surface_density_g_cm2: FloatArray,
-        density_g_cm3: FloatArray,
         aspect_ratio: FloatArray,
         disk_inner_radius_cm: float,
         disk_outer_radius_cm: float,
@@ -327,7 +315,6 @@ class TimescaleCalculator:
         self.smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
         self.radius_grid_cm = radius_grid_cm
         self.surface_density_g_cm2 = surface_density_g_cm2
-        self.density_g_cm3 = density_g_cm3
         self.aspect_ratio = aspect_ratio
         self.disk_inner_radius_cm = float(disk_inner_radius_cm)
         self.disk_outer_radius_cm = float(disk_outer_radius_cm)
@@ -424,7 +411,6 @@ class TimescaleCalculator:
             radius_2_cm,
             active_node_mask,
             self.surface_density_g_cm2,
-            self.density_g_cm3,
             self.aspect_ratio,
             self.radius_grid_cm,
         )
@@ -486,7 +472,6 @@ class DampingCalculator:
         verbose: bool,
         radius_grid_cm: FloatArray,
         surface_density_g_cm2: FloatArray,
-        density_g_cm3: FloatArray,
         aspect_ratio: FloatArray,
         disk_inner_radius_cm: float,
         disk_outer_radius_cm: float,
@@ -502,7 +487,6 @@ class DampingCalculator:
             agn_properties,
             radius_grid_cm,
             surface_density_g_cm2,
-            density_g_cm3,
             aspect_ratio,
             self.disk_inner_radius_cm,
             self.disk_outer_radius_cm,
@@ -704,7 +688,7 @@ class DampingCalculator:
             / (1 - state.eccentricity**2)
             * (
                 1
-                + 2 * state.eccentricity * state.cos_omega
+                - 2 * state.eccentricity * state.cos_omega
                 + state.eccentricity**2
                 - (1 + state.eccentricity * state.cos_omega) ** 1.5
                 * state.cos_inclination
@@ -720,7 +704,7 @@ class DampingCalculator:
                 - (
                     state.eccentricity
                     + state.eccentricity * state.cos_omega**2
-                    + 2 * state.cos_omega
+                    - 2 * state.cos_omega
                 )
                 / np.sqrt(1 + state.eccentricity * state.cos_omega)
                 * state.cos_inclination

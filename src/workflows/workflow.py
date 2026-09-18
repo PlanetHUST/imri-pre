@@ -48,7 +48,6 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Disk migration model: {config.disk_model}")
-    print(f"Torque migration model: {config.migration_model}")
     print(f"Type-II migration: {config.consider_type_ii_migration}")
     print(f"gap_opening_condition: {config.gap_opening_condition}")
     print(f"Redshift: {config.redshift:.3e}")
@@ -79,6 +78,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
         f"{source_lisa_min_hz:.3e} to "
         f"{source_lisa_max_hz:.3e} Hz"
     )
+    print("Cosmic merge time: " f"{config.cosmic_merge_time_myr:.3e} Myr")
     print(f"Output directory: {config.output_dir}")
     print(
         "Damping CPU count: "

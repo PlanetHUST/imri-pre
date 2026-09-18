@@ -1,0 +1,204 @@
+{
+  "checkpoint": "F_parallel_reproducibility",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "workers=2: identical job set and order",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=2: identical per-job seeds",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=2: identical statuses",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=2: identical per-repeat task seeds",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=2: identical per-job result files (byte for byte)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=4: identical job set and order",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=4: identical per-job seeds",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=4: identical statuses",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=4: identical per-repeat task seeds",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "workers=4: identical per-job result files (byte for byte)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "all jobs succeeded",
+      "result": "PASS",
+      "detail": [
+        "success",
+        "success",
+        "success",
+        "success"
+      ]
+    },
+    {
+      "check": "no duplicate job identities",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "no duplicate seeds",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "no output collisions (one directory per job)",
+      "result": "PASS",
+      "detail": null
+    }
+  ],
+  "data": {
+    "runtimes_s": {
+      "1": 36.55192786200132,
+      "2": 19.742143458999635,
+      "4": 11.908490710000478
+    },
+    "signatures": {
+      "1": {
+        "job_ids": [
+          "n000003_b000001_r0000039",
+          "n000003_b000001_r0000040",
+          "n000003_b000001_r0000041",
+          "n000003_b000001_r0000042"
+        ],
+        "seeds": [
+          1902784078,
+          1603870487,
+          4047642140,
+          2627777537
+        ],
+        "statuses": [
+          "success",
+          "success",
+          "success",
+          "success"
+        ],
+        "n_imri": [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "rate_imri_per_myr": [
+          0.1,
+          0.1,
+          0.0,
+          0.0
+        ],
+        "task_seeds": [
+          "2321903621",
+          "2333413788",
+          "411201554",
+          "872920222"
+        ]
+      },
+      "2": {
+        "job_ids": [
+          "n000003_b000001_r0000039",
+          "n000003_b000001_r0000040",
+          "n000003_b000001_r0000041",
+          "n000003_b000001_r0000042"
+        ],
+        "seeds": [
+          1902784078,
+          1603870487,
+          4047642140,
+          2627777537
+        ],
+        "statuses": [
+          "success",
+          "success",
+          "success",
+          "success"
+        ],
+        "n_imri": [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "rate_imri_per_myr": [
+          0.1,
+          0.1,
+          0.0,
+          0.0
+        ],
+        "task_seeds": [
+          "2321903621",
+          "2333413788",
+          "411201554",
+          "872920222"
+        ]
+      },
+      "4": {
+        "job_ids": [
+          "n000003_b000001_r0000039",
+          "n000003_b000001_r0000040",
+          "n000003_b000001_r0000041",
+          "n000003_b000001_r0000042"
+        ],
+        "seeds": [
+          1902784078,
+          1603870487,
+          4047642140,
+          2627777537
+        ],
+        "statuses": [
+          "success",
+          "success",
+          "success",
+          "success"
+        ],
+        "n_imri": [
+          1.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "rate_imri_per_myr": [
+          0.1,
+          0.1,
+          0.0,
+          0.0
+        ],
+        "task_seeds": [
+          "2321903621",
+          "2333413788",
+          "411201554",
+          "872920222"
+        ]
+      }
+    }
+  }
+}

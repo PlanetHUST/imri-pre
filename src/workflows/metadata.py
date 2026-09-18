@@ -7,7 +7,7 @@ from typing import Any
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .config import IMRIDynConfig
-from .lisa_snr import (
+from lisa.snr import (
     COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
     LISA_AVERAGING_CONVENTION,
     LISA_ARM_LENGTH_M,
@@ -48,10 +48,11 @@ def build_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "disk_model": config.disk_model,
-            "migration_model": config.migration_model,
             "consider_type_ii_migration": config.consider_type_ii_migration,
             "gap_opening_condition": config.gap_opening_condition,
+            "gap_criterion": config.gap_criterion.to_dict(),
             "redshift": config.redshift,
+            "hubble_constant_per_myr": config.hubble_constant_per_myr,
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
             "source_lisa_min_gw_frequency_hz": gw_helpers.source_frame_gw_frequency_hz(
                 config.lisa_min_gw_frequency_hz,
@@ -69,6 +70,9 @@ def build_metadata(
                 config.detector_hubble_constant_km_s_mpc
             ),
             "detector_omega_m": config.detector_omega_m,
+            "cosmic_merge_time_myr": config.cosmic_merge_time_myr,
+            "cosmic_merge_smbh_mass_factor": config.cosmic_merge_smbh_mass_factor,
+            "cosmic_merge_radius_factor": config.cosmic_merge_radius_factor,
             "max_gw_time_myr": config.max_gw_time_myr,
             "gw_eccentricity": config.gw_eccentricity,
             "damping_cpu_count": config.damping_cpu_count,

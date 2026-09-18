@@ -1,0 +1,16 @@
+smbh_mass_msun,criterion,type_ii_cells,outward_torque_cells,stable_traps,anti_traps
+1000.0,kanagawa,943,0,0,0
+1000.0,kii,26,704,1,2
+1000.0,crida,843,0,0,0
+10000.0,kanagawa,845,0,0,0
+10000.0,kii,0,684,0,1
+10000.0,crida,207,477,3,4
+100000.0,kanagawa,640,0,0,0
+100000.0,kii,0,507,0,1
+100000.0,crida,0,507,0,1
+1000000.0,kanagawa,189,69,3,3
+1000000.0,kii,0,250,3,4
+1000000.0,crida,0,250,3,4
+10000000.0,kanagawa,0,0,0,0
+10000000.0,kii,0,0,0,0
+10000000.0,crida,0,0,0,0

@@ -1,0 +1,6 @@
+smbh_mass_msun,sign_changes,stable_traps,anti_traps,boundary_roots,unresolved_roots,outermost_stable_rg,strict_stable_traps,reproducible
+1000.0,0,0,0,0,0,,0,True
+10000.0,0,0,0,0,0,,0,True
+100000.0,0,0,0,0,0,,0,True
+1000000.0,8,3,3,0,2,102829.92601766769,0,True
+10000000.0,0,0,0,0,0,,0,True

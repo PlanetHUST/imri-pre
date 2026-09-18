@@ -1,0 +1,118 @@
+
+########################################################################
+                          IMRI DYN SIMULATION                           
+########################################################################
+Grid size: 1 x 1 = 1
+Repeats per point: 2
+Duty cycle: 1.000e+01 Myr
+Metallicity: 1.000e-05 Zsun
+Disk migration model: torque_with_trap
+Type-II migration: True
+gap_opening_condition: kanagawa
+Redshift: 1.500e+01
+LISA detector model: mission=4 yr, SNR threshold=20, H0=67.4 km/s/Mpc, Omega_m=0.315
+Observed LISA GW band: 1.000e-03 to 1.000e-01 Hz
+Source-frame LISA GW band: 1.600e-02 to 1.600e+00 Hz
+Cosmic merge time: 1.000e+03 Myr
+Output directory: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01
+Damping CPU count: 2
+
+------------------------------------------------------------------------
+    Grid Point 1/1: smbh_mass_msun=1.00e+05, nsc_mass_msun=5.00e+04     
+------------------------------------------------------------------------
+Repeat 1/2
+AGN initialized done.
+  cached pAGN disk profile for damping and migration work at smbh_mass_msun=1.000e+05
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.361e+01 to 1.960e+02 Msun
+formation time range is 2.252e+00 to 1.170e+01 Myr
+sma range is 1.033e+16 to 2.587e+18 cm
+eccentricity range is 4.116e-02 to 9.999e-01
+inclination range is 1.821e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.412e+01 to 1.840e+02 Msun
+formation time range is 2.283e+00 to 1.117e+01 Myr
+sma range is 1.033e+16 to 2.356e+18 cm
+eccentricity range is 4.803e-01 to 9.999e-01
+inclination range is 1.948e-01 to 2.686e+00 rad
+Geometry selection: 33/1154 objects selected (f_geo=2.860e-02)
+Relaxation times initialized, mean_trel_myr_geo = 9.232e+01 Myr
+Running 33 damping tasks with cpus=2, chunksize=4
+  total sampled objects : 1.154e+03
+  disk-crossing objects : 3.300e+01
+  f_geo                 : 2.860e-02
+  embedded stars        : 2.000e+00
+  embedded BHs          : 2.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 1.000e+00
+  no-IMRI objects       : 3.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 1.000e+00
+  detector unavailable  : 0.000e+00
+  SNR below threshold   : 1.000e+00
+  no frequency overlap  : 0.000e+00
+  detector input/model/numerical unavailable: 0/0/0
+  Band entry            : evaluated=4, in_domain=0, handoff=4, inside_isco=0, profile_error=0
+  Migration             : evaluated=4, finite=1, trap_bound=3, errors=0
+  Trap-bound mass       : 1.454186e+02 Msun
+  IMRI candidate rate   : 1.000e-01 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 1.840e+01 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0000.json
+Repeat 2/2
+AGN initialized done.
+Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
+initial population 
+mass range is 1.360e+01 to 1.962e+02 Msun
+formation time range is 2.252e+00 to 1.171e+01 Myr
+sma range is 1.701e+16 to 2.587e+18 cm
+eccentricity range is 2.174e-02 to 9.986e-01
+inclination range is 1.747e-01 to 2.967e+00 rad
+disk-crossing population 
+mass range is 1.373e+01 to 1.819e+02 Msun
+formation time range is 2.289e+00 to 1.157e+01 Myr
+sma range is 1.701e+16 to 2.267e+18 cm
+eccentricity range is 7.079e-01 to 9.986e-01
+inclination range is 4.038e-01 to 2.928e+00 rad
+Geometry selection: 20/1141 objects selected (f_geo=1.753e-02)
+Relaxation times initialized, mean_trel_myr_geo = 1.232e+02 Myr
+Running 20 damping tasks with cpus=2, chunksize=2
+  total sampled objects : 1.141e+03
+  disk-crossing objects : 2.000e+01
+  f_geo                 : 1.753e-02
+  embedded stars        : 1.000e+00
+  embedded BHs          : 1.000e+00
+  migration-formed BHs  : 0.000e+00
+  BH candidates         : 1.000e+00
+  IMRI candidates       : 0.000e+00
+  no-IMRI objects       : 2.000e+00
+  detectable IMRIs      : 0.000e+00
+  non-detectable IMRIs  : 0.000e+00
+  detector unavailable  : 0.000e+00
+  SNR below threshold   : 0.000e+00
+  no frequency overlap  : 0.000e+00
+  detector input/model/numerical unavailable: 0/0/0
+  Band entry            : evaluated=2, in_domain=0, handoff=2, inside_isco=0, profile_error=0
+  Migration             : evaluated=2, finite=0, trap_bound=2, errors=0
+  Trap-bound mass       : 1.164957e+02 Msun
+  IMRI candidate rate   : 0.000e+00 /Myr
+  detectable IMRI rate  : 0.000e+00 /Myr
+  candidate mass rate   : 0.000e+00 Msun/Myr
+  detectable mass rate  : 0.000e+00 Msun/Myr
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0001.json
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_averaged_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_events.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_repeat_results.csv
+
+########################################################################
+                          SIMULATION COMPLETE                           
+########################################################################
+Total simulations: 2
+Runtime: 2.35 s (0.04 min)
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_averaged_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_events.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/imri_repeat_results.csv
+saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.01/simulation_metadata.json

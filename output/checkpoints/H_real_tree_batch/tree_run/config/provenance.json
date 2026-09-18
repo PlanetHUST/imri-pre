@@ -1,0 +1,207 @@
+{
+  "created_iso": "2026-09-18T16:27:25.037799",
+  "tree": {
+    "path": "/home/planet/projects/ding/science/task_003/run/attachment/galaxy_1e12.csv",
+    "size_bytes": 2804280,
+    "modified_iso": "2026-09-17T15:56:56.568397",
+    "sha256_first_bytes": "85ce4c5a00a368e150c6c5ad6c19e875b1758bfbe65493b86d68f9c78df15fe8",
+    "sha256_first_bytes_count": 65536
+  },
+  "tree_columns_required": [
+    "z",
+    "m",
+    "Mstar",
+    "Z",
+    "MBH",
+    "inode",
+    "br"
+  ],
+  "tree_columns_ignored": [
+    "plc",
+    "br_b4",
+    "fc",
+    "sf",
+    "bh",
+    "brf",
+    "Mhot",
+    "Mcold",
+    "Mout",
+    "mZ",
+    "dM",
+    "Q",
+    "mlist",
+    "dt",
+    "gen",
+    "MSF",
+    "MBH2",
+    "Mgas",
+    "Mgas2",
+    "Mtde",
+    "Mtde2",
+    "Macc2"
+  ],
+  "tree_columns_present": [
+    "",
+    "plc",
+    "z",
+    "m",
+    "inode",
+    "br",
+    "br_b4",
+    "fc",
+    "sf",
+    "bh",
+    "brf",
+    "Mhot",
+    "Mcold",
+    "Mstar",
+    "Mout",
+    "mZ",
+    "Z",
+    "dM",
+    "Q",
+    "mlist",
+    "dt",
+    "gen",
+    "MSF",
+    "MBH",
+    "MBH2",
+    "Mgas",
+    "Mgas2",
+    "Mtde",
+    "Mtde2",
+    "Macc2"
+  ],
+  "config_source": "command line: scripts/run_interface_checkpoints.py",
+  "selection": {
+    "nodes": [
+      40.0,
+      80.0,
+      120.0,
+      160.0,
+      200.0,
+      240.0
+    ],
+    "branches": null,
+    "redshift_min": 6.005,
+    "redshift_max": 6.03,
+    "smbh_mass_min_msun": null,
+    "smbh_mass_max_msun": null,
+    "halo_mass_min_msun": null,
+    "halo_mass_max_msun": null,
+    "max_hosts": 12
+  },
+  "host_mapping_policy": {
+    "smbh_mass_source": "stellar-scaling",
+    "nsc_mass_source": "stellar-scaling",
+    "metallicity_source": "config",
+    "smbh_stellar_mass_fraction": 0.0001,
+    "nsc_stellar_mass_fraction": 0.0001,
+    "domain_smbh_mass_min_msun": 1000.0,
+    "domain_smbh_mass_max_msun": 1000000.0,
+    "domain_nsc_mass_min_msun": 100.0,
+    "domain_nsc_mass_max_msun": 100000000.0,
+    "domain_redshift_max": 30.0
+  },
+  "master_seed": 2026,
+  "seed_policy": "numpy.random.SeedSequence([master_seed, node_key, branch_key, record_index]) -> host base seed; kernel derive_task_seed(base_seed, 0, 0, repeat_index) per repeat",
+  "job_identity_policy": "job_id = host_id = n<node>_b<branch>_r<record_index>",
+  "workers": 4,
+  "mp_context": "spawn",
+  "damping_cpu_count_per_job": 1,
+  "code": {
+    "package": "bsi-trap",
+    "package_version": "0.1.0",
+    "python": "3.12.3",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39"
+  },
+  "jobs": [
+    {
+      "job_id": "n000080_b000001_r0002436",
+      "host_id": "n000080_b000001_r0002436",
+      "seed": 1565593868,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000080_b000001_r0002436"
+    },
+    {
+      "job_id": "n000080_b000001_r0002437",
+      "host_id": "n000080_b000001_r0002437",
+      "seed": 1894001443,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000080_b000001_r0002437"
+    },
+    {
+      "job_id": "n000080_b000001_r0002438",
+      "host_id": "n000080_b000001_r0002438",
+      "seed": 829633638,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000080_b000001_r0002438"
+    },
+    {
+      "job_id": "n000080_b000001_r0002439",
+      "host_id": "n000080_b000001_r0002439",
+      "seed": 1198734045,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000080_b000001_r0002439"
+    },
+    {
+      "job_id": "n000080_b000001_r0002440",
+      "host_id": "n000080_b000001_r0002440",
+      "seed": 1462058175,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000080_b000001_r0002440"
+    },
+    {
+      "job_id": "n000120_b000001_r0003480",
+      "host_id": "n000120_b000001_r0003480",
+      "seed": 1865959005,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003480"
+    },
+    {
+      "job_id": "n000120_b000001_r0003481",
+      "host_id": "n000120_b000001_r0003481",
+      "seed": 4174499819,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003481"
+    },
+    {
+      "job_id": "n000120_b000001_r0003482",
+      "host_id": "n000120_b000001_r0003482",
+      "seed": 190094306,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003482"
+    },
+    {
+      "job_id": "n000120_b000001_r0003483",
+      "host_id": "n000120_b000001_r0003483",
+      "seed": 4179709748,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003483"
+    },
+    {
+      "job_id": "n000120_b000001_r0003484",
+      "host_id": "n000120_b000001_r0003484",
+      "seed": 2535270193,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003484"
+    },
+    {
+      "job_id": "n000120_b000001_r0003485",
+      "host_id": "n000120_b000001_r0003485",
+      "seed": 1576701404,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000120_b000001_r0003485"
+    },
+    {
+      "job_id": "n000160_b000001_r0004813",
+      "host_id": "n000160_b000001_r0004813",
+      "seed": 2584343022,
+      "status": "success",
+      "output_path": "/home/planet/projects/ding/science/task_003/run/attachment/output/checkpoints/H_real_tree_batch/tree_run/simulations/n000160_b000001_r0004813"
+    }
+  ],
+  "scope_note": "Host-level single-halo results only; no cosmic-rate, comoving density or all-sky aggregation is performed."
+}

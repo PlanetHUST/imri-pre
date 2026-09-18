@@ -1,0 +1,38 @@
+{
+  "fixture": {
+    "rows_seen": 9,
+    "rows_selected": 6,
+    "missing_required_field": 1,
+    "invalid_redshift": 1,
+    "invalid_halo_mass": 0,
+    "invalid_bh_mass": 1,
+    "outside_selection": 0,
+    "truncated_by_max_hosts": 0
+  },
+  "real": {
+    "rows_seen": 2839,
+    "rows_selected": 40,
+    "missing_required_field": 0,
+    "invalid_redshift": 0,
+    "invalid_halo_mass": 0,
+    "invalid_bh_mass": 0,
+    "outside_selection": 2798,
+    "truncated_by_max_hosts": 1
+  },
+  "chunk_signatures": {
+    "fixture": {
+      "1": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+      "2": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+      "3": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+      "4": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+      "7": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00",
+      "1000": "a69c13e42a97a0544cc2e71c6abb94f80eb1df9dede69bd47e0a9c0cf25e4e00"
+    },
+    "real": {
+      "50": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+      "333": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+      "1000": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f",
+      "50000": "615fcde0126eb369d867b20cf04e40803a29c0f9ed8333bc6709e7f992b3095f"
+    }
+  }
+}
