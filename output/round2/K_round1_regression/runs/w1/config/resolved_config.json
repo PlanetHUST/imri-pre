@@ -1,0 +1,82 @@
+{
+  "base_config": {
+    "smbh_masses_msun": [
+      1000.0,
+      10000.0,
+      100000.0,
+      1000000.0
+    ],
+    "nsc_masses_msun": [
+      200000.0
+    ],
+    "num_repeats": 1,
+    "duty_cycle_myr": 10.0,
+    "output_dir": "/home/planet/projects/ding/science/task_003/run/attachment/output/round2/K_round1_regression/runs/unused",
+    "metallicity": 1e-05,
+    "initial_stellar_density_gamma": 1.75,
+    "use_disk_inner_radius": true,
+    "consider_type_ii_migration": true,
+    "disk_model": "torque_with_trap",
+    "lisa_min_gw_frequency_hz": 0.001,
+    "lisa_max_gw_frequency_hz": 0.1,
+    "max_gw_time_myr": 13600.0,
+    "gw_eccentricity": 0.0,
+    "redshift": 15,
+    "hubble_constant_per_myr": 7.352941176470588e-05,
+    "snr_threshold": 20.0,
+    "lisa_mission_duration_years": 4.0,
+    "detector_hubble_constant_km_s_mpc": 67.4,
+    "detector_omega_m": 0.315,
+    "cosmic_merge_time_myr": 1000.0,
+    "cosmic_merge_smbh_mass_factor": 2.0,
+    "cosmic_merge_radius_factor": 2.0,
+    "damping_cpu_count": 1,
+    "checkpoint_grid_interval": 5,
+    "print_debug_results": false,
+    "base_seed": 0,
+    "nsc_radius_pc_at_reference_mass": 3.31,
+    "nsc_radius_mass_slope": 0.321,
+    "nsc_radius_reference_mass_msun": 3600000.0,
+    "gap_opening_condition": "kanagawa",
+    "gap_parameter_threshold": null
+  },
+  "host_mapping_policy": {
+    "smbh_mass_source": "stellar-scaling",
+    "nsc_mass_source": "stellar-scaling",
+    "metallicity_source": "config",
+    "smbh_stellar_mass_fraction": 0.0001,
+    "nsc_stellar_mass_fraction": 0.0001,
+    "domain_smbh_mass_min_msun": 1000.0,
+    "domain_smbh_mass_max_msun": 1000000.0,
+    "domain_nsc_mass_min_msun": 100.0,
+    "domain_nsc_mass_max_msun": 100000000.0,
+    "domain_redshift_max": 30.0
+  },
+  "host_selection": {
+    "nodes": [
+      3.0,
+      200.0
+    ],
+    "branches": null,
+    "redshift_min": null,
+    "redshift_max": null,
+    "smbh_mass_min_msun": null,
+    "smbh_mass_max_msun": null,
+    "halo_mass_min_msun": null,
+    "halo_mass_max_msun": null,
+    "max_hosts": 4
+  },
+  "batch_settings": {
+    "workers": 1,
+    "chunk_size": 50000,
+    "master_seed": 2026,
+    "mp_context": "spawn",
+    "make_figures": false
+  },
+  "host_dependent_parameters": [
+    "redshift",
+    "smbh_mass_msun",
+    "nsc_mass_msun",
+    "metallicity_zsun"
+  ]
+}

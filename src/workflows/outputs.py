@@ -18,7 +18,7 @@ from .config import (
     IMRIDynConfig,
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
-from .lisa_snr import (
+from lisa.snr import (
     SNR_STATUS_EVALUATED,
     SNR_STATUS_MODEL_UNAVAILABLE,
     SNR_STATUS_NO_OVERLAP,
@@ -1063,7 +1063,6 @@ def save_migration_diagnostics(
         "m_nsc_msun": json_float(result.m_nsc_msun),
         "repeat": result.repeat_idx,
         "disk_model": result.disk_model,
-        "migration_model": config.migration_model,
         "redshift": json_float(config.redshift),
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,

@@ -1,0 +1,95 @@
+{
+  "checkpoint": "H_event_classification",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "the funnel narrows: disk-crossing <= sampled",
+      "result": "PASS",
+      "detail": {
+        "initial_sampled": 1140,
+        "disk_crossing": 23,
+        "embedded_stars": 4,
+        "embedded_bhs": 0,
+        "migration_formed_bhs": 0,
+        "bh_candidates": 0,
+        "band_entry_evaluated": 4,
+        "migration_evaluated": 4,
+        "migration_finite": 4,
+        "migration_trap_bound": 0,
+        "imri_candidates": 0,
+        "no_imri": 4,
+        "detectable_imris": 0,
+        "outside_or_failed": 19,
+        "migration_errors": 0,
+        "profile_errors": 0,
+        "band_entry_inside_isco": 0
+      }
+    },
+    {
+      "check": "BH candidates <= embedded + migration-formed",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "IMRI candidates <= BH candidates",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "detectable IMRIs <= IMRI candidates",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "migration outcomes are partitioned (finite + trap-bound <= evaluated)",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "every stage count is a nonnegative integer",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "every evaluated object carries an event-rate reason",
+      "result": "PASS",
+      "detail": 4
+    },
+    {
+      "check": "a physical zero is distinguishable from a failure",
+      "result": "PASS",
+      "detail": {
+        "imri": 0,
+        "profile_errors": 0,
+        "migration_errors": 0
+      }
+    }
+  ],
+  "data": {
+    "stages": {
+      "initial_sampled": 1140,
+      "disk_crossing": 23,
+      "embedded_stars": 4,
+      "embedded_bhs": 0,
+      "migration_formed_bhs": 0,
+      "bh_candidates": 0,
+      "band_entry_evaluated": 4,
+      "migration_evaluated": 4,
+      "migration_finite": 4,
+      "migration_trap_bound": 0,
+      "imri_candidates": 0,
+      "no_imri": 4,
+      "detectable_imris": 0,
+      "outside_or_failed": 19,
+      "migration_errors": 0,
+      "profile_errors": 0,
+      "band_entry_inside_isco": 0
+    },
+    "event_rate_reasons": {
+      "not_bh_before_gas_final": 4
+    },
+    "detect_rate_reasons": {
+      "not_imri_candidate": 4
+    }
+  }
+}

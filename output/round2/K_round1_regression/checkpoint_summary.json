@@ -1,0 +1,46 @@
+{
+  "checkpoint": "K_round1_regression",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "single-halo CLI still runs",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "tree batch CLI still runs (workers=1)",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "tree batch CLI still runs (workers=4)",
+      "result": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "serial and parallel job sets are identical",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "serial and parallel seeds are identical",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "serial and parallel scientific results are identical",
+      "result": "PASS",
+      "detail": []
+    },
+    {
+      "check": "host mapping provenance is preserved",
+      "result": "PASS",
+      "detail": null
+    }
+  ],
+  "data": {
+    "status_counts": {
+      "success": 4
+    }
+  }
+}

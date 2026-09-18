@@ -1,0 +1,46 @@
+{
+  "checkpoint": "D_migration_components",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "Gamma_0 is positive everywhere",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "all torque components are finite",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "Type-II torque is inward (negative) everywhere",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "the total torque changes sign (a trap can exist)",
+      "result": "PASS",
+      "detail": {
+        "positive_cells": 507,
+        "negative_cells": 493
+      }
+    },
+    {
+      "check": "Type-I equals (corotation*attenuation + lindblad)/denominator * Gamma_0",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "gap attenuation is in [0, 1]",
+      "result": "PASS",
+      "detail": null
+    }
+  ],
+  "data": {
+    "dominant_component_cells": {
+      "lindblad": 611,
+      "thermal": 389
+    },
+    "sign_changes_total": 1
+  }
+}

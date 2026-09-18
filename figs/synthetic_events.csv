@@ -1,0 +1,49 @@
+disk_model,redshift,m_smbh_msun,m_nsc_msun,repeat,object_index,gas_final_time_myr,detection_time_myr,is_imri_candidate,migration_status,band_entry_status,gas_stop_reason,event_rate_class,detect_rate_class,is_lisa_detectable
+torque_with_trap,10,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+torque_with_trap,10,1000.0,200000.0,0,1,8.0,12.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+torque_with_trap,10,10000.0,200000.0,0,0,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,10,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,10,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+torque_with_trap,10,10000.0,200000.0,1,1,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,10,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,10,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+torque_with_trap,12,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+torque_with_trap,12,1000.0,200000.0,0,1,8.0,inf,True,finite,entry_in_migration_domain,entry_reached,imri candi,non-detectable,False
+torque_with_trap,12,10000.0,200000.0,0,0,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,12,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,12,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+torque_with_trap,12,10000.0,200000.0,1,1,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,12,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,12,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+torque_with_trap,15,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+torque_with_trap,15,1000.0,200000.0,0,1,8.0,inf,True,finite,entry_in_migration_domain,entry_reached,imri candi,non-detectable,False
+torque_with_trap,15,10000.0,200000.0,0,0,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,15,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,15,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+torque_with_trap,15,10000.0,200000.0,1,1,10.0,inf,False,trap_bound,entry_in_migration_domain,migration_trap_bound,no-IMRI,not evaluated,
+torque_with_trap,15,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+torque_with_trap,15,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,10,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+semi_without_trap,10,1000.0,200000.0,0,1,8.0,12.0,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,10,10000.0,200000.0,0,0,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,10,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,10,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,10,10000.0,200000.0,1,1,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,10,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,10,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,12,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+semi_without_trap,12,1000.0,200000.0,0,1,8.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,12,10000.0,200000.0,0,0,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,12,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,12,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,12,10000.0,200000.0,1,1,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,12,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,12,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,15,1000.0,200000.0,0,0,2.0,5.0,True,finite,entry_in_migration_domain,entry_reached,imri candi,imri data,True
+semi_without_trap,15,1000.0,200000.0,0,1,8.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,15,10000.0,200000.0,0,0,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,15,100000.0,200000.0,0,0,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,15,1000000.0,200000.0,0,0,,inf,,profile_error,profile_error,,not evaluated,not evaluated,
+semi_without_trap,15,10000.0,200000.0,1,1,10.0,inf,False,finite,entry_in_migration_domain,entry_reached,no-IMRI,not evaluated,
+semi_without_trap,15,100000.0,200000.0,1,1,,inf,,not_evaluated,band_entry_inside_isco,band_entry_inside_isco,not evaluated,not evaluated,
+semi_without_trap,15,1000000.0,200000.0,1,1,,inf,,profile_error,profile_error,,not evaluated,not evaluated,

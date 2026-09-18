@@ -1,0 +1,79 @@
+{
+  "checkpoint": "E_gap_regime_transition",
+  "status": "PASS",
+  "checks": [
+    {
+      "check": "gap decision matches the Type-II cell selection",
+      "result": "PASS",
+      "detail": [
+        {
+          "criterion": "kanagawa",
+          "gap_open_cells": 640,
+          "gap_open_fraction": 0.64,
+          "type_ii_cells": 640
+        },
+        {
+          "criterion": "kii",
+          "gap_open_cells": 0,
+          "gap_open_fraction": 0.0,
+          "type_ii_cells": 0
+        },
+        {
+          "criterion": "crida",
+          "gap_open_cells": 0,
+          "gap_open_fraction": 0.0,
+          "type_ii_cells": 0
+        }
+      ]
+    },
+    {
+      "check": "the two K definitions differ by exactly h^-3",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "the kii and kanagawa criteria disagree on this disk (documented model ambiguity)",
+      "result": "PASS",
+      "detail": {
+        "kanagawa": 640,
+        "kii": 0,
+        "crida": 0
+      }
+    },
+    {
+      "check": "the regime transition is discontinuous, as the model intends",
+      "result": "PASS",
+      "detail": {
+        "max_relative_jump": 45575.30800710308
+      }
+    }
+  ],
+  "data": {
+    "criteria": [
+      {
+        "criterion": "kanagawa",
+        "gap_open_cells": 640,
+        "gap_open_fraction": 0.64,
+        "type_ii_cells": 640
+      },
+      {
+        "criterion": "kii",
+        "gap_open_cells": 0,
+        "gap_open_fraction": 0.0,
+        "type_ii_cells": 0
+      },
+      {
+        "criterion": "crida",
+        "gap_open_cells": 0,
+        "gap_open_fraction": 0.0,
+        "type_ii_cells": 0
+      }
+    ],
+    "regime_switch_cells": 3,
+    "relative_torque_jump_at_switch": [
+      45575.30800710308,
+      7208.492621224765,
+      4585.0460424347275
+    ]
+  }
+}

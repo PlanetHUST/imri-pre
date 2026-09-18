@@ -1,0 +1,153 @@
+disk_model,m_smbh_msun,m_nsc_msun,variable,category,count,denominator,fraction,result_state
+semi_without_trap,1000,200000,band_entry_status,entry_in_migration_domain,6,6,1,valid
+semi_without_trap,1000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+semi_without_trap,1000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+semi_without_trap,1000,200000,band_entry_status,profile_error,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,already_inside_lisa_entry,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,entry_reached,6,6,1,valid
+semi_without_trap,1000,200000,transport_status,gas_to_gw_handoff,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,gw_dominates_at_start,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,gw_dominates_after_gas,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,duty_cycle_limited,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,damping_misses_duty_cycle,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,migration_trap_bound,0,6,0,valid
+semi_without_trap,1000,200000,transport_status,invalid_radius,0,6,0,valid
+semi_without_trap,1000,200000,event_outcome,imri candi,3,6,0.5,valid
+semi_without_trap,1000,200000,event_outcome,no-IMRI,3,6,0.5,valid
+semi_without_trap,1000,200000,event_outcome,not evaluated,0,6,0,valid
+semi_without_trap,1000,200000,detectability_outcome,imri data,3,6,0.5,valid
+semi_without_trap,1000,200000,detectability_outcome,non-detectable,0,6,0,valid
+semi_without_trap,1000,200000,detectability_outcome,not evaluated,3,6,0.5,valid
+semi_without_trap,10000,200000,band_entry_status,entry_in_migration_domain,0,6,0,valid
+semi_without_trap,10000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,6,6,1,valid
+semi_without_trap,10000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+semi_without_trap,10000,200000,band_entry_status,profile_error,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,already_inside_lisa_entry,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,entry_reached,6,6,1,valid
+semi_without_trap,10000,200000,transport_status,gas_to_gw_handoff,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,gw_dominates_at_start,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,gw_dominates_after_gas,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,duty_cycle_limited,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,damping_misses_duty_cycle,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,migration_trap_bound,0,6,0,valid
+semi_without_trap,10000,200000,transport_status,invalid_radius,0,6,0,valid
+semi_without_trap,10000,200000,event_outcome,imri candi,0,6,0,valid
+semi_without_trap,10000,200000,event_outcome,no-IMRI,6,6,1,valid
+semi_without_trap,10000,200000,event_outcome,not evaluated,0,6,0,valid
+semi_without_trap,10000,200000,detectability_outcome,imri data,0,6,0,valid
+semi_without_trap,10000,200000,detectability_outcome,non-detectable,0,6,0,valid
+semi_without_trap,10000,200000,detectability_outcome,not evaluated,6,6,1,valid
+semi_without_trap,100000,200000,band_entry_status,entry_in_migration_domain,0,6,0,valid
+semi_without_trap,100000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+semi_without_trap,100000,200000,band_entry_status,band_entry_inside_isco,6,6,1,valid
+semi_without_trap,100000,200000,band_entry_status,profile_error,0,6,0,valid
+semi_without_trap,100000,200000,transport_status,already_inside_lisa_entry,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,entry_reached,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,gas_to_gw_handoff,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,gw_dominates_at_start,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,gw_dominates_after_gas,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,duty_cycle_limited,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,damping_misses_duty_cycle,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,migration_trap_bound,0,0,,unavailable
+semi_without_trap,100000,200000,transport_status,invalid_radius,0,0,,unavailable
+semi_without_trap,100000,200000,event_outcome,imri candi,0,6,0,valid
+semi_without_trap,100000,200000,event_outcome,no-IMRI,0,6,0,valid
+semi_without_trap,100000,200000,event_outcome,not evaluated,6,6,1,valid
+semi_without_trap,100000,200000,detectability_outcome,imri data,0,6,0,valid
+semi_without_trap,100000,200000,detectability_outcome,non-detectable,0,6,0,valid
+semi_without_trap,100000,200000,detectability_outcome,not evaluated,6,6,1,valid
+semi_without_trap,1000000,200000,band_entry_status,entry_in_migration_domain,0,6,0,valid
+semi_without_trap,1000000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+semi_without_trap,1000000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+semi_without_trap,1000000,200000,band_entry_status,profile_error,6,6,1,valid
+semi_without_trap,1000000,200000,transport_status,already_inside_lisa_entry,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,entry_reached,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,gas_to_gw_handoff,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,gw_dominates_at_start,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,gw_dominates_after_gas,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,duty_cycle_limited,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,damping_misses_duty_cycle,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,migration_trap_bound,0,0,,unavailable
+semi_without_trap,1000000,200000,transport_status,invalid_radius,0,0,,unavailable
+semi_without_trap,1000000,200000,event_outcome,imri candi,0,6,0,valid
+semi_without_trap,1000000,200000,event_outcome,no-IMRI,0,6,0,valid
+semi_without_trap,1000000,200000,event_outcome,not evaluated,6,6,1,valid
+semi_without_trap,1000000,200000,detectability_outcome,imri data,0,6,0,valid
+semi_without_trap,1000000,200000,detectability_outcome,non-detectable,0,6,0,valid
+semi_without_trap,1000000,200000,detectability_outcome,not evaluated,6,6,1,valid
+torque_with_trap,1000,200000,band_entry_status,entry_in_migration_domain,6,6,1,valid
+torque_with_trap,1000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+torque_with_trap,1000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+torque_with_trap,1000,200000,band_entry_status,profile_error,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,already_inside_lisa_entry,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,entry_reached,6,6,1,valid
+torque_with_trap,1000,200000,transport_status,gas_to_gw_handoff,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,gw_dominates_at_start,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,gw_dominates_after_gas,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,duty_cycle_limited,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,damping_misses_duty_cycle,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,migration_trap_bound,0,6,0,valid
+torque_with_trap,1000,200000,transport_status,invalid_radius,0,6,0,valid
+torque_with_trap,1000,200000,event_outcome,imri candi,6,6,1,valid
+torque_with_trap,1000,200000,event_outcome,no-IMRI,0,6,0,valid
+torque_with_trap,1000,200000,event_outcome,not evaluated,0,6,0,valid
+torque_with_trap,1000,200000,detectability_outcome,imri data,4,6,0.6666666667,valid
+torque_with_trap,1000,200000,detectability_outcome,non-detectable,2,6,0.3333333333,valid
+torque_with_trap,1000,200000,detectability_outcome,not evaluated,0,6,0,valid
+torque_with_trap,10000,200000,band_entry_status,entry_in_migration_domain,6,6,1,valid
+torque_with_trap,10000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+torque_with_trap,10000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+torque_with_trap,10000,200000,band_entry_status,profile_error,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,already_inside_lisa_entry,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,entry_reached,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,gas_to_gw_handoff,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,gw_dominates_at_start,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,gw_dominates_after_gas,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,duty_cycle_limited,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,damping_misses_duty_cycle,0,6,0,valid
+torque_with_trap,10000,200000,transport_status,migration_trap_bound,6,6,1,valid
+torque_with_trap,10000,200000,transport_status,invalid_radius,0,6,0,valid
+torque_with_trap,10000,200000,event_outcome,imri candi,0,6,0,valid
+torque_with_trap,10000,200000,event_outcome,no-IMRI,6,6,1,valid
+torque_with_trap,10000,200000,event_outcome,not evaluated,0,6,0,valid
+torque_with_trap,10000,200000,detectability_outcome,imri data,0,6,0,valid
+torque_with_trap,10000,200000,detectability_outcome,non-detectable,0,6,0,valid
+torque_with_trap,10000,200000,detectability_outcome,not evaluated,6,6,1,valid
+torque_with_trap,100000,200000,band_entry_status,entry_in_migration_domain,0,6,0,valid
+torque_with_trap,100000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+torque_with_trap,100000,200000,band_entry_status,band_entry_inside_isco,6,6,1,valid
+torque_with_trap,100000,200000,band_entry_status,profile_error,0,6,0,valid
+torque_with_trap,100000,200000,transport_status,already_inside_lisa_entry,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,entry_reached,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,gas_to_gw_handoff,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,gw_dominates_at_start,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,gw_dominates_after_gas,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,duty_cycle_limited,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,damping_misses_duty_cycle,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,migration_trap_bound,0,0,,unavailable
+torque_with_trap,100000,200000,transport_status,invalid_radius,0,0,,unavailable
+torque_with_trap,100000,200000,event_outcome,imri candi,0,6,0,valid
+torque_with_trap,100000,200000,event_outcome,no-IMRI,0,6,0,valid
+torque_with_trap,100000,200000,event_outcome,not evaluated,6,6,1,valid
+torque_with_trap,100000,200000,detectability_outcome,imri data,0,6,0,valid
+torque_with_trap,100000,200000,detectability_outcome,non-detectable,0,6,0,valid
+torque_with_trap,100000,200000,detectability_outcome,not evaluated,6,6,1,valid
+torque_with_trap,1000000,200000,band_entry_status,entry_in_migration_domain,0,6,0,valid
+torque_with_trap,1000000,200000,band_entry_status,entry_below_migration_domain_but_above_isco,0,6,0,valid
+torque_with_trap,1000000,200000,band_entry_status,band_entry_inside_isco,0,6,0,valid
+torque_with_trap,1000000,200000,band_entry_status,profile_error,6,6,1,valid
+torque_with_trap,1000000,200000,transport_status,already_inside_lisa_entry,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,entry_reached,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,gas_to_gw_handoff,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,gw_dominates_at_start,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,gw_dominates_after_gas,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,duty_cycle_limited,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,damping_misses_duty_cycle,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,migration_trap_bound,0,0,,unavailable
+torque_with_trap,1000000,200000,transport_status,invalid_radius,0,0,,unavailable
+torque_with_trap,1000000,200000,event_outcome,imri candi,0,6,0,valid
+torque_with_trap,1000000,200000,event_outcome,no-IMRI,0,6,0,valid
+torque_with_trap,1000000,200000,event_outcome,not evaluated,6,6,1,valid
+torque_with_trap,1000000,200000,detectability_outcome,imri data,0,6,0,valid
+torque_with_trap,1000000,200000,detectability_outcome,non-detectable,0,6,0,valid
+torque_with_trap,1000000,200000,detectability_outcome,not evaluated,6,6,1,valid
