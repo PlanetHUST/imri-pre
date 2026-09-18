@@ -26,6 +26,8 @@ from workflows.lisa_snr import (  # noqa: E402
     SNR_STATUS_NUMERICAL_FAILURE,
     SNR_STATUS_NO_OVERLAP,
     SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE,
+    SNR_WINDOW_PLACEMENT_BAND_ENTRY,
+    SNR_WINDOW_PLACEMENT_OPTIMAL,
     evaluate_lisa_inspiral_snr,
     fourier_inspiral_amplitude_hz_inverse,
     inspiral_time_to_coalescence_s,
@@ -34,7 +36,7 @@ from workflows.lisa_snr import (  # noqa: E402
     lisa_effective_strain_psd_hz,
     lisa_instrument_strain_psd_hz,
     luminosity_distance_mpc,
-    mission_observation_window,
+    mission_observation_window as _mission_observation_window,
     observed_frequency_from_time_to_coalescence_hz,
     source_chirp_mass_msun,
 )
@@ -367,6 +369,12 @@ def validate_cosmology() -> None:
 
 
 def validate_windows() -> None:
+    def mission_observation_window(**kwargs):
+        """Pin these cases to the legacy band-entry start semantics."""
+        return _mission_observation_window(
+            window_placement=SNR_WINDOW_PLACEMENT_BAND_ENTRY, **kwargs
+        )
+
     result = demo_result()
     detector_chirp_mass_msun = result.chirp_mass_detector_msun
     tau_at_entry_s = inspiral_time_to_coalescence_s(
@@ -455,6 +463,128 @@ def validate_windows() -> None:
     ):
         print(
             f"{name:28s} {window.observation_case:55s} "
+            f"[{window.f_low_hz:.6e}, {window.f_high_hz:.6e}]"
+        )
+
+    validate_optimal_placement_windows()
+
+
+def validate_optimal_placement_windows() -> None:
+    """Optimal placement must close the window at the loud end of the track."""
+    result = demo_result()
+    detector_chirp_mass_msun = result.chirp_mass_detector_msun
+
+    # A source sitting at band entry, still far from merger: the mission is
+    # moved forward to the observed ISCO instead of sampling the faint start.
+    slow_chirp_mass_msun = (1.0 + 0.1) * source_chirp_mass_msun(10.0, 10.0)
+    optimal_slow = _mission_observation_window(
+        current_observed_frequency_hz=DEMO_F_MIN_HZ,
+        f_isco_observer_hz=0.1,
+        chirp_mass_detector_msun=slow_chirp_mass_msun,
+        detector_min_frequency_hz=DEMO_F_MIN_HZ,
+        detector_max_frequency_hz=DEMO_F_MAX_HZ,
+        mission_duration_years=DEMO_MISSION_YEARS,
+        window_placement=SNR_WINDOW_PLACEMENT_OPTIMAL,
+    )
+    band_entry_slow = _mission_observation_window(
+        current_observed_frequency_hz=DEMO_F_MIN_HZ,
+        f_isco_observer_hz=0.1,
+        chirp_mass_detector_msun=slow_chirp_mass_msun,
+        detector_min_frequency_hz=DEMO_F_MIN_HZ,
+        detector_max_frequency_hz=DEMO_F_MAX_HZ,
+        mission_duration_years=DEMO_MISSION_YEARS,
+        window_placement=SNR_WINDOW_PLACEMENT_BAND_ENTRY,
+    )
+    assert optimal_slow.status == SNR_STATUS_EVALUATED
+    assert optimal_slow.observation_case == (
+        "optimal_mission_limited_pre_merger:reaches_isco_during_mission"
+    )
+    # Window closes at the top of the available band, not just above f_min.
+    assert np.isclose(optimal_slow.f_high_hz, DEMO_F_MAX_HZ)
+    assert optimal_slow.f_low_hz > band_entry_slow.f_high_hz
+    assert np.isclose(
+        optimal_slow.observation_duration_years, DEMO_MISSION_YEARS
+    )
+
+    # The mission never starts below the band or before the source is there.
+    assert optimal_slow.f_low_hz >= DEMO_F_MIN_HZ
+
+    # A source whose whole residual inspiral is shorter than the mission keeps
+    # the full track and reports the true (shorter) observation duration.
+    tau_to_isco_s = inspiral_time_to_coalescence_s(
+        DEMO_F_MIN_HZ, detector_chirp_mass_msun
+    ) - inspiral_time_to_coalescence_s(
+        result.f_isco_observer_hz, detector_chirp_mass_msun
+    )
+    assert tau_to_isco_s < DEMO_MISSION_YEARS * JULIAN_YEAR_S
+    optimal_full = _mission_observation_window(
+        current_observed_frequency_hz=DEMO_F_MIN_HZ,
+        f_isco_observer_hz=result.f_isco_observer_hz,
+        chirp_mass_detector_msun=detector_chirp_mass_msun,
+        detector_min_frequency_hz=DEMO_F_MIN_HZ,
+        detector_max_frequency_hz=DEMO_F_MAX_HZ,
+        mission_duration_years=DEMO_MISSION_YEARS,
+        window_placement=SNR_WINDOW_PLACEMENT_OPTIMAL,
+    )
+    assert optimal_full.observation_case == (
+        "optimal_full_residual_inspiral:reaches_isco_during_mission"
+    )
+    assert np.isclose(optimal_full.f_low_hz, DEMO_F_MIN_HZ)
+    assert np.isclose(optimal_full.f_high_hz, result.f_isco_observer_hz)
+    assert optimal_full.observation_duration_years < DEMO_MISSION_YEARS
+
+    # No-overlap guards are shared with band-entry placement.
+    optimal_no_overlap = _mission_observation_window(
+        current_observed_frequency_hz=DEMO_F_MIN_HZ,
+        f_isco_observer_hz=5.0e-4,
+        chirp_mass_detector_msun=detector_chirp_mass_msun,
+        detector_min_frequency_hz=DEMO_F_MIN_HZ,
+        detector_max_frequency_hz=DEMO_F_MAX_HZ,
+        mission_duration_years=DEMO_MISSION_YEARS,
+        window_placement=SNR_WINDOW_PLACEMENT_OPTIMAL,
+    )
+    assert optimal_no_overlap.status == SNR_STATUS_NO_OVERLAP
+
+    with np.testing.assert_raises(ValueError):
+        _mission_observation_window(
+            current_observed_frequency_hz=DEMO_F_MIN_HZ,
+            f_isco_observer_hz=result.f_isco_observer_hz,
+            chirp_mass_detector_msun=detector_chirp_mass_msun,
+            detector_min_frequency_hz=DEMO_F_MIN_HZ,
+            detector_max_frequency_hz=DEMO_F_MAX_HZ,
+            mission_duration_years=DEMO_MISSION_YEARS,
+            window_placement="not_a_placement",
+        )
+
+    # Optimal placement can only ever help: same source, never a lower SNR.
+    for redshift in (1.0, 5.0, 10.0, 15.0):
+        common = dict(
+            m1_source_msun=1.0e4,
+            m2_source_msun=50.0,
+            redshift=redshift,
+            current_observed_frequency_hz=DEMO_F_MIN_HZ,
+            mission_duration_years=DEMO_MISSION_YEARS,
+            detector_min_frequency_hz=DEMO_F_MIN_HZ,
+            detector_max_frequency_hz=DEMO_F_MAX_HZ,
+            snr_threshold=20.0,
+        )
+        entry_snr = evaluate_lisa_inspiral_snr(
+            **common, window_placement=SNR_WINDOW_PLACEMENT_BAND_ENTRY
+        )
+        optimal_snr = evaluate_lisa_inspiral_snr(
+            **common, window_placement=SNR_WINDOW_PLACEMENT_OPTIMAL
+        )
+        assert optimal_snr.status == SNR_STATUS_EVALUATED
+        assert optimal_snr.window_placement == SNR_WINDOW_PLACEMENT_OPTIMAL
+        assert optimal_snr.lisa_snr >= entry_snr.lisa_snr
+
+    print("\nOptimal-placement observation windows")
+    for name, window in (
+        ("slow_source_moved_to_isco", optimal_slow),
+        ("short_residual_keeps_track", optimal_full),
+    ):
+        print(
+            f"{name:28s} {window.observation_case:60s} "
             f"[{window.f_low_hz:.6e}, {window.f_high_hz:.6e}]"
         )
 

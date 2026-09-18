@@ -449,6 +449,7 @@ class IMRIEventEvaluator:
                 eccentricity=self.config.gw_eccentricity,
                 snr_threshold=self.config.snr_threshold,
                 mission_duration_years=self.config.lisa_mission_duration_years,
+                snr_window_placement=self.config.snr_window_placement,
                 detector_hubble_constant_km_s_mpc=(
                     self.config.detector_hubble_constant_km_s_mpc
                 ),
@@ -596,6 +597,7 @@ class IMRIEventEvaluator:
                 detect_decision.snr_observation_duration_years
             ),
             "snr_observation_case": detect_decision.snr_observation_case,
+            "snr_window_placement": detect_decision.snr_window_placement,
             "snr_threshold": self.config.snr_threshold,
             "monte_carlo_event_weight": 1.0,
             "intrinsic_rate_contribution_per_myr": (

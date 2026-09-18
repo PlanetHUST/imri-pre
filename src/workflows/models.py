@@ -149,6 +149,7 @@ class IMRIEventRecord(TypedDict):
     mission_duration_years: float
     snr_observation_duration_years: float
     snr_observation_case: str
+    snr_window_placement: str
     snr_threshold: float
     monte_carlo_event_weight: float
     intrinsic_rate_contribution_per_myr: float

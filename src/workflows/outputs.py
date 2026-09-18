@@ -149,6 +149,7 @@ IMRI_EVENT_COLUMNS = [
     "mission_duration_years",
     "snr_observation_duration_years",
     "snr_observation_case",
+    "snr_window_placement",
     "snr_threshold",
     "monte_carlo_event_weight",
     "intrinsic_rate_contribution_per_myr",

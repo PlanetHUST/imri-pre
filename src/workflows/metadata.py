@@ -64,6 +64,7 @@ def build_metadata(
             ),
             "snr_threshold": config.snr_threshold,
             "lisa_mission_duration_years": config.lisa_mission_duration_years,
+            "snr_window_placement": config.snr_window_placement,
             "detector_hubble_constant_km_s_mpc": (
                 config.detector_hubble_constant_km_s_mpc
             ),

@@ -25,9 +25,11 @@ from .config import (
     IMRI_LISA_MISSION_DURATION_YEARS,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
+    IMRI_SNR_WINDOW_PLACEMENT,
     IMRIDynConfig,
     SECONDS_PER_MINUTE,
 )
+from .lisa_snr import SNR_WINDOW_PLACEMENTS
 from .run_figures import generate_production_figures
 from .workflow import run_simulation
 
@@ -193,6 +195,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="observer-frame mission duration selecting the RCL foreground curve",
     )
     parser.add_argument(
+        "--snr-window-placement",
+        choices=SNR_WINDOW_PLACEMENTS,
+        default=IMRI_SNR_WINDOW_PLACEMENT,
+        help=(
+            "when the mission window is assumed to occur: 'optimal' ends it at "
+            "the observed ISCO (merger-rate convention), 'band_entry' starts it "
+            "at the observed LISA-band crossing (legacy, faintest epoch)"
+        ),
+    )
+    parser.add_argument(
         "--detector-hubble-constant-km-s-mpc",
         type=float,
         default=IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
@@ -295,6 +307,7 @@ def run_cli(argv: Sequence[str] | None = None) -> None:
         redshift=arguments.redshift,
         snr_threshold=arguments.snr_threshold,
         lisa_mission_duration_years=arguments.lisa_mission_duration_years,
+        snr_window_placement=arguments.snr_window_placement,
         detector_hubble_constant_km_s_mpc=(
             arguments.detector_hubble_constant_km_s_mpc
         ),

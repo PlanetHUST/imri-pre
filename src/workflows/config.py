@@ -13,6 +13,8 @@ from physical_process.disk_migration import (
     UNGAPPED,
 )
 
+from .lisa_snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
+
 FloatArray = npt.NDArray[np.float64]
 
 SECONDS_PER_MINUTE = 60.0
@@ -34,6 +36,7 @@ IMRI_GW_ECCENTRICITY = 0.0
 IMRI_REDSHIFT = 15
 IMRI_SNR_THRESHOLD = 20.0
 IMRI_LISA_MISSION_DURATION_YEARS = 4.0
+IMRI_SNR_WINDOW_PLACEMENT = DEFAULT_SNR_WINDOW_PLACEMENT
 IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
 IMRI_DETECTOR_OMEGA_M = 0.315
 DEFAULT_BASE_SEED = 20260913
@@ -77,6 +80,7 @@ class IMRIDynConfig:
         redshift: float,
         snr_threshold: float,
         lisa_mission_duration_years: float,
+        snr_window_placement: str,
         detector_hubble_constant_km_s_mpc: float,
         detector_omega_m: float,
         # Execution controls
@@ -122,6 +126,10 @@ class IMRIDynConfig:
             raise ValueError("SNR threshold must be positive")
         if lisa_mission_duration_years not in (0.5, 1.0, 2.0, 4.0):
             raise ValueError("LISA mission duration must be 0.5, 1, 2, or 4 years")
+        if snr_window_placement not in SNR_WINDOW_PLACEMENTS:
+            raise ValueError(
+                f"SNR window placement must be one of {SNR_WINDOW_PLACEMENTS}"
+            )
         if (
             not np.isfinite(detector_hubble_constant_km_s_mpc)
             or detector_hubble_constant_km_s_mpc <= 0.0
@@ -164,6 +172,7 @@ class IMRIDynConfig:
         self.redshift = redshift
         self.snr_threshold = snr_threshold
         self.lisa_mission_duration_years = lisa_mission_duration_years
+        self.snr_window_placement = snr_window_placement
         self.detector_hubble_constant_km_s_mpc = (
             detector_hubble_constant_km_s_mpc
         )

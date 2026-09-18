@@ -15,6 +15,7 @@ from typing import Any, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
 
 from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 
@@ -106,6 +107,25 @@ MIGRATION_TIMESCALE_HISTOGRAM_COLUMNS = (
     "bin_left_myr",
     "bin_right_myr",
     "imri_candidate_count",
+)
+MIGRATION_MASS_MARKERS = ("o", "s", "^", "D", "v", "P", "X", "<", ">")
+MIGRATION_ROUTE_ORDER = ("entry_route", "gw_handoff_route")
+MIGRATION_ROUTE_LABELS = {
+    "entry_route": "Entry route",
+    "gw_handoff_route": "GW-handoff route",
+}
+MIGRATION_ROUTE_MARKERS = {
+    "entry_route": "o",
+    "gw_handoff_route": "^",
+}
+MIGRATION_TIMESCALE_SCATTER_COLUMNS = (
+    "event_id",
+    "m_smbh_msun",
+    "r_ini_rg",
+    "band_entry_status",
+    "migration_route",
+    "migration_status",
+    "migration_timescale_myr",
 )
 MIGRATION_TIMESCALE_HISTOGRAM_BIN_COUNT = 24
 
@@ -390,8 +410,10 @@ def _migration_frame(run: RunResults) -> pd.DataFrame:
     return pd.DataFrame(events[columns])
 
 
-def build_imri_candidate_migration_histogram(run: RunResults) -> pd.DataFrame:
-    """Bin valid route-specific migration times for intrinsic IMRI candidates."""
+def _imri_candidate_migration_timescale_and_validity(
+    events: pd.DataFrame,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return the persisted route-specific time, route, and histogram validity."""
     required_event_columns = {
         "m_smbh_msun",
         "band_entry_status",
@@ -401,14 +423,10 @@ def build_imri_candidate_migration_histogram(run: RunResults) -> pd.DataFrame:
         "migration_status",
         "is_imri_candidate",
     }
-    missing = sorted(required_event_columns.difference(run.events.columns))
+    missing = sorted(required_event_columns.difference(events.columns))
     if missing:
         raise ValueError(f"event results are missing migration columns: {missing}")
 
-    events = run.events
-    event_masses_msun = pd.to_numeric(events["m_smbh_msun"], errors="coerce").to_numpy(
-        dtype=float
-    )
     entry_time_myr = pd.to_numeric(
         events["migration_time_to_entry_myr"], errors="coerce"
     ).to_numpy(dtype=float)
@@ -419,6 +437,11 @@ def build_imri_candidate_migration_histogram(run: RunResults) -> pd.DataFrame:
         events["band_entry_status"]
         .astype(str)
         .eq("entry_below_migration_domain_but_above_isco")
+    )
+    migration_route = np.where(
+        handoff_required.to_numpy(dtype=bool),
+        "gw_handoff_route",
+        "entry_route",
     )
     migration_timescale_myr = np.where(
         handoff_required.to_numpy(dtype=bool),
@@ -440,6 +463,44 @@ def build_imri_candidate_migration_histogram(run: RunResults) -> pd.DataFrame:
         .to_numpy(dtype=bool)
         & np.isfinite(migration_timescale_myr)
         & (migration_timescale_myr >= 0.0)
+    )
+    return migration_timescale_myr, migration_route, valid
+
+
+def build_imri_candidate_migration_timescale_scatter(run: RunResults) -> pd.DataFrame:
+    """Return valid candidate migration times against their persisted start radii."""
+    required_event_columns = {"event_id", "r_ini_rg"}
+    missing = sorted(required_event_columns.difference(run.events.columns))
+    if missing:
+        raise ValueError(f"event results are missing migration columns: {missing}")
+
+    events = run.events
+    migration_timescale_myr, migration_route, valid = (
+        _imri_candidate_migration_timescale_and_validity(events)
+    )
+    selected = events.loc[
+        valid,
+        [
+            "event_id",
+            "m_smbh_msun",
+            "r_ini_rg",
+            "band_entry_status",
+            "migration_status",
+        ],
+    ].copy()
+    selected["migration_route"] = migration_route[valid]
+    selected["migration_timescale_myr"] = migration_timescale_myr[valid]
+    return pd.DataFrame(selected[list(MIGRATION_TIMESCALE_SCATTER_COLUMNS)])
+
+
+def build_imri_candidate_migration_histogram(run: RunResults) -> pd.DataFrame:
+    """Bin valid route-specific migration times for intrinsic IMRI candidates."""
+    events = run.events
+    migration_timescale_myr, _, valid = (
+        _imri_candidate_migration_timescale_and_validity(events)
+    )
+    event_masses_msun = pd.to_numeric(events["m_smbh_msun"], errors="coerce").to_numpy(
+        dtype=float
     )
 
     candidate_times_myr = migration_timescale_myr[valid]
@@ -495,28 +556,63 @@ def _figure_migration(
     data_path = save_plot_data(
         frame, figure_root / "migration" / "data" / "migration_radii.csv"
     )
-    fig, axes = new_figure(
+    fig, radius_axes = new_figure(
         "Gas transport outcomes and initial to gas-final radius",
         nrows=1,
-        ncols=2,
-        figsize=(13.0, 5.2),
+        ncols=1,
+        figsize=(11.5, 6.2),
     )
-    radius_axis = axes[0, 0]
+    radius_axis = radius_axes[0, 0]
+
     initial = pd.to_numeric(frame["r_ini_rg"], errors="coerce").to_numpy(dtype=float)
     final = pd.to_numeric(frame["r_gas_fin_rg"], errors="coerce").to_numpy(dtype=float)
+    event_masses_msun = pd.to_numeric(
+        frame["m_smbh_msun"], errors="coerce"
+    ).to_numpy(
+        dtype=float
+    )
     valid = np.isfinite(initial) & np.isfinite(final) & (initial > 0.0) & (final > 0.0)
     statuses = frame["transport_status"].astype(str).to_numpy()
-    for category in TRANSPORT_ORDER:
-        mask = valid & (statuses == category)
-        if not mask.any():
-            continue
-        radius_axis.scatter(
-            initial[mask],
-            final[mask],
-            s=22,
-            color=STATUS_CATEGORY_COLORS["transport_status"][category],
-            label=STATUS_CATEGORY_LABELS["transport_status"][category],
+    masses = sorted(
+        {float(value) for value in event_masses_msun[valid] if np.isfinite(value)}
+    )
+    mass_markers = {
+        mass: (
+            MIGRATION_MASS_MARKERS[index]
+            if index < len(MIGRATION_MASS_MARKERS)
+            else f"${index + 1}$"
         )
+        for index, mass in enumerate(masses)
+    }
+
+    for category in TRANSPORT_ORDER:
+        for mass in masses:
+            mask = (
+                valid
+                & (statuses == category)
+                & np.isclose(event_masses_msun, mass)
+            )
+            if not mask.any():
+                continue
+            radius_axis.scatter(
+                initial[mask],
+                final[mask],
+                s=22,
+                marker=mass_markers[mass],
+                color=STATUS_CATEGORY_COLORS["transport_status"][category],
+            )
+        unavailable_mass = (
+            valid & ~np.isfinite(event_masses_msun) & (statuses == category)
+        )
+        if unavailable_mass.any():
+            radius_axis.scatter(
+                initial[unavailable_mass],
+                final[unavailable_mass],
+                s=22,
+                marker="x",
+                color=STATUS_CATEGORY_COLORS["transport_status"][category],
+            )
+
     if valid.any():
         limits = (
             min(initial[valid].min(), final[valid].min()),
@@ -529,17 +625,91 @@ def _figure_migration(
     radius_axis.set_yscale("log")
     radius_axis.set_xlabel(r"initial radius $r_{\rm ini}/r_g$")
     radius_axis.set_ylabel(r"gas-final radius $r_{\rm gas,fin}/r_g$")
-    radius_axis.legend(frameon=False, fontsize=7, loc="best")
-
-    status_axis = axes[0, 1]
-    counts = [
-        int(frame["transport_status"].astype(str).eq(category).sum())
+    transport_handles = [
+        Line2D(
+            [],
+            [],
+            color=STATUS_CATEGORY_COLORS["transport_status"][category],
+            linestyle="none",
+            marker="o",
+            markersize=6,
+            label=STATUS_CATEGORY_LABELS["transport_status"][category],
+        )
         for category in TRANSPORT_ORDER
     ]
+    mass_handles = [
+        Line2D(
+            [],
+            [],
+            color="0.35",
+            linestyle="none",
+            marker=mass_markers[mass],
+            markersize=6,
+            label=rf"$M_\bullet={mass:.0e}\,M_\odot$",
+        )
+        for mass in masses
+    ]
+    if np.any(valid & ~np.isfinite(event_masses_msun)):
+        mass_handles.append(
+            Line2D(
+                [],
+                [],
+                color="0.35",
+                linestyle="none",
+                marker="x",
+                markersize=6,
+                label="SMBH mass unavailable",
+            )
+        )
+    transport_legend = radius_axis.legend(
+        handles=transport_handles,
+        title="Transport outcome (color)",
+        frameon=False,
+        fontsize=7,
+        title_fontsize=8,
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        borderaxespad=0.0,
+    )
+    radius_axis.add_artist(transport_legend)
+    if mass_handles:
+        radius_axis.legend(
+            handles=mass_handles,
+            title="SMBH mass (marker)",
+            frameon=False,
+            fontsize=7,
+            title_fontsize=8,
+            loc="lower left",
+            bbox_to_anchor=(1.02, 0.0),
+            borderaxespad=0.0,
+        )
+    fig.tight_layout()
+    figures = save_figure(fig, figure_root / "migration" / "migration_radii")
+
+    status_counts = pd.DataFrame(
+        {
+            "transport_status": list(TRANSPORT_ORDER),
+            "count": [
+                int(frame["transport_status"].astype(str).eq(category).sum())
+                for category in TRANSPORT_ORDER
+            ],
+        }
+    )
+    status_data_path = save_plot_data(
+        status_counts,
+        figure_root / "migration" / "data" / "transport_status_counts.csv",
+    )
+    status_fig, status_axes = new_figure(
+        "Gas transport-status counts",
+        nrows=1,
+        ncols=1,
+        figsize=(9.0, 5.4),
+    )
+    status_axis = status_axes[0, 0]
     positions = np.arange(len(TRANSPORT_ORDER), dtype=float)
     status_axis.bar(
         positions,
-        counts,
+        status_counts["count"].to_numpy(dtype=int),
         color=[STATUS_CATEGORY_COLORS["transport_status"][c] for c in TRANSPORT_ORDER],
     )
     status_axis.set_yscale("symlog", linthresh=1.0)
@@ -552,8 +722,155 @@ def _figure_migration(
     )
     status_axis.set_ylabel("persisted events")
     status_axis.set_title("Transport status", fontsize=12)
-    fig.tight_layout()
-    figures = save_figure(fig, figure_root / "migration" / "migration_radii")
+    status_fig.tight_layout()
+    status_figures = save_figure(
+        status_fig,
+        figure_root / "migration" / "migration_transport_status",
+    )
+
+    timescale_scatter = build_imri_candidate_migration_timescale_scatter(run)
+    timescale_scatter_data_path = save_plot_data(
+        timescale_scatter,
+        figure_root
+        / "migration"
+        / "data"
+        / "migration_timescale_vs_initial_radius.csv",
+    )
+    timescale_scatter_fig, timescale_scatter_axes = new_figure(
+        "IMRI-candidate migration timescale vs initial radius",
+        nrows=1,
+        ncols=1,
+        figsize=(9.2, 5.6),
+    )
+    timescale_scatter_axis = timescale_scatter_axes[0, 0]
+    scatter_initial_rg = pd.to_numeric(
+        timescale_scatter["r_ini_rg"], errors="coerce"
+    ).to_numpy(dtype=float)
+    scatter_timescale_myr = pd.to_numeric(
+        timescale_scatter["migration_timescale_myr"], errors="coerce"
+    ).to_numpy(dtype=float)
+    scatter_masses_msun = pd.to_numeric(
+        timescale_scatter["m_smbh_msun"], errors="coerce"
+    ).to_numpy(dtype=float)
+    scatter_routes = timescale_scatter["migration_route"].astype(str).to_numpy()
+    scatter_valid = (
+        np.isfinite(scatter_initial_rg)
+        & (scatter_initial_rg > 0.0)
+        & np.isfinite(scatter_timescale_myr)
+        & (scatter_timescale_myr >= 0.0)
+        & np.isfinite(scatter_masses_msun)
+    )
+    scatter_masses = sorted(
+        {float(value) for value in scatter_masses_msun[scatter_valid]}
+    )
+    scatter_colors = plt.get_cmap("tab10")(
+        np.arange(len(scatter_masses), dtype=int) % 10
+    )
+    mass_colors = {
+        mass: color
+        for mass, color in zip(scatter_masses, scatter_colors, strict=True)
+    }
+    for mass in scatter_masses:
+        for route in MIGRATION_ROUTE_ORDER:
+            mask = (
+                scatter_valid
+                & np.isclose(scatter_masses_msun, mass)
+                & (scatter_routes == route)
+            )
+            if not mask.any():
+                continue
+            timescale_scatter_axis.scatter(
+                scatter_initial_rg[mask],
+                scatter_timescale_myr[mask],
+                s=28,
+                marker=MIGRATION_ROUTE_MARKERS[route],
+                color=mass_colors[mass],
+                alpha=0.8,
+            )
+    timescale_scatter_axis.set_xscale("log")
+    if scatter_valid.any():
+        positive_timescale_myr = scatter_timescale_myr[
+            scatter_valid & (scatter_timescale_myr > 0.0)
+        ]
+        if np.any(scatter_timescale_myr[scatter_valid] == 0.0):
+            linear_threshold_myr = (
+                float(positive_timescale_myr.min()) / 10.0
+                if positive_timescale_myr.size
+                else 1.0
+            )
+            timescale_scatter_axis.set_yscale(
+                "symlog", linthresh=linear_threshold_myr
+            )
+        else:
+            timescale_scatter_axis.set_yscale("log")
+    else:
+        timescale_scatter_axis.text(
+            0.5,
+            0.5,
+            "No valid migration-timescale points",
+            transform=timescale_scatter_axis.transAxes,
+            ha="center",
+            va="center",
+        )
+    timescale_scatter_axis.set_xlabel(r"initial radius $r_{\rm ini}/r_g$")
+    timescale_scatter_axis.set_ylabel("migration timescale to gas target [Myr]")
+    mass_color_handles = [
+        Line2D(
+            [],
+            [],
+            color=mass_colors[mass],
+            linestyle="none",
+            marker="o",
+            markersize=6,
+            label=rf"$M_\bullet={mass:.0e}\,M_\odot$",
+        )
+        for mass in scatter_masses
+    ]
+    present_routes = [
+        route
+        for route in MIGRATION_ROUTE_ORDER
+        if np.any(scatter_valid & (scatter_routes == route))
+    ]
+    route_handles = [
+        Line2D(
+            [],
+            [],
+            color="0.35",
+            linestyle="none",
+            marker=MIGRATION_ROUTE_MARKERS[route],
+            markersize=6,
+            label=MIGRATION_ROUTE_LABELS[route],
+        )
+        for route in present_routes
+    ]
+    if mass_color_handles:
+        mass_legend = timescale_scatter_axis.legend(
+            handles=mass_color_handles,
+            title="SMBH mass (color)",
+            frameon=False,
+            fontsize=8,
+            title_fontsize=9,
+            loc="upper left",
+            bbox_to_anchor=(1.02, 1.0),
+            borderaxespad=0.0,
+        )
+        timescale_scatter_axis.add_artist(mass_legend)
+    if route_handles:
+        timescale_scatter_axis.legend(
+            handles=route_handles,
+            title="Gas target (marker)",
+            frameon=False,
+            fontsize=8,
+            title_fontsize=9,
+            loc="lower left",
+            bbox_to_anchor=(1.02, 0.0),
+            borderaxespad=0.0,
+        )
+    timescale_scatter_fig.tight_layout()
+    timescale_scatter_figures = save_figure(
+        timescale_scatter_fig,
+        figure_root / "migration" / "migration_timescale_vs_initial_radius",
+    )
 
     timescale_histogram = build_imri_candidate_migration_histogram(run)
     timescale_data_path = save_plot_data(
@@ -624,8 +941,25 @@ def _figure_migration(
         [
             (
                 "migration_radii",
-                "Inside-ISCO rows are excluded from the transport-status "
-                "denominator, and unavailable states are never plotted as zero.",
+                "Color encodes the transport outcome and marker shape encodes "
+                "SMBH mass. The dashed diagonal marks "
+                "$r_{\\rm gas,fin}=r_{\\rm ini}$; horizontal branches correspond "
+                "to common physical stopping radii.",
+            ),
+            (
+                "migration_transport_status",
+                "Counts retain every transport-outcome category in the configured "
+                "order. Inside-ISCO and blank rows are excluded from this transport "
+                "summary; unavailable or failure states remain distinct and are "
+                "never converted to zero-valued physical outcomes.",
+            ),
+            (
+                "migration_timescale_vs_initial_radius",
+                "Points use exactly the same intrinsic-candidate validity logic and "
+                "route-specific migration timescale as the histogram. Color "
+                "distinguishes SMBH mass; marker shape distinguishes formal-entry "
+                "routes from GW-handoff routes. Valid zero times remain visible on "
+                "a symmetric-logarithmic axis when present.",
             ),
             (
                 "migration_timescale_histogram",
@@ -640,9 +974,13 @@ def _figure_migration(
     )
     return {
         "migration_data": data_path,
+        "migration_status_data": status_data_path,
+        "migration_timescale_scatter_data": timescale_scatter_data_path,
         "migration_timescale_histogram_data": timescale_data_path,
         "migration_caption": caption_path,
         "migration_figures": figures,
+        "migration_status_figures": status_figures,
+        "migration_timescale_scatter_figures": timescale_scatter_figures,
         "migration_timescale_histogram_figures": timescale_figures,
     }
 

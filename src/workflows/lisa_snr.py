@@ -48,6 +48,14 @@ _CONFUSION_PARAMETERS = {
 }
 SUPPORTED_MISSION_DURATIONS_YEARS = tuple(_CONFUSION_PARAMETERS)
 
+SNR_WINDOW_PLACEMENT_BAND_ENTRY = "band_entry"
+SNR_WINDOW_PLACEMENT_OPTIMAL = "optimal"
+SNR_WINDOW_PLACEMENTS = (
+    SNR_WINDOW_PLACEMENT_BAND_ENTRY,
+    SNR_WINDOW_PLACEMENT_OPTIMAL,
+)
+DEFAULT_SNR_WINDOW_PLACEMENT = SNR_WINDOW_PLACEMENT_OPTIMAL
+
 SNR_STATUS_EVALUATED = "evaluated"
 SNR_STATUS_NO_OVERLAP = "no_physical_lisa_overlap"
 SNR_STATUS_REQUIRED_INPUT_UNAVAILABLE = "required_input_unavailable"
@@ -91,6 +99,7 @@ class LISASNRResult:
     mission_duration_years: float
     observation_duration_years: float
     observation_case: str
+    window_placement: str
     snr_threshold: float
 
 
@@ -314,13 +323,31 @@ def mission_observation_window(
     detector_min_frequency_hz: float,
     detector_max_frequency_hz: float,
     mission_duration_years: float,
+    window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
 ) -> LISAObservationWindow:
-    """Return the physical inspiral interval overlapping one LISA mission."""
+    """Return the physical inspiral interval overlapping one LISA mission.
+
+    ``window_placement`` selects when the mission is assumed to occur.
+
+    ``band_entry`` starts the mission at the moment the source crosses into
+    the observed band and integrates forward.  For a slowly inspiralling IMRI
+    this samples the faintest part of the track: the source sits just above
+    ``detector_min_frequency_hz`` for many thousands of observer-frame years,
+    so the mission covers a negligible fraction of a log-frequency decade.
+
+    ``optimal`` instead places the mission against the loud end of the
+    available inspiral, ending at ``min(detector_max, f_isco_observer)``.  For
+    a merger-rate-based detection rate this is the correct convention: a
+    mission of fixed length catches events at the merger rate, so the question
+    is whether a source is detectable during its final observable stretch, not
+    whether it happened to be loud at band entry.
+    """
     _require_positive_frequency(current_observed_frequency_hz)
     _require_positive_frequency(f_isco_observer_hz)
     _require_positive_frequency(detector_min_frequency_hz)
     _require_positive_frequency(detector_max_frequency_hz)
     _confusion_parameters(mission_duration_years)
+    _validate_window_placement(window_placement)
     if detector_min_frequency_hz >= detector_max_frequency_hz:
         raise ValueError("detector frequencies must satisfy f_min < f_max")
 
@@ -339,6 +366,17 @@ def mission_observation_window(
         )
 
     mission_duration_s = mission_duration_years * JULIAN_YEAR_S
+    if window_placement == SNR_WINDOW_PLACEMENT_OPTIMAL:
+        return _optimal_placement_window(
+            current_observed_frequency_hz=current_observed_frequency_hz,
+            f_isco_observer_hz=f_isco_observer_hz,
+            f_upper_available_hz=f_upper_available_hz,
+            chirp_mass_detector_msun=chirp_mass_detector_msun,
+            detector_min_frequency_hz=detector_min_frequency_hz,
+            detector_max_frequency_hz=detector_max_frequency_hz,
+            mission_duration_s=mission_duration_s,
+        )
+
     if current_observed_frequency_hz < detector_min_frequency_hz:
         time_to_band_s = inspiral_time_to_coalescence_s(
             current_observed_frequency_hz, chirp_mass_detector_msun
@@ -458,14 +496,17 @@ def evaluate_lisa_inspiral_snr(
     hubble_constant_km_s_mpc: float = DEFAULT_DETECTOR_H0_KM_S_MPC,
     omega_m: float = DEFAULT_DETECTOR_OMEGA_M,
     eccentricity: float = 0.0,
+    window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
 ) -> LISASNRResult:
     """Evaluate the complete first-order physical LISA SNR chain."""
+    _validate_window_placement(window_placement)
     base = {
         "m1_source_msun": float(m1_source_msun),
         "m2_source_msun": float(m2_source_msun),
         "redshift": float(redshift),
         "current_observed_frequency_hz": float(current_observed_frequency_hz),
         "mission_duration_years": float(mission_duration_years),
+        "window_placement": str(window_placement),
         "snr_threshold": float(snr_threshold),
     }
     unavailable = {
@@ -535,6 +576,7 @@ def evaluate_lisa_inspiral_snr(
             detector_min_frequency_hz=detector_min_frequency_hz,
             detector_max_frequency_hz=detector_max_frequency_hz,
             mission_duration_years=mission_duration_years,
+            window_placement=window_placement,
         )
         common = {
             **base,
@@ -607,6 +649,83 @@ def _confusion_parameters(
     raise ValueError(
         "mission duration must be one of "
         f"{SUPPORTED_MISSION_DURATIONS_YEARS} years"
+    )
+
+
+def _validate_window_placement(window_placement: str) -> None:
+    if window_placement not in SNR_WINDOW_PLACEMENTS:
+        raise ValueError(
+            f"window placement must be one of {SNR_WINDOW_PLACEMENTS}"
+        )
+
+
+def _optimal_placement_window(
+    *,
+    current_observed_frequency_hz: float,
+    f_isco_observer_hz: float,
+    f_upper_available_hz: float,
+    chirp_mass_detector_msun: float,
+    detector_min_frequency_hz: float,
+    detector_max_frequency_hz: float,
+    mission_duration_s: float,
+) -> LISAObservationWindow:
+    """Return the mission window ending at the loud end of the inspiral.
+
+    The window closes at ``f_upper_available_hz`` and opens one mission
+    duration earlier, clamped so it never starts below the detector band or
+    before the source's present frequency.
+    """
+    earliest_observable_hz = max(
+        detector_min_frequency_hz, current_observed_frequency_hz
+    )
+    time_at_upper_s = inspiral_time_to_coalescence_s(
+        f_upper_available_hz, chirp_mass_detector_msun
+    )
+    residual_inspiral_s = (
+        inspiral_time_to_coalescence_s(
+            earliest_observable_hz, chirp_mass_detector_msun
+        )
+        - time_at_upper_s
+    )
+    if mission_duration_s >= residual_inspiral_s:
+        f_low_hz = earliest_observable_hz
+        observation_duration_s = residual_inspiral_s
+        start_case = "optimal_full_residual_inspiral"
+    else:
+        f_low_hz = max(
+            earliest_observable_hz,
+            observed_frequency_from_time_to_coalescence_hz(
+                time_at_upper_s + mission_duration_s,
+                chirp_mass_detector_msun,
+            ),
+        )
+        observation_duration_s = mission_duration_s
+        start_case = "optimal_mission_limited_pre_merger"
+
+    end_case = (
+        "reaches_isco_during_mission"
+        if f_isco_observer_hz <= detector_max_frequency_hz
+        else "reaches_detector_max_during_mission"
+    )
+    if not np.isfinite(f_low_hz) or f_upper_available_hz <= f_low_hz:
+        raise ArithmeticError("mission frequency interval is not positive")
+
+    time_to_band_s = max(
+        0.0,
+        inspiral_time_to_coalescence_s(
+            current_observed_frequency_hz, chirp_mass_detector_msun
+        )
+        - inspiral_time_to_coalescence_s(f_low_hz, chirp_mass_detector_msun),
+    )
+    return LISAObservationWindow(
+        status=SNR_STATUS_EVALUATED,
+        reason="lisa_frequency_overlap",
+        observation_case=f"{start_case}:{end_case}",
+        f_low_hz=float(f_low_hz),
+        f_high_hz=float(f_upper_available_hz),
+        f_upper_available_hz=float(f_upper_available_hz),
+        time_to_band_years=float(time_to_band_s / JULIAN_YEAR_S),
+        observation_duration_years=float(observation_duration_s / JULIAN_YEAR_S),
     )
 
 

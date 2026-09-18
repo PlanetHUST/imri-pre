@@ -7,7 +7,7 @@ import numpy as np
 import physical_process.gw_frequency_radius as gw_helpers
 
 from .cosmology import FlatLambdaCDM
-from .lisa_snr import evaluate_lisa_inspiral_snr
+from .lisa_snr import DEFAULT_SNR_WINDOW_PLACEMENT, evaluate_lisa_inspiral_snr
 
 DETECTION_CLASS_DETECTABLE = "imri data"
 DETECTION_CLASS_NOT_DETECTABLE = "non-detectable"
@@ -42,6 +42,7 @@ class DetectRateDecision:
     mission_duration_years: float = np.nan
     snr_observation_duration_years: float = np.nan
     snr_observation_case: str = "not_evaluated"
+    snr_window_placement: str = "not_evaluated"
 
 
 @dataclass(frozen=True)
@@ -306,6 +307,7 @@ def classify_detectability(
     mission_duration_years: float,
     detector_hubble_constant_km_s_mpc: float,
     detector_omega_m: float,
+    snr_window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
 ) -> DetectRateDecision:
     """Classify one single-AGN IMRI candidate after fixed-mass GW evolution."""
     if not is_imri_candidate:
@@ -402,6 +404,7 @@ def classify_detectability(
                 outcome=entry_outcome,
                 cosmic_merge_applied=False,
                 mission_duration_years=mission_duration_years,
+                snr_window_placement=snr_window_placement,
             )
 
         return _not_detected_due_to_time(
@@ -417,6 +420,7 @@ def classify_detectability(
                 else "misses_cosmic_time_budget"
             ),
             mission_duration_years=mission_duration_years,
+            snr_window_placement=snr_window_placement,
         )
 
     detection_time_myr = entry_outcome.state_time_myr
@@ -438,6 +442,7 @@ def classify_detectability(
         hubble_constant_km_s_mpc=detector_hubble_constant_km_s_mpc,
         omega_m=detector_omega_m,
         eccentricity=eccentricity,
+        window_placement=snr_window_placement,
     )
     detect_rate_class = (
         DETECTION_CLASS_DETECTABLE
@@ -472,6 +477,7 @@ def classify_detectability(
         mission_duration_years=snr_result.mission_duration_years,
         snr_observation_duration_years=snr_result.observation_duration_years,
         snr_observation_case=snr_result.observation_case,
+        snr_window_placement=snr_result.window_placement,
     )
 
 
@@ -481,6 +487,7 @@ def _gw_evolution_unavailable(
     outcome: ObservedLisaEntryOutcome,
     cosmic_merge_applied: bool,
     mission_duration_years: float,
+    snr_window_placement: str,
 ) -> DetectRateDecision:
     """Return an explicit invalid-regime result for a GW segment ending at ISCO."""
 
@@ -500,6 +507,7 @@ def _gw_evolution_unavailable(
         detect_rate_reason="required_input_unavailable_invalid_frequency",
         mission_duration_years=mission_duration_years,
         snr_status="required_input_unavailable",
+        snr_window_placement=snr_window_placement,
     )
 
 
@@ -513,6 +521,7 @@ def _not_detected_due_to_time(
     cosmic_merge_applied: bool,
     reason: str,
     mission_duration_years: float,
+    snr_window_placement: str,
 ) -> DetectRateDecision:
     return DetectRateDecision(
         detect_rate_class=DETECTION_CLASS_NOT_DETECTABLE,
@@ -533,4 +542,5 @@ def _not_detected_due_to_time(
         mission_duration_years=mission_duration_years,
         snr_observation_duration_years=0.0,
         snr_observation_case="no_lisa_frequency_overlap",
+        snr_window_placement=snr_window_placement,
     )

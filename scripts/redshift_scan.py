@@ -37,6 +37,7 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "gw_eccentricity": 0.0,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
+    "snr_window_placement": "optimal",
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
     "damping_cpu_count": None,
@@ -94,6 +95,7 @@ CONFIG_TEMPLATE_FIELDS = (
     "gw_eccentricity",
     "snr_threshold",
     "lisa_mission_duration_years",
+    "snr_window_placement",
     "detector_hubble_constant_km_s_mpc",
     "detector_omega_m",
     "damping_cpu_count",
@@ -192,6 +194,7 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
         )
     historical_detector_defaults = {
         "lisa_mission_duration_years": 4.0,
+        "snr_window_placement": "optimal",
         "detector_hubble_constant_km_s_mpc": 67.4,
         "detector_omega_m": 0.315,
     }
