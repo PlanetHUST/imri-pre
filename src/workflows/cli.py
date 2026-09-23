@@ -15,12 +15,9 @@ import time
 from pathlib import Path
 from typing import Sequence
 
-from physical_process.migration import GAP_OPENING_CONDITIONS
+from lisa.snr import SNR_WINDOW_PLACEMENTS
 
 from .config import (
-    DEFAULT_DISK_MODEL,
-    DEFAULT_GAP_OPENING_CONDITION,
-    DISK_MODELS,
     IMRI_GW_ECCENTRICITY,
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
@@ -31,6 +28,7 @@ from .config import (
     IMRI_LISA_MISSION_DURATION_YEARS,
     IMRI_REDSHIFT,
     IMRI_SNR_THRESHOLD,
+    IMRI_SNR_WINDOW_PLACEMENT,
     IMRI_COSMIC_MERGE_RADIUS_FACTOR,
     IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
     IMRI_COSMIC_MERGE_TIME_MYR,
@@ -142,33 +140,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--ignore-disk-inner-radius",
         action="store_true",
         help="select disk-crossing objects using only the disk outer radius",
-    )
-    parser.add_argument(
-        "--no-type-ii-migration",
-        action="store_true",
-        help="force embedded compact objects to use type-I migration",
-    )
-    parser.add_argument(
-        "--gap-open-condition",
-        choices=GAP_OPENING_CONDITIONS,
-        default=DEFAULT_GAP_OPENING_CONDITION,
-        help="gap-opening condition used to select the Type-II migration branch",
-    )
-    parser.add_argument(
-        "--gap-threshold",
-        type=float,
-        default=None,
-        help="override the gap parameter threshold of the selected criterion "
-        "(default: the calibrated value for that criterion)",
-    )
-    parser.add_argument(
-        "--disk-model",
-        choices=DISK_MODELS,
-        default=DEFAULT_DISK_MODEL,
-        help=(
-            "gas-migration scenario; this does not select the underlying "
-            "Sirko/Thompson disk structure"
-        ),
     )
     parser.add_argument(
         "--lisa-min-gw-frequency-hz",
@@ -439,10 +410,6 @@ def build_config_from_arguments(arguments: argparse.Namespace) -> IMRIDynConfig:
         metallicity=arguments.metallicity,
         initial_stellar_density_gamma=arguments.initial_stellar_density_gamma,
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
-        consider_type_ii_migration=not arguments.no_type_ii_migration,
-        disk_model=arguments.disk_model,
-        gap_opening_condition=arguments.gap_open_condition,
-        gap_parameter_threshold=arguments.gap_threshold,
         lisa_min_gw_frequency_hz=arguments.lisa_min_gw_frequency_hz,
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
         max_gw_time_myr=arguments.max_gw_time_myr,

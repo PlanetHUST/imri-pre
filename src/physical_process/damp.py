@@ -80,6 +80,22 @@ def sigma_gas(
     return float(surface_density_g_cm2[index])
 
 
+def rho_gas(
+    radius_cm: float,
+    density_g_cm3: FloatArray,
+    radius_grid_cm: FloatArray,
+) -> float:
+    """Return disk midplane density [g/cm^3] at ``radius_cm``.
+
+    The density is read directly from the solved disk profile.  It is never
+    reconstructed as ``Sigma / H`` or ``Sigma / (2H)``: the disk defines
+    ``Sigma = 2 rho H``, so reconstructing it at a different radius than the
+    one where ``H`` was evaluated would not return the disk's own density.
+    """
+    index = find_closest_index(radius_grid_cm, radius_cm)
+    return float(density_g_cm3[index])
+
+
 # ----------------------------------------------------------------------
 @dataclass(frozen=True)
 class OrbitalState:
@@ -161,6 +177,7 @@ class DiskProperties:
         surface_density_g_cm2: FloatArray,
         aspect_ratio: FloatArray,
         radius_grid_cm: FloatArray,
+        density_g_cm3: FloatArray,
     ) -> "DiskProperties":
         """Create disk properties only for nodes inside the physical disk."""
         node_radii_cm = (radius_1_cm, radius_2_cm)
@@ -184,10 +201,10 @@ class DiskProperties:
             else np.nan,
         )
         density_values_g_cm3 = (
-            surface_density_values_g_cm2[0] / scale_height_cm
+            rho_gas(radius_1_cm, density_g_cm3, radius_grid_cm)
             if active_node_mask[0]
             else np.nan,
-            surface_density_values_g_cm2[1] / scale_height_cm
+            rho_gas(radius_2_cm, density_g_cm3, radius_grid_cm)
             if active_node_mask[1]
             else np.nan,
         )
@@ -310,12 +327,14 @@ class TimescaleCalculator:
         disk_inner_radius_cm: float,
         disk_outer_radius_cm: float,
         use_disk_inner_radius: bool,
+        density_g_cm3: FloatArray,
     ) -> None:
         self.agn_properties = agn_properties
         self.smbh_mass_g = agn_properties.smbh_mass_msun * const.msun
         self.radius_grid_cm = radius_grid_cm
         self.surface_density_g_cm2 = surface_density_g_cm2
         self.aspect_ratio = aspect_ratio
+        self.density_g_cm3 = density_g_cm3
         self.disk_inner_radius_cm = float(disk_inner_radius_cm)
         self.disk_outer_radius_cm = float(disk_outer_radius_cm)
         self.use_disk_inner_radius = use_disk_inner_radius
@@ -363,6 +382,39 @@ class TimescaleCalculator:
         )
         return float(velocity_1_cm_s), float(velocity_2_cm_s)
 
+    def compute_vertical_velocities(
+        self,
+        state: OrbitalState,
+        radius_1_cm: float,
+        radius_2_cm: float,
+    ) -> tuple[float, float]:
+        """Vertical (out-of-disk-plane) speeds at the two nodes [cm/s].
+
+        At a node the body sits on the line of nodes, which lies *in* the disk
+        plane, so the radial part of the velocity is in-plane and contributes
+        nothing vertical.  Only the transverse component ``v_t = h_ang / r``
+        tilts out of the plane, by the inclination:
+
+        ``v_z = v_t sin i = sqrt(G M p) sin i / r``   with ``p = a (1 - e^2)``.
+
+        This replaces the inherited ``v sin i`` approximation, which used the
+        *total* speed and therefore overestimated the vertical crossing speed
+        by ``v / v_t = 1 / cos(flight-path angle)`` -- up to tens of per cent
+        on eccentric orbits, and always in the direction of too little damping
+        per crossing.
+        """
+        semi_latus_rectum_cm = state.semi_major_axis_cm * (1.0 - state.eccentricity**2)
+        specific_angular_momentum = np.sqrt(
+            const.G * self.smbh_mass_g * semi_latus_rectum_cm
+        )
+        vertical_1_cm_s = (
+            specific_angular_momentum * state.sin_inclination / radius_1_cm
+        )
+        vertical_2_cm_s = (
+            specific_angular_momentum * state.sin_inclination / radius_2_cm
+        )
+        return float(vertical_1_cm_s), float(vertical_2_cm_s)
+
     def orbital_period(self, state: OrbitalState) -> float:
         """Keplerian orbital period [s]."""
         return float(
@@ -374,19 +426,24 @@ class TimescaleCalculator:
     def compute_crossing_times(
         self,
         scale_height_cm: float,
-        velocity_1_cm_s: float,
-        velocity_2_cm_s: float,
+        vertical_velocity_1_cm_s: float,
+        vertical_velocity_2_cm_s: float,
         state: OrbitalState,
         active_node_mask: tuple[bool, bool],
     ) -> tuple[float, float]:
-        """Disk crossing times (time to pass through the disk thickness)."""
+        """Disk crossing times (time to pass through the disk thickness).
+
+        ``t_cross = 2H / v_z`` with the true vertical velocity from
+        :meth:`compute_vertical_velocities`.  The inclination already enters
+        through ``v_z``, so it must not be applied a second time here.
+        """
         crossing_time_1_s = (
-            2 * scale_height_cm / (velocity_1_cm_s * state.sin_inclination)
+            2 * scale_height_cm / vertical_velocity_1_cm_s
             if active_node_mask[0]
             else 0.0
         )
         crossing_time_2_s = (
-            2 * scale_height_cm / (velocity_2_cm_s * state.sin_inclination)
+            2 * scale_height_cm / vertical_velocity_2_cm_s
             if active_node_mask[1]
             else 0.0
         )
@@ -413,6 +470,7 @@ class TimescaleCalculator:
             self.surface_density_g_cm2,
             self.aspect_ratio,
             self.radius_grid_cm,
+            self.density_g_cm3,
         )
 
         # Orbital velocities
@@ -430,11 +488,14 @@ class TimescaleCalculator:
             obj_type,
         )
 
-        # Crossing times
+        # Crossing times, from the true vertical velocity at each node
+        vertical_1_cm_s, vertical_2_cm_s = self.compute_vertical_velocities(
+            state, radius_1_cm, radius_2_cm
+        )
         crossing_time_1_s, crossing_time_2_s = self.compute_crossing_times(
             disk_prop.scale_height_cm,
-            velocity_1_cm_s,
-            velocity_2_cm_s,
+            vertical_1_cm_s,
+            vertical_2_cm_s,
             state,
             active_node_mask,
         )
@@ -476,8 +537,14 @@ class DampingCalculator:
         disk_inner_radius_cm: float,
         disk_outer_radius_cm: float,
         use_disk_inner_radius: bool = True,
+        density_g_cm3: FloatArray | None = None,
     ) -> None:
         """Initialize from AGN state and disk grids."""
+        if density_g_cm3 is None:
+            raise ValueError(
+                "density_g_cm3 is required: the midplane density must come from "
+                "the solved disk, not from Sigma / H"
+            )
         self.agn_properties = agn_properties
         self.verbose = verbose
         self.disk_inner_radius_cm = float(disk_inner_radius_cm)
@@ -491,6 +558,7 @@ class DampingCalculator:
             self.disk_inner_radius_cm,
             self.disk_outer_radius_cm,
             use_disk_inner_radius,
+            density_g_cm3,
         )
 
     def inclination_limit_rad(self, state: OrbitalState) -> float:
@@ -688,7 +756,7 @@ class DampingCalculator:
             / (1 - state.eccentricity**2)
             * (
                 1
-                - 2 * state.eccentricity * state.cos_omega
+                + 2 * state.eccentricity * state.cos_omega
                 + state.eccentricity**2
                 - (1 + state.eccentricity * state.cos_omega) ** 1.5
                 * state.cos_inclination
@@ -704,7 +772,7 @@ class DampingCalculator:
                 - (
                     state.eccentricity
                     + state.eccentricity * state.cos_omega**2
-                    - 2 * state.cos_omega
+                    + 2 * state.cos_omega
                 )
                 / np.sqrt(1 + state.eccentricity * state.cos_omega)
                 * state.cos_inclination

@@ -950,7 +950,6 @@ def _single_disk_model(frame: pd.DataFrame) -> str:
 def _disk_model_label(disk_model: str) -> str:
     labels = {
         "torque_with_trap": "torque with traps",
-        "semi_without_trap": "semi-analytic without traps",
     }
     return labels.get(disk_model, disk_model.replace("_", " "))
 

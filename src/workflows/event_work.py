@@ -12,7 +12,7 @@ from physical_process import gw_frequency_radius as gw_helpers
 from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
-from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
+from .config import IMRIDynConfig
 from lisa.detectability import (
     classify_detectability,
     solve_time_to_observed_lisa_entry,
@@ -21,9 +21,11 @@ from lisa.detectability import (
 from .engine import IMRIDynEngine, MigrationProfileError, TorqueProfileError
 from .event_rate import (
     BH_ORIGIN_MIGRATION_FORMED,
+    EVENT_RATE_NO_IMRI,
     GAS_FINAL_RADIUS_SAMPLES,
     classify_event_rate,
     classify_unsupported_band_entry,
+    is_physical_imri_entry,
 )
 from lisa.snr import (
     SNR_STATUS_EVALUATED,
@@ -195,6 +197,9 @@ class IMRIEventEvaluator:
                 if event["migration_status"] == "trap_bound":
                     result.trap_bound_migration_count += 1
                     result.trap_bound_mass_msun += event["mass_msun"]
+                elif event["migration_status"] == "outward_blocked":
+                    result.outward_blocked_migration_count += 1
+                    result.outward_blocked_mass_msun += event["mass_msun"]
                 # vprint(
                 #     "Trap-bound migration: "
                 #     f"object_index={event['object_index']}, "
@@ -203,8 +208,13 @@ class IMRIEventEvaluator:
                 #     f"r_entry_rg={event['r_entry_rg']:.6e}, "
                 #     f"blocking_radius_rg={event['blocking_radius_rg']}"
                 # )
-                else:
+                elif event["migration_status"] in ("finite", "already_at_target"):
                     result.finite_migration_count += 1
+                else:
+                    raise ValueError(
+                        "unknown migration status: "
+                        f"{event['migration_status']}"
+                    )
 
             if event["bh_candidate"]:
                 result.bh_candidate_count += 1
@@ -309,23 +319,15 @@ class IMRIEventEvaluator:
                 mission_duration_years=self.config.lisa_mission_duration_years,
             )
         else:
-            torque_profile: TorqueProfile | None = None
-            if self.config.disk_model == TORQUE_WITH_TRAP:
-                torque_profile = self.engine.get_torque_profile(
-                    disk_data,
-                    agn_properties.smbh_mass_msun,
-                    migrator_mass_msun,
-                )
-                migration_radius_cm = np.asarray(
-                    torque_profile.radius_cm,
-                    dtype=float,
-                )
-            elif self.config.disk_model == SEMI_WITHOUT_TRAP:
-                migration_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
-            else:
-                raise RuntimeError(
-                    f"unsupported disk migration model: {self.config.disk_model}"
-                )
+            torque_profile = self.engine.get_torque_profile(
+                disk_data,
+                agn_properties.smbh_mass_msun,
+                migrator_mass_msun,
+            )
+            migration_radius_cm = np.asarray(
+                torque_profile.radius_cm,
+                dtype=float,
+            )
             route = resolve_band_entry_route(
                 boundary,
                 disk_inner_radius_cm,
@@ -346,29 +348,16 @@ class IMRIEventEvaluator:
             ) -> disk_migration.MigrationOutcome:
                 key = (float(start_radius_cm), float(target_radius_cm))
                 if key not in migration_outcomes:
-                    if self.config.disk_model == TORQUE_WITH_TRAP:
-                        if torque_profile is None:
-                            raise RuntimeError("torque migration profile was not built")
-                        migration_outcomes[key] = (
-                            self.torque_migration_outcome_to_radius(
-                                agn_properties,
-                                disk_data,
-                                damping_result["mass_g"],
-                                start_radius_cm,
-                                target_radius_cm,
-                                torque_profile=torque_profile,
-                            )
+                    migration_outcomes[key] = (
+                        self.torque_migration_outcome_to_radius(
+                            agn_properties,
+                            disk_data,
+                            damping_result["mass_g"],
+                            start_radius_cm,
+                            target_radius_cm,
+                            torque_profile=torque_profile,
                         )
-                    else:
-                        migration_outcomes[key] = (
-                            self.semi_analytic_migration_outcome_to_radius(
-                                agn_properties,
-                                disk_data,
-                                damping_result["mass_g"],
-                                start_radius_cm,
-                                target_radius_cm,
-                            )
-                        )
+                    )
                 return migration_outcomes[key]
 
             def migration_time_myr_call(
@@ -492,11 +481,24 @@ class IMRIEventEvaluator:
             f"m_smbh={result.m_smbh_msun:.12g}:m_nsc={result.m_nsc_msun:.12g}:"
             f"repeat={result.repeat_idx}:object={damping_result['idx']}"
         )
+        # One definition of a counted candidate, shared with the averaged CSV:
+        # the gas stage produced a candidate *and* the object actually reaches
+        # the LISA band in finite time. Applying it here keeps the per-event
+        # table, the in-model tally and the headline count in agreement.
+        counted_imri_candidate = is_physical_imri_entry(
+            event_decision.is_imri_candidate,
+            float(detect_decision.detection_time_myr),
+        )
+        counted_event_rate_class = (
+            event_decision.event_rate_class
+            if counted_imri_candidate is None or counted_imri_candidate
+            else EVENT_RATE_NO_IMRI
+        )
         intrinsic_rate_contribution_per_myr = (
             1.0 / self.duty_cycle_myr
-            if event_decision.is_imri_candidate is True
+            if counted_imri_candidate is True
             else 0.0
-            if event_decision.is_imri_candidate is False
+            if counted_imri_candidate is False
             else np.nan
         )
         detected_rate_contribution_per_myr = (
@@ -504,7 +506,7 @@ class IMRIEventEvaluator:
             if detect_decision.is_lisa_detectable is True
             else 0.0
             if (
-                event_decision.is_imri_candidate is True
+                counted_imri_candidate is True
                 and detect_decision.is_lisa_detectable is False
             )
             else np.nan
@@ -525,7 +527,7 @@ class IMRIEventEvaluator:
             ),
             "bh_origin": event_decision.bh_origin,
             "band_entry_status": band_entry_status,
-            "event_rate_class": event_decision.event_rate_class,
+            "event_rate_class": counted_event_rate_class,
             "detect_rate_class": detect_decision.detect_rate_class,
             "formation_time_myr": formation_time_myr,
             "damping_time_myr": damping_time_myr,
@@ -579,7 +581,7 @@ class IMRIEventEvaluator:
             "final_smbh_mass_msun": detect_decision.final_smbh_mass_msun,
             "cosmic_merge_applied": detect_decision.cosmic_merge_applied,
             "bh_candidate": event_decision.bh_candidate,
-            "is_imri_candidate": event_decision.is_imri_candidate,
+            "is_imri_candidate": counted_imri_candidate,
             "is_lisa_detectable": detect_decision.is_lisa_detectable,
             "lisa_snr": detect_decision.lisa_snr,
             "snr_status": detect_decision.snr_status,
@@ -635,12 +637,7 @@ class IMRIEventEvaluator:
                 agn_properties.smbh_mass_msun,
                 migrator_mass_msun,
             )
-        torque_cgs = self._migration_torque_cgs(
-            torque_profile,
-            agn_properties,
-            disk_data,
-            mass_g,
-        )
+        torque_cgs = self._migration_torque_cgs(torque_profile)
         return disk_migration.torque_migration_outcome(
             np.asarray(torque_profile.radius_cm, dtype=float),
             torque_cgs,
@@ -650,57 +647,9 @@ class IMRIEventEvaluator:
             agn_properties.smbh_mass_msun,
         )
 
-    def semi_analytic_migration_outcome_to_radius(
-        self,
-        agn_properties: AGNProperties,
-        disk_data: DiskProfiles,
-        mass_g: float,
-        start_radius_cm: float,
-        target_radius_cm: float,
-    ) -> disk_migration.MigrationOutcome:
-        """Return the integrated semi-analytic outcome for one radial path."""
-        if "torque_alpha" not in disk_data:
-            raise MigrationProfileError("cached pAGN disk has no migration alpha")
-        return disk_migration.semi_analytic_migration_outcome(
-            np.asarray(disk_data["radius_cm"], dtype=float),
-            np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
-            np.asarray(disk_data["aspect_ratio"], dtype=float),
-            mass_g,
-            start_radius_cm,
-            target_radius_cm,
-            agn_properties.smbh_mass_msun,
-            float(disk_data["torque_alpha"]),
-            self.config.gap_criterion,
-            self.config.consider_type_ii_migration,
-        )
-
     def _migration_torque_cgs(
         self,
         torque_profile: TorqueProfile,
-        agn_properties: AGNProperties,
-        disk_data: DiskProfiles,
-        mass_g: float,
     ) -> FloatArray:
-        """Compose the selected migration torque and convert SI to CGS."""
-        torque_radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
-        disk_radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
-        aspect_ratio = np.asarray(disk_data["aspect_ratio"], dtype=float)
-        order = np.argsort(disk_radius_cm)
-        local_aspect_ratio = np.interp(
-            torque_radius_cm,
-            disk_radius_cm[order],
-            aspect_ratio[order],
-        )
-        if "torque_alpha" not in disk_data:
-            raise TorqueProfileError("cached pAGN disk has no torque alpha")
-        torque_alpha = float(disk_data["torque_alpha"])
-        mass_ratio = mass_g / (agn_properties.smbh_mass_msun * const.msun)
-        selection = disk_migration.select_migration_torque_si(
-            torque_profile,
-            mass_ratio,
-            local_aspect_ratio,
-            torque_alpha,
-            self.config.gap_criterion,
-            self.config.consider_type_ii_migration,
-        )
-        return torque_si_to_cgs(selection.torque_si)
+        """Convert the already-composed production torque from SI to CGS."""
+        return torque_si_to_cgs(torque_profile.gamma_total_si)

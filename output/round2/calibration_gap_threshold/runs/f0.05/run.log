@@ -14,7 +14,7 @@ LISA detector model: mission=4 yr, SNR threshold=20, H0=67.4 km/s/Mpc, Omega_m=0
 Observed LISA GW band: 1.000e-03 to 1.000e-01 Hz
 Source-frame LISA GW band: 1.600e-02 to 1.600e+00 Hz
 Cosmic merge time: 1.000e+03 Myr
-Output directory: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05
+Output directory: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05
 Damping CPU count: 2
 
 ------------------------------------------------------------------------
@@ -42,26 +42,26 @@ Running 33 damping tasks with cpus=2, chunksize=4
   total sampled objects : 1.154e+03
   disk-crossing objects : 3.300e+01
   f_geo                 : 2.860e-02
-  embedded stars        : 2.000e+00
+  embedded stars        : 5.000e+00
   embedded BHs          : 2.000e+00
   migration-formed BHs  : 0.000e+00
   BH candidates         : 2.000e+00
   IMRI candidates       : 2.000e+00
-  no-IMRI objects       : 2.000e+00
+  no-IMRI objects       : 5.000e+00
   detectable IMRIs      : 0.000e+00
   non-detectable IMRIs  : 2.000e+00
   detector unavailable  : 0.000e+00
   SNR below threshold   : 2.000e+00
   no frequency overlap  : 0.000e+00
   detector input/model/numerical unavailable: 0/0/0
-  Band entry            : evaluated=4, in_domain=0, handoff=4, inside_isco=0, profile_error=0
-  Migration             : evaluated=4, finite=2, trap_bound=2, errors=0
-  Trap-bound mass       : 3.964341e+01 Msun
+  Band entry            : evaluated=7, in_domain=0, handoff=7, inside_isco=0, profile_error=0
+  Migration             : evaluated=7, finite=7, trap_bound=0, errors=0
+  Trap-bound mass       : 0.000000e+00 Msun
   IMRI candidate rate   : 2.000e-01 /Myr
   detectable IMRI rate  : 0.000e+00 /Myr
-  candidate mass rate   : 2.898e+01 Msun/Myr
+  candidate mass rate   : 7.496e+00 Msun/Myr
   detectable mass rate  : 0.000e+00 Msun/Myr
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0000.json
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0000.json
 Repeat 2/2
 AGN initialized done.
 Disk profiles cached. r_out = 9.953e+15 cm = 3.226e-03 pc
@@ -83,36 +83,36 @@ Running 20 damping tasks with cpus=2, chunksize=2
   total sampled objects : 1.141e+03
   disk-crossing objects : 2.000e+01
   f_geo                 : 1.753e-02
-  embedded stars        : 1.000e+00
+  embedded stars        : 3.000e+00
   embedded BHs          : 1.000e+00
-  migration-formed BHs  : 0.000e+00
-  BH candidates         : 1.000e+00
-  IMRI candidates       : 1.000e+00
-  no-IMRI objects       : 1.000e+00
+  migration-formed BHs  : 1.000e+00
+  BH candidates         : 2.000e+00
+  IMRI candidates       : 2.000e+00
+  no-IMRI objects       : 2.000e+00
   detectable IMRIs      : 0.000e+00
-  non-detectable IMRIs  : 1.000e+00
+  non-detectable IMRIs  : 2.000e+00
   detector unavailable  : 0.000e+00
-  SNR below threshold   : 1.000e+00
+  SNR below threshold   : 2.000e+00
   no frequency overlap  : 0.000e+00
   detector input/model/numerical unavailable: 0/0/0
-  Band entry            : evaluated=2, in_domain=0, handoff=2, inside_isco=0, profile_error=0
-  Migration             : evaluated=2, finite=1, trap_bound=1, errors=0
-  Trap-bound mass       : 3.010416e+01 Msun
-  IMRI candidate rate   : 1.000e-01 /Myr
+  Band entry            : evaluated=4, in_domain=0, handoff=4, inside_isco=0, profile_error=0
+  Migration             : evaluated=4, finite=4, trap_bound=0, errors=0
+  Trap-bound mass       : 0.000000e+00 Msun
+  IMRI candidate rate   : 2.000e-01 /Myr
   detectable IMRI rate  : 0.000e+00 /Myr
-  candidate mass rate   : 8.639e+00 Msun/Myr
+  candidate mass rate   : 3.088e+01 Msun/Myr
   detectable mass rate  : 0.000e+00 Msun/Myr
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0001.json
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_averaged_results.csv
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_events.csv
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_repeat_results.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/intermediate/migration_smbh_1.000000e05_nsc_5.000000e04_repeat_0001.json
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_averaged_results.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_events.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_repeat_results.csv
 
 ########################################################################
                           SIMULATION COMPLETE                           
 ########################################################################
 Total simulations: 2
-Runtime: 2.38 s (0.04 min)
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_averaged_results.csv
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_events.csv
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/imri_repeat_results.csv
-saved: /home/planet/projects/ding/science/task_003/run/attachment/output/round2/calibration_gap_threshold/runs/f0.05/simulation_metadata.json
+Runtime: 4.72 s (0.08 min)
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_averaged_results.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_events.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/imri_repeat_results.csv
+saved: /home/planet/Phy/imri/output/round2/calibration_gap_threshold/runs/f0.05/simulation_metadata.json

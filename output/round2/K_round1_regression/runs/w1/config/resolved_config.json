@@ -11,12 +11,10 @@
     ],
     "num_repeats": 1,
     "duty_cycle_myr": 10.0,
-    "output_dir": "/home/planet/projects/ding/science/task_003/run/attachment/output/round2/K_round1_regression/runs/unused",
+    "output_dir": "/home/planet/Phy/imri/output/round2/K_round1_regression/runs/unused",
     "metallicity": 1e-05,
     "initial_stellar_density_gamma": 1.75,
     "use_disk_inner_radius": true,
-    "consider_type_ii_migration": true,
-    "disk_model": "torque_with_trap",
     "lisa_min_gw_frequency_hz": 0.001,
     "lisa_max_gw_frequency_hz": 0.1,
     "max_gw_time_myr": 13600.0,
@@ -25,6 +23,7 @@
     "hubble_constant_per_myr": 7.352941176470588e-05,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
+    "snr_window_placement": "optimal",
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
     "cosmic_merge_time_myr": 1000.0,
@@ -36,9 +35,7 @@
     "base_seed": 0,
     "nsc_radius_pc_at_reference_mass": 3.31,
     "nsc_radius_mass_slope": 0.321,
-    "nsc_radius_reference_mass_msun": 3600000.0,
-    "gap_opening_condition": "kanagawa",
-    "gap_parameter_threshold": null
+    "nsc_radius_reference_mass_msun": 3600000.0
   },
   "host_mapping_policy": {
     "smbh_mass_source": "stellar-scaling",

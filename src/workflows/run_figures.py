@@ -20,7 +20,7 @@ from matplotlib.lines import Line2D
 from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 
 from .config import DISK_ACCRETION_RATE_G_S_PER_MSUN, PAGN_ALPHA
-from .lisa_snr import (
+from lisa.snr import (
     SNR_STATUS_EVALUATED,
     SNR_STATUS_MODEL_UNAVAILABLE,
     SNR_STATUS_NO_OVERLAP,
@@ -29,7 +29,7 @@ from .lisa_snr import (
     fourier_inspiral_amplitude_hz_inverse,
     lisa_effective_strain_psd_hz,
 )
-from .rate_plots import (
+from viz.rate_plots import (
     STATUS_CATEGORY_COLORS,
     STATUS_CATEGORY_LABELS,
     STATUS_CATEGORY_ORDER,

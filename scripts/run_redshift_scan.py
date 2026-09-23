@@ -1,4 +1,4 @@
-"""Run paired scalar-redshift IMRI workflows and build comparison figures."""
+"""Run scalar-redshift IMRI workflows for the fixed migration contract."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import shutil
 import sys
 import warnings
 from pathlib import Path
-from typing import Any, Sequence, cast
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
@@ -28,8 +28,6 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "metallicity": 1.0e-5,
     "initial_stellar_density_gamma": 7.0 / 4.0,
     "use_disk_inner_radius": True,
-    "consider_type_ii_migration": True,
-    "disk_model": "torque_with_trap",
     "lisa_min_gw_frequency_hz": 1.0e-3,
     "lisa_max_gw_frequency_hz": 1.0e-1,
     "max_gw_time_myr": 13.6e3,
@@ -49,7 +47,6 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "nsc_radius_pc_at_reference_mass": 3.31,
     "nsc_radius_mass_slope": 0.321,
     "nsc_radius_reference_mass_msun": 3.6e6,
-    "gap_opening_condition": DEFAULT_GAP_OPENING_CONDITION,
 }
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -57,13 +54,7 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
-from workflows.config import (
-    DEFAULT_DISK_MODEL,
-    DISK_MODELS,
-    SEMI_WITHOUT_TRAP,
-    TORQUE_WITH_TRAP,
-    IMRIDynConfig,
-)
+from workflows.config import IMRIDynConfig, MIGRATION_CONTRACT
 from viz.rate_plots import (
     STATUS_VARIABLE_ORDER,
     RunResults,
@@ -88,8 +79,6 @@ CONFIG_TEMPLATE_FIELDS = (
     "metallicity",
     "initial_stellar_density_gamma",
     "use_disk_inner_radius",
-    "consider_type_ii_migration",
-    "disk_model",
     "lisa_min_gw_frequency_hz",
     "lisa_max_gw_frequency_hz",
     "max_gw_time_myr",
@@ -109,7 +98,6 @@ CONFIG_TEMPLATE_FIELDS = (
     "nsc_radius_pc_at_reference_mass",
     "nsc_radius_mass_slope",
     "nsc_radius_reference_mass_msun",
-    "gap_opening_condition",
 )
 
 
@@ -136,13 +124,6 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="+",
         default=DEFAULT_REDSHIFTS,
         help="ordered scalar redshifts; matching grid tasks use paired seeds",
-    )
-    parser.add_argument(
-        "--disk-models",
-        choices=DISK_MODELS,
-        nargs="+",
-        default=DISK_MODELS,
-        help="ordered migration scenarios; defaults to the paired comparison",
     )
     parser.add_argument(
         "--base-seed",
@@ -175,14 +156,6 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
     source = payload.get("parameters", payload)
     if not isinstance(source, dict):
         raise ValueError("config JSON must contain an object")
-    if "disk_model" not in source and is_metadata:
-        source = dict(source)
-        source["disk_model"] = DEFAULT_DISK_MODEL
-        warnings.warn(
-            "historical simulation metadata has no disk_model; explicitly "
-            f"inferring {DEFAULT_DISK_MODEL}",
-            stacklevel=2,
-        )
     historical_detector_defaults = {
         "lisa_mission_duration_years": 4.0,
         "snr_window_placement": "optimal",
@@ -213,75 +186,6 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
 def _redshift_token(index: int, redshift: float) -> str:
     value = f"{redshift:.12g}".replace("-", "m").replace("+", "p").replace(".", "p")
     return f"z{index:03d}_{value}"
-
-
-def build_paired_rate_comparison(rate_summary: pd.DataFrame) -> pd.DataFrame:
-    """Return model-separated rates and a guarded semi-minus-torque comparison."""
-    key_columns = ["redshift", "m_smbh_msun", "m_nsc_msun"]
-    required = [
-        "disk_model",
-        *key_columns,
-        "imri_rate_mean_per_myr",
-        "result_state",
-    ]
-    missing = sorted(set(required).difference(rate_summary.columns))
-    if missing:
-        raise ValueError(f"rate summary is missing comparison columns: {missing}")
-
-    records: list[dict[str, Any]] = []
-    for key, group in rate_summary.groupby(key_columns, sort=True, dropna=False):
-        if not isinstance(key, tuple) or len(key) != len(key_columns):
-            raise ValueError(f"unexpected comparison group key: {key!r}")
-        redshift, smbh_mass_msun, nsc_mass_msun = (float(value) for value in key)
-        by_model = {str(row["disk_model"]): row for _, row in group.iterrows()}
-        torque = by_model.get(TORQUE_WITH_TRAP)
-        semi = by_model.get(SEMI_WITHOUT_TRAP)
-        torque_rate = (
-            float(torque["imri_rate_mean_per_myr"]) if torque is not None else np.nan
-        )
-        semi_rate = (
-            float(semi["imri_rate_mean_per_myr"]) if semi is not None else np.nan
-        )
-        torque_state = str(torque["result_state"]) if torque is not None else "missing"
-        semi_state = str(semi["result_state"]) if semi is not None else "missing"
-        both_finite = np.isfinite(torque_rate) and np.isfinite(semi_rate)
-        difference = semi_rate - torque_rate if both_finite else np.nan
-        ratio = semi_rate / torque_rate if both_finite and torque_rate > 0.0 else np.nan
-
-        if torque is None or semi is None:
-            comparison_status = "missing_scenario"
-        elif not both_finite:
-            unavailable = [
-                name
-                for name, value in (
-                    (TORQUE_WITH_TRAP, torque_rate),
-                    (SEMI_WITHOUT_TRAP, semi_rate),
-                )
-                if not np.isfinite(value)
-            ]
-            comparison_status = "unavailable:" + ",".join(unavailable)
-        elif torque_rate <= 0.0:
-            comparison_status = "ratio_undefined_nonpositive_torque_rate"
-        elif torque_state == "valid" and semi_state == "valid":
-            comparison_status = "valid"
-        else:
-            comparison_status = "partial_repeats"
-
-        records.append(
-            {
-                "redshift": redshift,
-                "m_smbh_msun": smbh_mass_msun,
-                "m_nsc_msun": nsc_mass_msun,
-                "torque_with_trap_rate_per_myr": torque_rate,
-                "torque_with_trap_result_state": torque_state,
-                "semi_without_trap_rate_per_myr": semi_rate,
-                "semi_without_trap_result_state": semi_state,
-                "semi_minus_torque_rate_per_myr": difference,
-                "semi_over_torque_rate_ratio": ratio,
-                "comparison_status": comparison_status,
-            }
-        )
-    return pd.DataFrame.from_records(records)
 
 
 def _json_paths(value: Any) -> Any:
@@ -353,13 +257,12 @@ def run_scan(
     *,
     config_json: Path | None,
     redshifts: Sequence[float],
-    disk_models: Sequence[str] = DISK_MODELS,
     base_seed: int,
     output_dir: Path,
     selected_nsc_mass_msun: float | None = None,
     overwrite_existing: bool = False,
 ) -> dict[str, Any]:
-    """Run a paired scan and return the strict metadata payload."""
+    """Run a fixed-contract redshift scan and return strict metadata."""
     redshift_values = [float(value) for value in redshifts]
     if not redshift_values:
         raise ValueError("at least one redshift is required")
@@ -369,59 +272,45 @@ def run_scan(
         raise ValueError("redshift values must be unique")
     if base_seed < 0:
         raise ValueError("base seed must be nonnegative")
-    model_values = [str(value) for value in disk_models]
-    if not model_values:
-        raise ValueError("at least one disk model is required")
-    if len(set(model_values)) != len(model_values):
-        raise ValueError("disk model values must be unique")
-    invalid_models = sorted(set(model_values).difference(DISK_MODELS))
-    if invalid_models:
-        raise ValueError(f"unsupported disk models: {invalid_models}")
     _prepare_output_dir(output_dir, overwrite_existing=overwrite_existing)
 
     template = load_config_template(config_json)
     repeat_frames: list[pd.DataFrame] = []
     event_frames: list[pd.DataFrame] = []
     run_records: list[dict[str, Any]] = []
-    reference_runs: dict[str, RunResults] = {}
-    for disk_model in model_values:
-        for index, redshift in enumerate(redshift_values):
-            run_dir = output_dir / disk_model / _redshift_token(index, redshift)
-            config_values = dict(template)
-            config_values["disk_model"] = disk_model
-            config = IMRIDynConfig(
-                **config_values,
-                output_dir=run_dir,
-                redshift=redshift,
-                base_seed=base_seed,
-            )
-            run_simulation(config)
-            run = load_run_results(run_dir)
-            reference_runs.setdefault(disk_model, run)
+    reference_run: RunResults | None = None
+    for index, redshift in enumerate(redshift_values):
+        run_dir = output_dir / _redshift_token(index, redshift)
+        config = IMRIDynConfig(
+            **template,
+            output_dir=run_dir,
+            redshift=redshift,
+            base_seed=base_seed,
+        )
+        run_simulation(config)
+        run = load_run_results(run_dir)
+        if reference_run is None:
+            reference_run = run
 
-            repeat_frame = run.repeats.copy()
-            repeat_frame["run_output_dir"] = str(run_dir)
-            repeat_frames.append(repeat_frame)
-            event_frames.append(run.events.copy())
-            run_records.append(
-                {
-                    "disk_model": disk_model,
-                    "redshift": redshift,
-                    "directory_token": run_dir.name,
-                    "output_dir": run_dir,
-                }
-            )
+        repeat_frame = run.repeats.copy()
+        repeat_frame["run_output_dir"] = str(run_dir)
+        repeat_frames.append(repeat_frame)
+        event_frames.append(run.events.copy())
+        run_records.append(
+            {
+                "redshift": redshift,
+                "directory_token": run_dir.name,
+                "output_dir": run_dir,
+            }
+        )
 
     combined_repeats = pd.concat(repeat_frames, ignore_index=True)
-    summary_path = output_dir / "disk_model_scan_summary.csv"
+    summary_path = output_dir / "redshift_scan_summary.csv"
     combined_repeats.to_csv(summary_path, index=False, float_format="%.17g")
     rate_summary = build_rate_summary_data(combined_repeats)
     rate_summary_path = save_plot_data(
         rate_summary, output_dir / "figures" / "data" / "imri_rate_summary.csv"
     )
-    comparison = build_paired_rate_comparison(rate_summary)
-    comparison_path = output_dir / "disk_model_rate_comparison.csv"
-    comparison.to_csv(comparison_path, index=False, float_format="%.17g")
     rate_ylim = shared_rate_axis_limits(rate_summary)
     combined_events = pd.concat(event_frames, ignore_index=True)
     status_fractions = build_status_fraction_data(combined_events, combined_repeats)
@@ -456,33 +345,27 @@ def run_scan(
         selected_nsc_mass_msun=selected_nsc_mass_msun,
     )
 
-    scan_figures: dict[str, Any] = {}
-    for disk_model in model_values:
-        model_repeats = cast(
-            pd.DataFrame,
-            combined_repeats.loc[
-                combined_repeats["disk_model"].astype(str).eq(disk_model)
-            ].copy(),
-        )
-        scan_figures[disk_model] = generate_scan_figures(
-            model_repeats,
-            output_dir / "figures" / disk_model,
-            reference_runs[disk_model],
-            selected_nsc_mass_msun,
-            rate_ylim,
-        )
+    if reference_run is None:  # Guarded above; keeps the type contract explicit.
+        raise RuntimeError("redshift scan produced no reference run")
+    scan_figures = generate_scan_figures(
+        combined_repeats,
+        output_dir / "figures",
+        reference_run,
+        selected_nsc_mass_msun,
+        rate_ylim,
+    )
     metadata: dict[str, Any] = {
-        "description": "Paired disk-migration-scenario and redshift IMRI scan",
+        "description": "Fixed-contract redshift IMRI scan",
         "config_json": config_json.resolve() if config_json is not None else None,
         "config_template": template,
         "redshifts": redshift_values,
-        "disk_models": model_values,
+        "migration_contract": MIGRATION_CONTRACT,
         "base_seed": base_seed,
         "presentation_nsc_mass_msun": selected_nsc_mass_msun,
         "shared_rate_axis_limits_per_myr": rate_ylim,
         "task_seed_policy": (
             "numpy_seed_sequence(base_seed,smbh_index,nsc_index,repeat_index);"
-            "redshift_and_disk_model_excluded"
+            "redshift_excluded"
         ),
         "rate_normalization": "AGN-duty-cycle-normalized production yield",
         "gas_time_coordinate": "gas_final_time_myr",
@@ -492,9 +375,8 @@ def run_scan(
         ),
         "lisa_entry_boundary": "evolving with redshift",
         "runs": run_records,
-        "disk_model_scan_summary": summary_path,
-        "disk_model_rate_summary": rate_summary_path,
-        "disk_model_rate_comparison": comparison_path,
+        "redshift_scan_summary": summary_path,
+        "redshift_rate_summary": rate_summary_path,
         "status_fraction_summary": status_fraction_path,
         "status_fraction_figures": status_fraction_figures,
         "status_fraction_smbh_mass_summary": mass_status_fraction_path,
@@ -515,8 +397,8 @@ def run_scan(
         },
         "scan_figures": scan_figures,
     }
-    metadata_path = output_dir / "disk_model_scan_metadata.json"
-    metadata["disk_model_scan_metadata"] = metadata_path
+    metadata_path = output_dir / "redshift_scan_metadata.json"
+    metadata["redshift_scan_metadata"] = metadata_path
     with metadata_path.open("w") as metadata_file:
         json.dump(_json_paths(metadata), metadata_file, indent=2, allow_nan=False)
     return metadata
@@ -533,21 +415,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     outputs = run_scan(
         config_json=arguments.config_json,
         redshifts=arguments.redshifts,
-        disk_models=arguments.disk_models,
         base_seed=arguments.base_seed,
         output_dir=arguments.output_dir,
         selected_nsc_mass_msun=arguments.nsc_mass_msun,
         overwrite_existing=overwrite_existing,
     )
-    print(f"saved scan summary: {outputs['disk_model_scan_summary']}")
-    print(f"saved comparison: {outputs['disk_model_rate_comparison']}")
+    print(f"saved scan summary: {outputs['redshift_scan_summary']}")
     print(f"saved status fractions: {outputs['status_fraction_summary']}")
     print(
         "saved SMBH-mass status fractions: "
         f"{outputs['status_fraction_smbh_mass_summary']}"
     )
     print(f"saved figure captions: {outputs['status_fraction_figure_captions']}")
-    print(f"saved scan metadata: {outputs['disk_model_scan_metadata']}")
+    print(f"saved scan metadata: {outputs['redshift_scan_metadata']}")
 
 
 if __name__ == "__main__":

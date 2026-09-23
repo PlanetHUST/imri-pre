@@ -56,6 +56,7 @@ def init_damping_worker(
     disk_inner_radius_cm: float,
     disk_outer_radius_cm: float,
     use_disk_inner_radius: bool,
+    density_g_cm3: FloatArray,
 ) -> None:
     """Create one damping calculator per worker process."""
     global _WORKER_CALCULATOR
@@ -68,6 +69,7 @@ def init_damping_worker(
         disk_inner_radius_cm=disk_inner_radius_cm,
         disk_outer_radius_cm=disk_outer_radius_cm,
         use_disk_inner_radius=use_disk_inner_radius,
+        density_g_cm3=density_g_cm3,
     )
 
 
@@ -135,6 +137,7 @@ def run_damping_tasks_parallel(
     disk_outer_radius_cm: float,
     use_disk_inner_radius: bool,
     cpu_count: int,
+    density_g_cm3: FloatArray,
 ) -> list[DampingResult]:
     """Run damping tasks in a worker pool."""
     if not tasks:
@@ -156,6 +159,7 @@ def run_damping_tasks_parallel(
             disk_inner_radius_cm,
             disk_outer_radius_cm,
             use_disk_inner_radius,
+            density_g_cm3,
         ),
     ) as pool:
         return list(

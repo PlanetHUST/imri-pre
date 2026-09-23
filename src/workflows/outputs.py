@@ -13,8 +13,8 @@ from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
     IMRI_REPEAT_RESULTS_FILENAME,
+    MIGRATION_CONTRACT,
     METADATA_FILENAME,
-    SEMI_WITHOUT_TRAP,
     IMRIDynConfig,
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
@@ -47,6 +47,8 @@ IMRI_RESULT_COLUMN_MAP = [
     ("imri_candidate_count_max", "n_imri_max"),
     ("imri_candidate_mass_mean_msun", "m_imri_msun"),
     ("imri_candidate_rate_mean_per_myr", "rate_imri_per_myr"),
+    ("entry_after_duty_cycle_count_mean", "n_entry_after_duty"),
+    ("max_entry_time_in_duty_cycles", "max_entry_duty_cycles"),
     ("no_detectable_imri_count_mean", "n_nondet"),
     ("detectable_imri_rate_mean_per_myr", "rate_det_per_myr"),
     ("detectable_imri_count_mean", "n_det"),
@@ -70,8 +72,10 @@ IMRI_RESULT_COLUMN_MAP = [
     ("migration_evaluated_count_mean", "n_mig_eval"),
     ("finite_migration_count_mean", "n_mig_finite"),
     ("trap_bound_migration_count_mean", "n_mig_trap"),
+    ("outward_blocked_migration_count_mean", "n_mig_outward_blocked"),
     ("migration_error_count_mean", "n_mig_error"),
     ("trap_bound_mass_mean_msun", "m_mig_trap_msun"),
+    ("outward_blocked_mass_mean_msun", "m_mig_outward_blocked_msun"),
 ]
 IMRI_RESULT_COLUMNS = [
     output_name for _source_name, output_name in IMRI_RESULT_COLUMN_MAP
@@ -200,6 +204,7 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "n_mig_eval",
     "n_mig_finite",
     "n_mig_trap",
+    "n_mig_outward_blocked",
     "n_mig_error",
 ]
 
@@ -252,6 +257,14 @@ class _PhysicalEntrySummary:
     required_input_unavailable_count: int
     model_unavailable_count: int
     numerical_failure_count: int
+    #: Counted candidates whose LISA band entry falls *after* the AGN episode.
+    #: The gas stage is confined to the duty cycle by construction, but the
+    #: GW-only inspiral that follows is not, so these are reported rather than
+    #: cut: they are the events a merger-tree treatment would have to revisit,
+    #: because the host will have changed by the time they enter the band.
+    entry_after_duty_cycle_count: int
+    #: Largest band-entry time in units of the duty cycle (1.0 = at the edge).
+    max_entry_time_in_duty_cycles: float
 
 
 def _boolean_state(value: Any) -> bool | None:
@@ -321,6 +334,16 @@ def _physical_entry_summary(result: IMRIDynSingleResult) -> _PhysicalEntrySummar
         + numerical_failure_count
     ):
         raise ValueError("detector-unavailable entries do not conserve outcomes")
+
+    duty_cycle_myr = _core_duty_cycle_myr(result)
+    entry_times_in_duty_cycles = (
+        [
+            float(event["detection_time_myr"]) / duty_cycle_myr
+            for event in entries
+        ]
+        if duty_cycle_myr
+        else []
+    )
     return _PhysicalEntrySummary(
         count=len(entries),
         mass_msun=float(sum(float(event["mass_msun"]) for event in entries)),
@@ -334,6 +357,12 @@ def _physical_entry_summary(result: IMRIDynSingleResult) -> _PhysicalEntrySummar
         required_input_unavailable_count=required_input_unavailable_count,
         model_unavailable_count=model_unavailable_count,
         numerical_failure_count=numerical_failure_count,
+        entry_after_duty_cycle_count=int(
+            sum(1 for ratio in entry_times_in_duty_cycles if ratio > 1.0)
+        ),
+        max_entry_time_in_duty_cycles=(
+            max(entry_times_in_duty_cycles) if entry_times_in_duty_cycles else 0.0
+        ),
     )
 
 
@@ -511,6 +540,17 @@ def _result_output_record(
         record["imri_candidate_rate_mean_per_myr"] = float(
             np.mean(physical_rates)
         )
+        # Post-duty-cycle significance: the gas stage is confined to the AGN
+        # episode, but the GW-only inspiral that follows is not. Report how many
+        # counted candidates enter the LISA band after the episode ends, and how
+        # far past it the latest one lands, so a merger-tree treatment knows how
+        # much of the yield it will have to re-evaluate against a changed host.
+        record["entry_after_duty_cycle_count_mean"] = float(
+            np.mean([summary.entry_after_duty_cycle_count for summary in summaries])
+        )
+        record["max_entry_time_in_duty_cycles"] = float(
+            np.max([summary.max_entry_time_in_duty_cycles for summary in summaries])
+        )
     else:
         for name in (
             "imri_candidate_count_mean",
@@ -518,6 +558,8 @@ def _result_output_record(
             "imri_candidate_count_max",
             "imri_candidate_mass_mean_msun",
             "imri_candidate_rate_mean_per_myr",
+            "entry_after_duty_cycle_count_mean",
+            "max_entry_time_in_duty_cycles",
         ):
             record[name] = np.nan
 
@@ -852,6 +894,7 @@ def _repeat_output_record(
         "n_mig_eval": result.migration_evaluated_count,
         "n_mig_finite": result.finite_migration_count,
         "n_mig_trap": result.trap_bound_migration_count,
+        "n_mig_outward_blocked": result.outward_blocked_migration_count,
         "n_mig_error": result.migration_error_count,
     }
 
@@ -920,6 +963,19 @@ def save_migration_diagnostics(
         for event in result.imri_events
         if event["migration_status"] == "trap_bound"
     ]
+    outward_blocked_objects = [
+        {
+            "object_index": event["object_index"],
+            "mass_msun": json_float(event["mass_msun"]),
+            "r_ini_rg": json_float(event["r_ini_rg"]),
+            "r_entry_rg": json_float(event["r_entry_rg"]),
+            "migration_time_to_entry_myr": None,
+            "migration_status": event["migration_status"],
+            "blocking_radius_rg": None,
+        }
+        for event in result.imri_events
+        if event["migration_status"] == "outward_blocked"
+    ]
 
     band_entry_objects = [
         {
@@ -963,16 +1019,14 @@ def save_migration_diagnostics(
         result.migration_evaluated_count
         != result.finite_migration_count
         + result.trap_bound_migration_count
+        + result.outward_blocked_migration_count
         + result.migration_error_count
     ):
         raise ValueError("migration counters do not sum to evaluated count")
     if result.trap_bound_migration_count != len(trap_bound_objects):
         raise ValueError("trap-bound counter does not match event records")
-    if (
-        result.disk_model == SEMI_WITHOUT_TRAP
-        and result.trap_bound_migration_count != 0
-    ):
-        raise ValueError("semi-analytic migration cannot produce trap-bound outcomes")
+    if result.outward_blocked_migration_count != len(outward_blocked_objects):
+        raise ValueError("outward-blocked counter does not match event records")
     if result.migration_error_count != len(result.migration_errors):
         raise ValueError("migration error counter does not match error records")
     if result.profile_error_count != result.migration_error_count:
@@ -1068,8 +1122,7 @@ def save_migration_diagnostics(
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,
         "duty_cycle_myr": json_float(config.duty_cycle_myr),
-        "gap_opening_condition": config.gap_opening_condition,
-        "consider_type_ii_migration": config.consider_type_ii_migration,
+        "migration_contract": MIGRATION_CONTRACT,
         "rate_evaluation_status": rate_status,
         "detector_rate_evaluation_status": detector_rate_status,
         "physical_entry_imri_count": physical.count,
@@ -1097,8 +1150,14 @@ def save_migration_diagnostics(
         "migration_evaluated_count": result.migration_evaluated_count,
         "finite_migration_count": result.finite_migration_count,
         "trap_bound_migration_count": result.trap_bound_migration_count,
+        "outward_blocked_migration_count": (
+            result.outward_blocked_migration_count
+        ),
         "migration_error_count": result.migration_error_count,
         "trap_bound_mass_msun": json_float(result.trap_bound_mass_msun),
+        "outward_blocked_mass_msun": json_float(
+            result.outward_blocked_mass_msun
+        ),
         "imri_rate_per_myr": json_float(
             physical.count / config.duty_cycle_myr
             if rate_status == "complete"
@@ -1112,6 +1171,7 @@ def save_migration_diagnostics(
         "gw_propagation_eligible_rate_per_myr": json_float(result.imri_rate_per_myr),
         "band_entry_objects": band_entry_objects,
         "trap_bound_objects": trap_bound_objects,
+        "outward_blocked_objects": outward_blocked_objects,
         "migration_errors": [
             {
                 "object_index": error["object_index"],

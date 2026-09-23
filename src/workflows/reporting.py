@@ -104,9 +104,14 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
         f"evaluated={result.migration_evaluated_count}, "
         f"finite={result.finite_migration_count}, "
         f"trap_bound={result.trap_bound_migration_count}, "
+        f"outward_blocked={result.outward_blocked_migration_count}, "
         f"errors={result.migration_error_count}"
     )
     print(f"  Trap-bound mass       : {result.trap_bound_mass_msun:.6e} Msun")
+    print(
+        "  Outward-blocked mass  : "
+        f"{result.outward_blocked_mass_msun:.6e} Msun"
+    )
     print("  IMRI candidate rate   : " f"{rate_text(result.imri_rate_per_myr, '/Myr')}")
     print(
         "  detectable IMRI rate  : "

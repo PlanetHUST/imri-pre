@@ -14,6 +14,32 @@ BH_ORIGIN_NOT_FORMED = "no_bh"
 EVENT_RATE_IMRI_CANDIDATE = "imri candi"
 EVENT_RATE_NO_IMRI = "no-IMRI"
 EVENT_RATE_NOT_EVALUATED = "not evaluated"
+
+
+def is_physical_imri_entry(
+    is_imri_candidate: bool | None,
+    detection_time_myr: float,
+) -> bool | None:
+    """Return whether an object is a *counted* IMRI candidate.
+
+    ``classify_event_rate`` decides candidacy from the gas stop reason alone,
+    because it runs before the GW stage knows when -- or whether -- the object
+    reaches the LISA band.  Two of its candidate reasons (``duty_cycle_limited``
+    and ``gas_to_gw_handoff``) admit objects whose band entry never happens, so
+    candidacy alone is not the quantity the rate is built from.
+
+    This predicate is the single definition of a counted candidate: the gas
+    stage produced a candidate *and* the object actually reaches the band in
+    finite time.  Every layer -- the in-model tally, the per-event
+    ``event_rate_class`` column and the averaged CSV -- must use it, otherwise
+    the per-event table disagrees with the headline count.
+
+    Returns ``None`` when candidacy itself was not evaluated, preserving the
+    "a zero is always explainable" status semantics.
+    """
+    if is_imri_candidate is None:
+        return None
+    return bool(is_imri_candidate) and bool(np.isfinite(detection_time_myr))
 GAS_FINAL_RADIUS_SAMPLES = 96
 
 
@@ -95,10 +121,21 @@ def solve_gas_final_radius_cm(
 ) -> tuple[float, float, float, float, float, str]:
     """Return the final gas-delivered radius before GW or duty-cycle stopping.
 
-    The gas stage moves inward from ``r_ini_cm`` until one of three conditions is reached:
-    1. its in-domain target, either LISA entry or a gas-to-GW handoff;
-    2. exhaustion of the AGN duty-cycle time;
-    3. available after damping, or the point where GW-only evolution to entry is faster than continued gas migration.
+    The gas stage moves inward from ``r_ini_cm`` and stops at whichever of the
+    following comes first, reported as the returned stop reason:
+
+    * ``already_inside_lisa_entry`` / ``entry_reached`` / ``gas_to_gw_handoff``
+      -- the in-domain target was already met or was reached;
+    * ``gw_dominates_at_start`` -- GW-only evolution from ``r_ini_cm`` reaches
+      entry no later than the gas-assisted route.  This is tested *before* the
+      trap check: a torque barrier blocks gas delivery, not GW evolution;
+    * ``migration_trap_bound`` -- gas delivery is blocked and GW-only offers no
+      finite route either;
+    * ``damping_misses_duty_cycle`` / ``duty_cycle_limited`` -- the AGN episode
+      ended before or during the gas stage;
+    * ``gw_dominates_after_gas`` -- the sampled/refined crossover where
+      continued gas migration becomes slower than GW-only evolution;
+    * ``invalid_radius`` -- a non-finite or non-positive input radius.
     """
     if (
         not np.isfinite(r_ini_cm)
@@ -157,18 +194,14 @@ def solve_gas_final_radius_cm(
             "damping_misses_duty_cycle",
         )
 
-    if not np.isfinite(total_migration_time_myr):
-        return (
-            r_ini_cm,
-            0.0,
-            total_migration_time_myr,
-            total_gw_time_myr,
-            gw_time_gas_target_to_entry_myr,
-            "migration_trap_bound",
-        )
-
+    # An infinite gas time means gas delivery is blocked, so the gas-assisted
+    # route costs infinity -- but that says nothing about GW evolution, which
+    # is unaffected by a torque barrier.  Give the direct-GW route its chance
+    # before declaring the migrator trap-bound.
     gas_assisted_time_to_entry_myr = (
         total_migration_time_myr + gw_time_gas_target_to_entry_myr
+        if np.isfinite(total_migration_time_myr)
+        else np.inf
     )
     if (
         np.isfinite(total_gw_time_myr)
@@ -181,6 +214,16 @@ def solve_gas_final_radius_cm(
             total_gw_time_myr,
             gw_time_gas_target_to_entry_myr,
             "gw_dominates_at_start",
+        )
+
+    if not np.isfinite(total_migration_time_myr):
+        return (
+            r_ini_cm,
+            0.0,
+            total_migration_time_myr,
+            total_gw_time_myr,
+            gw_time_gas_target_to_entry_myr,
+            "migration_trap_bound",
         )
 
     sample_count = max(2, int(num_radius_samples))

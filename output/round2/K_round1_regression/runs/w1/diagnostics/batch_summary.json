@@ -25,6 +25,6 @@
   "jobs_succeeded": 4,
   "jobs_not_evaluated": 0,
   "physical_zero_note": "A job with status 'success' and n_imri == 0 is a physical zero; any other status means the local model could not be evaluated.",
-  "runtime_s": 22.95497567500024,
+  "runtime_s": 67.75217693100421,
   "workers": 1
 }

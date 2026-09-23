@@ -28,29 +28,55 @@
       "detail": null
     },
     {
-      "check": "heavier objects embed no more slowly (expected scaling)",
+      "check": "eccentricity is not pinned at the zero clamp",
       "result": "PASS",
       "detail": {
-        "1.0": 0.6389220543850536,
-        "10.0": 0.1340159832674116,
-        "100.0": 0.013401598326741166
+        "rows_at_exactly_zero": 0,
+        "rows": 27
+      }
+    },
+    {
+      "check": "damping does not drive the semi-major axis outward",
+      "result": "PASS",
+      "detail": {
+        "rows_that_grew": 0,
+        "worst_growth_factor": 1.0
+      }
+    },
+    {
+      "check": "heavier objects embed no more slowly, at fixed initial conditions",
+      "result": "PASS",
+      "detail": {
+        "per_configuration": {
+          "r=1e+04rg,i=30deg": {
+            "1.0": 3.135256255305432,
+            "10.0": 0.3135256255305428,
+            "100.0": 0.03135256255305432
+          },
+          "r=1e+05rg,i=30deg": {
+            "1.0": 3.4272238354376645,
+            "10.0": 0.3427223835437661,
+            "100.0": 0.03427223835437661
+          }
+        },
+        "violations": []
       }
     },
     {
       "check": "at least one configuration embeds and one does not",
       "result": "PASS",
       "detail": {
-        "True": 16,
-        "False": 11
+        "False": 19,
+        "True": 8
       }
     }
   ],
   "data": {
     "status_counts": {
-      "DampingStatus.EMBEDDED_BH": 16,
+      "DampingStatus.DAMPING_INCOMPLETE": 10,
       "DampingStatus.OUTSIDE_DISK": 9,
-      "DampingStatus.DAMPING_INCOMPLETE": 2
+      "DampingStatus.EMBEDDED_BH": 8
     },
-    "embedded_fraction": 0.5925925925925926
+    "embedded_fraction": 0.2962962962962963
   }
 }

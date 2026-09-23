@@ -23,7 +23,7 @@
     {
       "check": "Peters time approaches the a^4 scaling away from entry",
       "result": "PASS",
-      "detail": 4.0228512115515755
+      "detail": 4.022851211551574
     },
     {
       "check": "both processes dominate somewhere, or gas dominates throughout (a physical result, not an assumption)",
@@ -39,12 +39,12 @@
         "ample_gas_time": {
           "r_gas_fin_rg": 100000.0,
           "gas_elapsed_myr": 0.0,
-          "stop_reason": "migration_trap_bound"
+          "stop_reason": "gw_dominates_at_start"
         },
         "starved_gas_time": {
           "r_gas_fin_rg": 100000.0,
           "gas_elapsed_myr": 0.0,
-          "stop_reason": "migration_trap_bound"
+          "stop_reason": "gw_dominates_at_start"
         }
       }
     },
@@ -55,12 +55,12 @@
         "ample_gas_time": {
           "r_gas_fin_rg": 100000.0,
           "gas_elapsed_myr": 0.0,
-          "stop_reason": "migration_trap_bound"
+          "stop_reason": "gw_dominates_at_start"
         },
         "starved_gas_time": {
           "r_gas_fin_rg": 100000.0,
           "gas_elapsed_myr": 0.0,
-          "stop_reason": "migration_trap_bound"
+          "stop_reason": "gw_dominates_at_start"
         }
       }
     },
@@ -81,17 +81,17 @@
     "dominant_counts": {
       "gw": 60
     },
-    "peters_log_slope_far_from_entry": 4.0228512115515755,
+    "peters_log_slope_far_from_entry": 4.022851211551574,
     "handoff_outcomes": {
       "ample_gas_time": {
         "r_gas_fin_rg": 100000.0,
         "gas_elapsed_myr": 0.0,
-        "stop_reason": "migration_trap_bound"
+        "stop_reason": "gw_dominates_at_start"
       },
       "starved_gas_time": {
         "r_gas_fin_rg": 100000.0,
         "gas_elapsed_myr": 0.0,
-        "stop_reason": "migration_trap_bound"
+        "stop_reason": "gw_dominates_at_start"
       }
     }
   }

@@ -1,7 +1,7 @@
 {
   "simulation_info": {
-    "date": "2026-09-18T16:24:38.219864",
-    "timestamp_s_since_epoch": 1789719878.219877,
+    "date": "2026-09-23T21:21:03.127886",
+    "timestamp_s_since_epoch": 1790169663.1278992,
     "description": "Dynamical IMRI rate simulation with parallel damping"
   },
   "parameters": {
@@ -21,16 +21,17 @@
     "nsc_radius_mass_slope": 0.321,
     "use_disk_inner_radius": true,
     "disk_model": "torque_with_trap",
-    "consider_type_ii_migration": true,
-    "gap_opening_condition": "kanagawa",
-    "gap_criterion": {
-      "name": "kanagawa",
-      "kii_threshold": 11.0,
-      "kii_aspect_ratio_exponent": 2.0,
-      "kanagawa_threshold": 25.0,
-      "kanagawa_aspect_ratio_exponent": 5.0,
-      "crida_parameter_threshold": 1.0,
-      "crida_hill_ratio_threshold": 1.0
+    "migration_contract": {
+      "name": "jm17_grishin2024_continuous_kanagawa",
+      "gravitational_torque": "jimenez_masset_2017_linear",
+      "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
+      "gap_depth": "kanagawa_1_over_1_plus_0p04K",
+      "gap_depth_coefficient": 0.04,
+      "kanagawa_calibrated_max_parameter": 10000.0,
+      "deep_gap_diagnostic": "crida_parameter_le_1",
+      "crida_deep_gap_parameter": 1.0,
+      "classical_type_ii_branch": false,
+      "embedded_bh_luminosity": "eddington_capped"
     },
     "redshift": 6.000155117582408,
     "hubble_constant_per_myr": 7.352941176470588e-05,
@@ -40,6 +41,7 @@
     "source_lisa_max_gw_frequency_hz": 0.7000155117582408,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
+    "snr_window_placement": "optimal",
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
     "cosmic_merge_time_myr": 1000.0,
@@ -75,8 +77,8 @@
   "runtime_statistics": {
     "workflow": "imri",
     "total_simulations": 1,
-    "total_runtime_seconds": 7.5625481605529785,
-    "total_runtime_minutes": 0.12604246934254965,
-    "average_time_per_simulation_seconds": 7.5625481605529785
+    "total_runtime_seconds": 18.382582187652588,
+    "total_runtime_minutes": 0.3063763697942098,
+    "average_time_per_simulation_seconds": 18.382582187652588
   }
 }

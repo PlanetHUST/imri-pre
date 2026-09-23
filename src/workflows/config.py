@@ -6,13 +6,7 @@ from typing import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from physical_process.migration import (
-    DEFAULT_GAP_CRITERION,
-    GAP_OPENING_CONDITIONS,
-    GapCriterion,
-)
-
-from .lisa_snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
+from lisa.snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -42,12 +36,10 @@ IMRI_DETECTOR_OMEGA_M = 0.315
 IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
-# Set in physical_process.migration.gap; never hard-coded here.
-DEFAULT_GAP_OPENING_CONDITION = DEFAULT_GAP_CRITERION
 TORQUE_WITH_TRAP = "torque_with_trap"
-SEMI_WITHOUT_TRAP = "semi_without_trap"
-DISK_MODELS = (TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
+DISK_MODELS = (TORQUE_WITH_TRAP,)
 DEFAULT_DISK_MODEL = TORQUE_WITH_TRAP
+MIGRATION_CONTRACT = "jm17_grishin2024_continuous_kanagawa"
 
 
 class IMRIDynConfig:
@@ -73,8 +65,6 @@ class IMRIDynConfig:
         initial_stellar_density_gamma: float,
         # Disk-crossing and migration controls
         use_disk_inner_radius: bool,
-        consider_type_ii_migration: bool,
-        disk_model: str,
         # Simplified IMRI controls
         lisa_min_gw_frequency_hz: float,
         lisa_max_gw_frequency_hz: float,
@@ -99,8 +89,6 @@ class IMRIDynConfig:
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
         nsc_radius_reference_mass_msun: float = 3.6e6,
-        gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
-        gap_parameter_threshold: float | None = None,
     ) -> None:
         if len(smbh_masses_msun) == 0 or len(nsc_masses_msun) == 0:
             raise ValueError("SMBH and NSC mass vectors must not be empty")
@@ -160,17 +148,6 @@ class IMRIDynConfig:
             or cosmic_merge_radius_factor <= 0.0
         ):
             raise ValueError("cosmic merger radius factor must be positive")
-        if gap_parameter_threshold is not None and (
-            not np.isfinite(gap_parameter_threshold) or gap_parameter_threshold <= 0.0
-        ):
-            raise ValueError("gap parameter threshold must be finite and positive")
-        if gap_opening_condition not in GAP_OPENING_CONDITIONS:
-            raise ValueError(
-                f"gap-opening condition must be one of {GAP_OPENING_CONDITIONS}"
-            )
-        if disk_model not in DISK_MODELS:
-            raise ValueError(f"disk model must be one of {DISK_MODELS}")
-
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
         self.num_repeats = num_repeats
@@ -184,14 +161,8 @@ class IMRIDynConfig:
         self.nsc_radius_reference_mass_msun = nsc_radius_reference_mass_msun
 
         self.use_disk_inner_radius = use_disk_inner_radius
-        self.consider_type_ii_migration = consider_type_ii_migration
-        self.disk_model = disk_model
-        self.gap_opening_condition = gap_opening_condition
-        self.gap_parameter_threshold = (
-            float(gap_parameter_threshold)
-            if gap_parameter_threshold is not None
-            else None
-        )
+        # Kept as a persisted scenario label, not a user-selectable model.
+        self.disk_model = DEFAULT_DISK_MODEL
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr
@@ -213,25 +184,6 @@ class IMRIDynConfig:
         self.checkpoint_grid_interval = checkpoint_grid_interval
         self.print_debug_results = print_debug_results
         self.base_seed = int(base_seed) if base_seed is not None else None
-
-    @property
-    def gap_criterion(self) -> GapCriterion:
-        """Return the resolved gap criterion, including any threshold override.
-
-        ``gap_parameter_threshold`` overrides the threshold belonging to the
-        *selected* criterion only; the others keep their canonical defaults.
-        """
-        if self.gap_parameter_threshold is None:
-            return GapCriterion(name=self.gap_opening_condition)
-        field = {
-            "kii": "kii_threshold",
-            "kanagawa": "kanagawa_threshold",
-            "crida": "crida_parameter_threshold",
-        }[self.gap_opening_condition]
-        return GapCriterion(
-            name=self.gap_opening_condition,
-            **{field: self.gap_parameter_threshold},
-        )
 
     def get_param_grid(self) -> tuple[FloatArray, FloatArray]:
         """Return the explicitly selected SMBH and NSC masses [Msun]."""

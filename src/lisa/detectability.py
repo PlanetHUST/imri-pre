@@ -7,7 +7,7 @@ import numpy as np
 import physical_process.gw_frequency_radius as gw_helpers
 
 from physical_process.cosmic_merge import CosmicMergeModel
-from .snr import evaluate_lisa_inspiral_snr
+from .snr import DEFAULT_SNR_WINDOW_PLACEMENT, evaluate_lisa_inspiral_snr
 from physical_process.redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
@@ -432,6 +432,7 @@ def classify_detectability(
                     else "misses_cosmic_time_budget"
                 ),
                 mission_duration_years=mission_duration_years,
+                snr_window_placement=snr_window_placement,
             )
 
         pre_merge_boundary = gw_helpers.circular_band_boundary(
@@ -488,6 +489,7 @@ def classify_detectability(
                     outcome=entry_outcome,
                     cosmic_merge_applied=True,
                     mission_duration_years=mission_duration_years,
+                    snr_window_placement=snr_window_placement,
                 )
             return _not_detected_due_to_time(
                 primary_mass_msun=current_smbh_mass_msun,
@@ -498,6 +500,7 @@ def classify_detectability(
                 cosmic_merge_applied=True,
                 reason="misses_cosmic_time_budget",
                 mission_duration_years=mission_duration_years,
+                snr_window_placement=snr_window_placement,
             )
 
     detection_time_myr = entry_outcome.state_time_myr

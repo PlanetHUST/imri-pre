@@ -397,6 +397,7 @@ def _build_disk() -> DiagnosticDisk:
         disk_inner_radius_cm=profile.inner_radius_cm,
         disk_outer_radius_cm=profile.outer_radius_cm,
         use_disk_inner_radius=USE_DISK_INNER_RADIUS,
+        density_g_cm3=np.asarray(profile.density_g_cm3, dtype=float),
     )
     return DiagnosticDisk(profile=profile, agn=agn, calculator=calculator)
 

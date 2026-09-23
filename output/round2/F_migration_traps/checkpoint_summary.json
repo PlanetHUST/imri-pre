@@ -1,6 +1,6 @@
 {
   "checkpoint": "F_migration_traps",
-  "status": "WARN",
+  "status": "PASS",
   "checks": [
     {
       "check": "trap finding is reproducible for every configuration",
@@ -22,7 +22,7 @@
           0,
           0,
           0,
-          3,
+          0,
           0
         ],
         "strict_stable_traps": [
@@ -47,43 +47,23 @@
         ],
         "sign_changes": [
           0,
+          2,
           0,
           0,
-          8,
           0
         ],
         "stable_traps": [
           0,
           0,
           0,
-          3,
+          0,
           0
         ],
         "anti_traps": [
           0,
           0,
           0,
-          3,
-          0
-        ]
-      }
-    },
-    {
-      "check": "stable traps exist for at least one SMBH mass",
-      "result": "PASS",
-      "detail": {
-        "smbh_mass_msun": [
-          1000.0,
-          10000.0,
-          100000.0,
-          1000000.0,
-          10000000.0
-        ],
-        "stable_traps": [
           0,
-          0,
-          0,
-          3,
           0
         ]
       }
@@ -94,26 +74,11 @@
       "detail": {
         "smbh_mass_msun": [
           1000.0,
-          1000.0,
-          10000.0,
           100000.0,
-          10000000.0,
-          10000000.0,
+          1000000.0,
           10000000.0
         ],
-        "criterion": [
-          "kanagawa",
-          "crida",
-          "kanagawa",
-          "kanagawa",
-          "kanagawa",
-          "kii",
-          "crida"
-        ],
         "stable_traps": [
-          0,
-          0,
-          0,
           0,
           0,
           0,
@@ -122,36 +87,31 @@
       }
     },
     {
-      "check": "the 'kanagawa' criterion leaves outward torque somewhere in the explored mass range",
+      "check": "every reported stable trap brackets a positive->negative sign change (local stability)",
       "result": "PASS",
       "detail": {
-        "masses_with_no_outward_torque": [
-          1000.0,
-          10000.0,
-          100000.0,
-          10000000.0
-        ]
+        "checked": 0,
+        "bracketed": []
       }
     },
     {
-      "check": "every stable trap brackets a positive->negative sign change (local stability)",
+      "check": "every stable trap has a basin wider than 0.1 decade",
       "result": "PASS",
-      "detail": [
-        true,
-        true,
-        true
-      ]
+      "detail": []
     },
     {
-      "check": "every stable trap has a basin wider than 0.1 decade",
-      "result": "WARN",
+      "check": "trap count does not grow when the grid is coarsened (a resolution-dependent trap is an artefact)",
+      "result": "PASS",
       "detail": [
         {
-          "smbh_mass_msun": 1000000.0,
-          "trap_radius_rg": 102829.92601766769,
-          "basin_inner_rg": 97020.27327583637,
-          "basin_outer_rg": 106324.97379465135,
-          "basin_decades": 0.03977279078402245
+          "n_resolution": 400,
+          "stable_traps": 0,
+          "basin_decades": []
+        },
+        {
+          "n_resolution": 1600,
+          "stable_traps": 0,
+          "basin_decades": []
         }
       ]
     },
@@ -172,39 +132,47 @@
         "unresolved_roots": 0,
         "outermost_stable_rg": null,
         "strict_stable_traps": 0,
+        "outward_torque_cells": 0,
+        "thermal_valid_fraction": 0.043,
         "reproducible": true
       },
       {
         "smbh_mass_msun": 10000.0,
-        "sign_changes": 0,
+        "sign_changes": 2,
         "stable_traps": 0,
         "anti_traps": 0,
-        "boundary_roots": 0,
-        "unresolved_roots": 0,
-        "outermost_stable_rg": null,
-        "strict_stable_traps": 0,
-        "reproducible": true
-      },
-      {
-        "smbh_mass_msun": 100000.0,
-        "sign_changes": 0,
-        "stable_traps": 0,
-        "anti_traps": 0,
-        "boundary_roots": 0,
-        "unresolved_roots": 0,
-        "outermost_stable_rg": null,
-        "strict_stable_traps": 0,
-        "reproducible": true
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "sign_changes": 8,
-        "stable_traps": 3,
-        "anti_traps": 3,
         "boundary_roots": 0,
         "unresolved_roots": 2,
-        "outermost_stable_rg": 102829.92601766769,
+        "outermost_stable_rg": null,
         "strict_stable_traps": 0,
+        "outward_torque_cells": 1,
+        "thermal_valid_fraction": 0.129,
+        "reproducible": true
+      },
+      {
+        "smbh_mass_msun": 100000.0,
+        "sign_changes": 0,
+        "stable_traps": 0,
+        "anti_traps": 0,
+        "boundary_roots": 0,
+        "unresolved_roots": 0,
+        "outermost_stable_rg": null,
+        "strict_stable_traps": 0,
+        "outward_torque_cells": 0,
+        "thermal_valid_fraction": 0.246,
+        "reproducible": true
+      },
+      {
+        "smbh_mass_msun": 1000000.0,
+        "sign_changes": 0,
+        "stable_traps": 0,
+        "anti_traps": 0,
+        "boundary_roots": 0,
+        "unresolved_roots": 0,
+        "outermost_stable_rg": null,
+        "strict_stable_traps": 0,
+        "outward_torque_cells": 0,
+        "thermal_valid_fraction": 0.53,
         "reproducible": true
       },
       {
@@ -216,153 +184,38 @@
         "unresolved_roots": 0,
         "outermost_stable_rg": null,
         "strict_stable_traps": 0,
+        "outward_torque_cells": 0,
+        "thermal_valid_fraction": 0.87,
         "reproducible": true
       }
     ],
-    "criterion_comparison": [
+    "stable_traps_by_smbh_mass": {
+      "smbh_mass_msun": [
+        1000.0,
+        10000.0,
+        100000.0,
+        1000000.0,
+        10000000.0
+      ],
+      "stable_traps": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "trap_basins": [],
+    "trap_resolution_scan": [
       {
-        "smbh_mass_msun": 1000.0,
-        "criterion": "kanagawa",
-        "type_ii_cells": 943,
-        "outward_torque_cells": 0,
+        "n_resolution": 400,
         "stable_traps": 0,
-        "anti_traps": 0
+        "basin_decades": []
       },
       {
-        "smbh_mass_msun": 1000.0,
-        "criterion": "kii",
-        "type_ii_cells": 26,
-        "outward_torque_cells": 704,
-        "stable_traps": 1,
-        "anti_traps": 2
-      },
-      {
-        "smbh_mass_msun": 1000.0,
-        "criterion": "crida",
-        "type_ii_cells": 843,
-        "outward_torque_cells": 0,
+        "n_resolution": 1600,
         "stable_traps": 0,
-        "anti_traps": 0
-      },
-      {
-        "smbh_mass_msun": 10000.0,
-        "criterion": "kanagawa",
-        "type_ii_cells": 845,
-        "outward_torque_cells": 0,
-        "stable_traps": 0,
-        "anti_traps": 0
-      },
-      {
-        "smbh_mass_msun": 10000.0,
-        "criterion": "kii",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 684,
-        "stable_traps": 0,
-        "anti_traps": 1
-      },
-      {
-        "smbh_mass_msun": 10000.0,
-        "criterion": "crida",
-        "type_ii_cells": 207,
-        "outward_torque_cells": 477,
-        "stable_traps": 3,
-        "anti_traps": 4
-      },
-      {
-        "smbh_mass_msun": 100000.0,
-        "criterion": "kanagawa",
-        "type_ii_cells": 640,
-        "outward_torque_cells": 0,
-        "stable_traps": 0,
-        "anti_traps": 0
-      },
-      {
-        "smbh_mass_msun": 100000.0,
-        "criterion": "kii",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 507,
-        "stable_traps": 0,
-        "anti_traps": 1
-      },
-      {
-        "smbh_mass_msun": 100000.0,
-        "criterion": "crida",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 507,
-        "stable_traps": 0,
-        "anti_traps": 1
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "criterion": "kanagawa",
-        "type_ii_cells": 189,
-        "outward_torque_cells": 69,
-        "stable_traps": 3,
-        "anti_traps": 3
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "criterion": "kii",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 250,
-        "stable_traps": 3,
-        "anti_traps": 4
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "criterion": "crida",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 250,
-        "stable_traps": 3,
-        "anti_traps": 4
-      },
-      {
-        "smbh_mass_msun": 10000000.0,
-        "criterion": "kanagawa",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 0,
-        "stable_traps": 0,
-        "anti_traps": 0
-      },
-      {
-        "smbh_mass_msun": 10000000.0,
-        "criterion": "kii",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 0,
-        "stable_traps": 0,
-        "anti_traps": 0
-      },
-      {
-        "smbh_mass_msun": 10000000.0,
-        "criterion": "crida",
-        "type_ii_cells": 0,
-        "outward_torque_cells": 0,
-        "stable_traps": 0,
-        "anti_traps": 0
-      }
-    ],
-    "gap_criterion_used": "kanagawa",
-    "trap_basins": [
-      {
-        "smbh_mass_msun": 1000000.0,
-        "trap_radius_rg": 12637.391815743684,
-        "basin_inner_rg": 10290.3256640464,
-        "basin_outer_rg": 46206.48030826389,
-        "basin_decades": 0.6522737688579641
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "trap_radius_rg": 66035.0069765165,
-        "basin_inner_rg": 46631.58392491134,
-        "basin_outer_rg": 96135.81545591576,
-        "basin_decades": 0.3142050471937736
-      },
-      {
-        "smbh_mass_msun": 1000000.0,
-        "trap_radius_rg": 102829.92601766769,
-        "basin_inner_rg": 97020.27327583637,
-        "basin_outer_rg": 106324.97379465135,
-        "basin_decades": 0.03977279078402245
+        "basin_decades": []
       }
     ]
   }

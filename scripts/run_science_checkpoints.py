@@ -12,8 +12,8 @@ Checkpoints
 -----------
 B  disk state             canonical pAGN disk profile, units, continuity, domain
 C  damping                damping/embedding over controlled parameter variations
-D  migration components   Lindblad / corotation / thermal / Type-II decomposition
-E  gap and regime         gap diagnostics, threshold crossing, transition size
+D  migration components   gravitational / thermal / total decomposition
+E  gap and regime         continuous Kanagawa depletion and validity diagnostics
 F  migration traps        traps derived from torque zeros, never hard-coded
 G  gas/GW handoff         gas versus GW competition and the handoff criterion
 H  event classification   a controlled population traced through every stage
@@ -61,13 +61,10 @@ from lisa import (  # noqa: E402
 from physical_process.agn import AGNProperties  # noqa: E402
 from physical_process.damp import DampingCalculator, DampingStatus, OrbitalState  # noqa: E402
 from physical_process.migration import (  # noqa: E402
-    DEFAULT_GAP_CRITERION,
-    GAP_OPENING_CONDITIONS,
     MigrationParameters,
     classify_torque_traps,
     compute_torque_profile,
     gap_diagnostics,
-    select_migration_torque_si,
     torque_si_to_cgs,
 )
 from workflows.cli import build_config_from_arguments, build_parser  # noqa: E402
@@ -269,6 +266,7 @@ def checkpoint_c() -> Report:
         disk_inner_radius_cm=profile.inner_radius_cm,
         disk_outer_radius_cm=profile.outer_radius_cm,
         use_disk_inner_radius=True,
+        density_g_cm3=profile.density_g_cm3,
     )
     rg_cm = profile.gravitational_radius_cm
     rows: list[dict[str, Any]] = []
@@ -310,11 +308,60 @@ def checkpoint_c() -> Report:
     report.check("final orbital elements stay physical (0 <= e < 1)",
                  bool(((frame["final_eccentricity"] >= 0) & (frame["final_eccentricity"] < 1)).all()))
 
+    # The eccentricity floor at damp.py's `max(..., 0.0)` previously fired for
+    # every embedded row, which made the "never increases eccentricity" check
+    # pass vacuously and hid a second-node sign error. Report it explicitly.
+    pinned = int((frame["final_eccentricity"] == 0.0).sum())
+    report.check("eccentricity is not pinned at the zero clamp",
+                 pinned == 0,
+                 {"rows_at_exactly_zero": pinned, "rows": int(len(frame.index))},
+                 warn=True)
+
+    # No check covered the semi-major axis at all, which is why an outward drift
+    # sat in a green checkpoint. Note this is a trajectory-level expectation,
+    # not a per-node one: at the sub-Keplerian node the disk overtakes the body
+    # and legitimately raises `a` while circularising it, so only the net
+    # evolution over the integration is expected to be inward.
+    evaluated = frame[frame["status"] != "DampingStatus.OUTSIDE_DISK"]
+    grew = evaluated[evaluated["final_radius_rg"] > evaluated["radius_rg"] * (1 + 1e-9)]
+    report.check("damping does not drive the semi-major axis outward",
+                 bool(grew.empty),
+                 {"rows_that_grew": int(len(grew.index)),
+                  "worst_growth_factor": (
+                      float((grew["final_radius_rg"] / grew["radius_rg"]).max())
+                      if len(grew.index) else 1.0)})
+
     embedded = frame[frame["embedded"]]
     if len(embedded.index):
-        by_mass = embedded.groupby("mass_msun")["damping_time_myr"].median()
-        report.check("heavier objects embed no more slowly (expected scaling)",
-                     bool(by_mass.is_monotonic_decreasing), by_mass.to_dict(), warn=True)
+        # Compare like-for-like: pooling across masses is invalid because the
+        # embedded set is itself mass-dependent (a heavier object embeds from
+        # initial conditions a lighter one never reaches, e.g. polar orbits,
+        # and those take far longer because 90 deg of inclination must damp).
+        # Test the 1/m scaling within each (radius, inclination) configuration.
+        scaling: dict[str, Any] = {}
+        violations: list[str] = []
+        for (radius_rg, inclination_deg), group in embedded.groupby(
+            ["radius_rg", "inclination_deg"]
+        ):
+            if len(group.index) < 2:
+                continue
+            ordered = group.sort_values("mass_msun")
+            times = ordered["damping_time_myr"].to_numpy()
+            label = f"r={radius_rg:.0e}rg,i={inclination_deg:.0f}deg"
+            scaling[label] = dict(
+                zip(
+                    ordered["mass_msun"].astype(float),
+                    (float(value) for value in times),
+                )
+            )
+            if not bool((times[1:] <= times[:-1] + 1e-12).all()):
+                violations.append(label)
+        report.check(
+            "heavier objects embed no more slowly, at fixed initial conditions",
+            not violations,
+            {"per_configuration": scaling, "violations": violations},
+            warn=True,
+        )
     report.check("at least one configuration embeds and one does not",
                  bool(frame["embedded"].any() and (~frame["embedded"]).any()),
                  frame["embedded"].value_counts().to_dict())
@@ -327,16 +374,13 @@ def checkpoint_c() -> Report:
 # --------------------------------------------- D: migration torque components
 def checkpoint_d() -> Report:
     report = Report("D_migration_components")
-    profile, torque = _disk_and_torque()
-    mass_ratio = MIGRATOR_MASS_MSUN / SMBH_MASS_MSUN
-    gap = gap_diagnostics(mass_ratio, torque.radius_m / torque.radius_m * 0 +
-                          np.interp(torque.radius_cm, profile.radius_cm, profile.aspect_ratio),
-                          ALPHA)
+    _, torque = _disk_and_torque()
     lindblad = torque.lindblad_coeff * torque.gamma_0_si
-    corotation = torque.corotation_coeff * torque.gap_attenuation_factor * torque.gamma_0_si
-    thermal = (1.0 - torque.gap_attenuation_factor) * torque.gamma_th_si
-    type_i = torque.gamma_type_i_si
-    total = type_i + thermal
+    corotation = torque.corotation_coeff * torque.gamma_0_si
+    thermal = torque.gamma_th_si
+    gravitational = torque.gamma_type_i_si
+    depleted_gravitational = torque.gap_depth_fraction * gravitational
+    total = torque.gamma_total_si
 
     frame = pd.DataFrame({
         "radius_rg": torque.radius_rg,
@@ -344,30 +388,53 @@ def checkpoint_d() -> Report:
         "lindblad_si": lindblad,
         "corotation_si": corotation,
         "thermal_si": thermal,
-        "type_i_si": type_i,
-        "type_ii_si": torque.gamma_type_ii_si,
-        "total_type_i_thermal_si": total,
-        "gap_attenuation_factor": torque.gap_attenuation_factor,
+        "gravitational_si": gravitational,
+        "gap_depleted_gravitational_si": depleted_gravitational,
+        "total_si": total,
+        "gap_depth_fraction": torque.gap_depth_fraction,
         "kanagawa_gap_parameter": torque.gap_parameter_dimensionless,
+        "thermal_regime_valid": torque.thermal_torque_regime_valid,
+        "kanagawa_extrapolated": torque.kanagawa_extrapolated,
     })
     frame.to_csv(report.directory / "torque_components.csv", index=False)
 
     report.check("Gamma_0 is positive everywhere", bool((torque.gamma_0_si > 0).all()))
     report.check("all torque components are finite",
-                 bool(np.isfinite(frame.to_numpy()).all()))
-    report.check("Type-II torque is inward (negative) everywhere",
-                 bool((torque.gamma_type_ii_si < 0).all()))
-    report.check("the total torque changes sign (a trap can exist)",
-                 bool((total > 0).any() and (total < 0).any()),
-                 {"positive_cells": int((total > 0).sum()), "negative_cells": int((total < 0).sum())})
-    report.check("Type-I equals (corotation*attenuation + lindblad)/denominator * Gamma_0",
-                 bool(np.allclose(type_i,
-                                  (torque.corotation_coeff * torque.gap_attenuation_factor
-                                   + torque.lindblad_coeff) / torque.type_i_gap_denominator
+                 bool(np.isfinite(frame.select_dtypes(include=[np.number])
+                                  .to_numpy(dtype=float)).all()))
+    # Whether the total torque changes sign -- and so whether a trap is even
+    # possible -- is a RESULT of the contract, not a property the model owes.
+    # With the thermal torque bounded by its validity regime and the log-slopes
+    # repaired across the hydrogen-ionisation instability, the torque is inward
+    # everywhere on this disk. Report it; do not assert it.
+    sign_counts = {"positive_cells": int((total > 0).sum()),
+                   "negative_cells": int((total < 0).sum())}
+    report.data["total_torque_sign_counts"] = sign_counts
+    print(f"  [INFO] total torque sign split: {sign_counts}"
+          f" -> {'a trap is possible' if sign_counts['positive_cells'] else 'inward everywhere'}")
+    report.check("gravitational torque equals (corotation + lindblad) * Gamma_0",
+                 bool(np.allclose(gravitational,
+                                  (torque.corotation_coeff + torque.lindblad_coeff)
                                   * torque.gamma_0_si, rtol=1e-12)))
-    report.check("gap attenuation is in [0, 1]",
-                 bool(((torque.gap_attenuation_factor >= 0) &
-                       (torque.gap_attenuation_factor <= 1)).all()))
+    report.check("total follows the fixed torque composition exactly",
+                 bool(np.allclose(
+                     total,
+                     depleted_gravitational + thermal
+                     + (1.0 - torque.gap_depth_fraction)
+                     * torque.gamma_secondary_dominated_si,
+                     rtol=1e-12, atol=0.0)))
+    report.check("the gap-limited viscous torque is inward everywhere",
+                 bool((torque.gamma_secondary_dominated_si <= 0.0).all()),
+                 {"max": float(torque.gamma_secondary_dominated_si.max())})
+    report.check("the thermal torque is zero outside its validity regime",
+                 bool(np.allclose(
+                     torque.gamma_th_si[~torque.thermal_torque_regime_valid],
+                     0.0)),
+                 {"invalid_cells": int((~torque.thermal_torque_regime_valid).sum()),
+                  "total_cells": int(torque.thermal_torque_regime_valid.size)})
+    report.check("gap depth is in [0, 1]",
+                 bool(((torque.gap_depth_fraction >= 0) &
+                       (torque.gap_depth_fraction <= 1)).all()))
 
     dominant = np.where(np.abs(lindblad) >= np.abs(thermal), "lindblad", "thermal")
     report.data["dominant_component_cells"] = {
@@ -379,8 +446,8 @@ def checkpoint_d() -> Report:
         (lindblad, SERIES[0], "Lindblad"),
         (corotation, SERIES[1], "corotation (attenuated)"),
         (thermal, SERIES[2], "thermal"),
-        (torque.gamma_type_ii_si, SERIES[3], "Type II"),
-        (total, SERIES[5], "total (Type I + thermal)"),
+        (depleted_gravitational, SERIES[3], "gap-depleted gravitational"),
+        (total, SERIES[5], "total"),
     ):
         axis.plot(torque.radius_rg, np.sign(values) * np.log10(np.abs(values) + 1e-30),
                   color=color, linewidth=1.6, label=label)
@@ -402,68 +469,50 @@ def checkpoint_e() -> Report:
     profile, torque = _disk_and_torque()
     aspect = np.interp(torque.radius_cm, profile.radius_cm, profile.aspect_ratio)
     mass_ratio = MIGRATOR_MASS_MSUN / SMBH_MASS_MSUN
-
-    rows = []
-    for name in GAP_OPENING_CONDITIONS:
-        diagnostics = gap_diagnostics(mass_ratio, aspect, ALPHA, name)
-        selection = select_migration_torque_si(
-            torque, mass_ratio, aspect, ALPHA, name, consider_type_ii_migration=True)
-        rows.append({
-            "criterion": name,
-            "gap_open_cells": int(diagnostics.gap_open.sum()),
-            "gap_open_fraction": diagnostics.gap_open_fraction,
-            "type_ii_cells": int(selection.type_ii_mask.sum()),
-        })
-        pd.DataFrame({
-            "radius_rg": torque.radius_rg, "aspect_ratio": aspect,
-            "kii_parameter": diagnostics.kii_parameter,
-            "kanagawa_parameter": diagnostics.kanagawa_parameter,
-            "crida_parameter": diagnostics.crida_parameter,
-            "hill_over_scale_height": diagnostics.hill_radius_over_scale_height,
-            "gap_open": diagnostics.gap_open,
-            "selected_torque_si": selection.torque_si,
-        }).to_csv(report.directory / f"gap_{name}.csv", index=False)
-    summary = pd.DataFrame(rows)
-    summary.to_csv(report.directory / "gap_criteria_summary.csv", index=False)
-    report.data["criteria"] = rows
-
     base = gap_diagnostics(mass_ratio, aspect, ALPHA)
-    report.check("gap decision matches the Type-II cell selection",
-                 all(r["gap_open_cells"] == r["type_ii_cells"] for r in rows), rows)
-    ratio = base.kanagawa_parameter / base.kii_parameter
-    report.check("the two K definitions differ by exactly h^-3",
-                 bool(np.allclose(ratio, aspect**-3.0)))
-    report.check("the kii and kanagawa criteria disagree on this disk "
-                 "(documented model ambiguity)",
-                 rows[0]["gap_open_cells"] != rows[2]["gap_open_cells"],
-                 {r["criterion"]: r["gap_open_cells"] for r in rows}, warn=True)
+    pd.DataFrame({
+        "radius_rg": torque.radius_rg,
+        "aspect_ratio": aspect,
+        "kanagawa_parameter": base.kanagawa_parameter,
+        "gap_depth_fraction": base.gap_depth_fraction,
+        "crida_parameter": base.crida_parameter,
+        "hill_over_scale_height": base.hill_radius_over_scale_height,
+        "deep_gap": base.deep_gap,
+        "kanagawa_extrapolated": base.kanagawa_extrapolated,
+        "thermal_regime_valid": torque.thermal_torque_regime_valid,
+    }).to_csv(report.directory / "gap_diagnostics.csv", index=False)
+    report.data["deep_gap_fraction"] = float(base.deep_gap.mean())
+    report.data["kanagawa_extrapolated_fraction"] = float(
+        base.kanagawa_extrapolated.mean()
+    )
+    report.data["thermal_regime_valid_fraction"] = float(
+        torque.thermal_torque_regime_valid.mean()
+    )
 
-    # Size of the Type-I -> Type-II discontinuity where the regime switches.
-    selection = select_migration_torque_si(
-        torque, mass_ratio, aspect, ALPHA, DEFAULT_GAP_CRITERION,
-        consider_type_ii_migration=True)
-    switch = np.where(np.diff(selection.type_ii_mask.astype(int)) != 0)[0]
-    jumps = []
-    type_i_thermal = (torque.gamma_type_i_si
-                      + (1.0 - torque.gap_attenuation_factor) * torque.gamma_th_si)
-    for index in switch:
-        a, b = type_i_thermal[index], torque.gamma_type_ii_si[index]
-        if a != 0.0:
-            jumps.append(float(abs(b - a) / abs(a)))
-    report.data["regime_switch_cells"] = int(switch.size)
-    report.data["relative_torque_jump_at_switch"] = jumps
-    report.check("the regime transition is discontinuous, as the model intends",
-                 True if not jumps else max(jumps) > 0.0,
-                 {"max_relative_jump": max(jumps) if jumps else None}, warn=bool(jumps))
+    report.check("Kanagawa depth matches 1/(1+0.04K)", bool(np.allclose(
+        base.gap_depth_fraction,
+        1.0 / (1.0 + 0.04 * base.kanagawa_parameter), rtol=1e-12)))
+    report.check("continuous gap depth is finite and in (0, 1]", bool((
+        np.isfinite(base.gap_depth_fraction)
+        & (base.gap_depth_fraction > 0.0)
+        & (base.gap_depth_fraction <= 1.0)
+    ).all()))
+    report.check("validity limits are exposed rather than silently changing torque",
+                 bool(base.kanagawa_extrapolated.any()
+                      or (~torque.thermal_torque_regime_valid).any()),
+                 {"kanagawa_extrapolated_fraction":
+                  report.data["kanagawa_extrapolated_fraction"],
+                  "thermal_regime_valid_fraction":
+                  report.data["thermal_regime_valid_fraction"]}, warn=True)
 
     figure, axes = plt.subplots(1, 2, figsize=(9.2, 3.8), dpi=150)
-    axes[0].loglog(torque.radius_rg, base.kii_parameter, color=SERIES[0],
-                   linewidth=1.8, label=r"$q^2/(\alpha h^2)$  [kii]")
     axes[0].loglog(torque.radius_rg, base.kanagawa_parameter, color=SERIES[1],
-                   linewidth=1.8, label=r"$q^2/(\alpha h^5)$  [kanagawa]")
-    axes[0].axhline(11.0, color=SERIES[0], linestyle="--", linewidth=1.0)
-    axes[0].axhline(25.0, color=SERIES[1], linestyle=":", linewidth=1.0)
-    _axes(axes[0], r"$R/r_g$", "gap parameter", "Two definitions of K")
+                   linewidth=1.8, label=r"$K=q^2/(\alpha h^5)$")
+    axes[0].axhline(25.0, color=SERIES[1], linestyle=":", linewidth=1.0,
+                    label="deep-depletion scale")
+    axes[0].axhline(1.0e4, color=MUTED, linestyle="--", linewidth=1.0,
+                    label="fit calibration limit")
+    _axes(axes[0], r"$R/r_g$", "Kanagawa K", "Continuous gap depletion")
     axes[0].legend(frameon=False, fontsize=8)
     axes[1].loglog(torque.radius_rg, base.crida_parameter, color=SERIES[2],
                    linewidth=1.8, label=r"Crida $P$")
@@ -488,38 +537,12 @@ def checkpoint_f() -> Report:
     # torque profile, not something the checkpoint may assume.
     rows: list[dict[str, Any]] = []
     profiles: dict[float, Any] = {}
-    criterion_comparison: list[dict[str, Any]] = []
     for smbh_mass_msun in (1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7):
-        profile, torque = _disk_and_torque(smbh_mass_msun)
-        aspect = np.interp(torque.radius_cm, profile.radius_cm, profile.aspect_ratio)
-        mass_ratio = MIGRATOR_MASS_MSUN / smbh_mass_msun
-
-        # The gap criterion decides how much of the disk is Type II, and the
-        # Type-II torque is inward everywhere, so the criterion controls whether
-        # traps can exist at all.  Record both so the consequence is visible.
-        for name in GAP_OPENING_CONDITIONS:
-            other = select_migration_torque_si(
-                torque, mass_ratio, aspect, ALPHA, name,
-                consider_type_ii_migration=True)
-            other_cgs = torque_si_to_cgs(other.torque_si)
-            other_traps = classify_torque_traps(
-                torque.radius_rg, other_cgs, min_separation_cells=1.0)
-            criterion_comparison.append({
-                "smbh_mass_msun": smbh_mass_msun,
-                "criterion": name,
-                "type_ii_cells": int(other.type_ii_mask.sum()),
-                "outward_torque_cells": int(np.count_nonzero(other_cgs > 0)),
-                "stable_traps": int(other_traps.stable_radius_rg.size),
-                "anti_traps": int(other_traps.anti_trap_radius_rg.size),
-            })
-
-        selection = select_migration_torque_si(
-            torque, mass_ratio, aspect, ALPHA, DEFAULT_GAP_CRITERION,
-        consider_type_ii_migration=True)
-        torque_cgs = torque_si_to_cgs(selection.torque_si)
-        traps = classify_torque_traps(torque.radius_rg, torque_cgs, min_separation_cells=1.0)
-        strict = classify_torque_traps(torque.radius_rg, torque_cgs, min_separation_cells=50.0)
-        again = classify_torque_traps(torque.radius_rg, torque_cgs, min_separation_cells=1.0)
+        _, torque = _disk_and_torque(smbh_mass_msun)
+        torque_cgs = torque_si_to_cgs(torque.gamma_total_si)
+        traps = classify_torque_traps(torque.radius_rg, torque_cgs)
+        strict = classify_torque_traps(torque.radius_rg, torque_cgs, min_basin_dex=0.5)
+        again = classify_torque_traps(torque.radius_rg, torque_cgs)
         profiles[smbh_mass_msun] = (torque.radius_rg, torque_cgs, traps)
         rows.append({
             "smbh_mass_msun": smbh_mass_msun,
@@ -530,6 +553,10 @@ def checkpoint_f() -> Report:
             "unresolved_roots": int(traps.unresolved_radius_rg.size),
             "outermost_stable_rg": traps.outermost_stable_radius_rg,
             "strict_stable_traps": int(strict.stable_radius_rg.size),
+            "outward_torque_cells": int(np.count_nonzero(torque_cgs > 0.0)),
+            "thermal_valid_fraction": float(
+                torque.thermal_torque_regime_valid.mean()
+            ),
             "reproducible": bool(np.array_equal(again.stable_radius_rg,
                                                 traps.stable_radius_rg)),
         })
@@ -546,29 +573,23 @@ def checkpoint_f() -> Report:
                  bool((frame["stable_traps"] + frame["anti_traps"]
                        <= frame["sign_changes"]).all()),
                  frame[["smbh_mass_msun", "sign_changes", "stable_traps", "anti_traps"]].to_dict("list"))
-    report.check("stable traps exist for at least one SMBH mass",
-                 bool((frame["stable_traps"] > 0).any()),
-                 frame[["smbh_mass_msun", "stable_traps"]].to_dict("list"))
+    # Whether traps exist is a RESULT of the torque contract, not a property
+    # the model is required to have. Under the fixed contract with the thermal
+    # torque bounded by its validity regime, no resolved trap survives at any
+    # SMBH mass: the apparent traps were opacity-table artefacts whose basin
+    # width halves with every doubling of the radial resolution. Report the
+    # count; do not assert it.
+    trap_counts = frame[["smbh_mass_msun", "stable_traps"]].to_dict("list")
+    report.data["stable_traps_by_smbh_mass"] = trap_counts
+    total_traps = int(frame["stable_traps"].sum())
+    print(f"  [INFO] resolved stable traps across the scan: {total_traps}")
+    print(f"  [INFO] per SMBH mass: {trap_counts['stable_traps']}")
 
-    # Criterion dependence of the trap structure (a physical result, not an
-    # assumption).  Whether any configuration has traps depends on how much of
-    # the disk the gap criterion moves to the always-inward Type-II torque.
-    comparison = pd.DataFrame(criterion_comparison)
-    comparison.to_csv(report.directory / "trap_criterion_comparison.csv", index=False)
-    report.data["criterion_comparison"] = criterion_comparison
-    report.data["gap_criterion_used"] = DEFAULT_GAP_CRITERION
     report.check("a torque zero is only possible where outward torque survives",
-                 bool(((comparison["stable_traps"] + comparison["anti_traps"] == 0)
-                       | (comparison["outward_torque_cells"] > 0)).all()),
-                 comparison[comparison["outward_torque_cells"] == 0][
-                     ["smbh_mass_msun", "criterion", "stable_traps"]].to_dict("list"))
-    suppressed = comparison[(comparison["criterion"] == DEFAULT_GAP_CRITERION)
-                            & (comparison["outward_torque_cells"] == 0)]
-    report.check(f"the '{DEFAULT_GAP_CRITERION}' criterion leaves outward torque "
-                 "somewhere in the explored mass range",
-                 len(suppressed.index) < len(comparison["smbh_mass_msun"].unique()),
-                 {"masses_with_no_outward_torque":
-                  suppressed["smbh_mass_msun"].tolist()}, warn=True)
+                 bool(((frame["stable_traps"] + frame["anti_traps"] == 0)
+                       | (frame["outward_torque_cells"] > 0)).all()),
+                 frame[frame["outward_torque_cells"] == 0][
+                     ["smbh_mass_msun", "stable_traps"]].to_dict("list"))
 
     # Every reported stable trap must actually bracket a + -> - sign change,
     # and the torque must converge onto it from both sides.
@@ -597,13 +618,49 @@ def checkpoint_f() -> Report:
                 "basin_outer_rg": float(radius_rg[outer]),
                 "basin_decades": float(np.log10(radius_rg[outer] / radius_rg[inner])),
             })
-    report.check("every stable trap brackets a positive->negative sign change "
-                 "(local stability)",
-                 bool(bracketed) and all(bracketed), bracketed)
+    # Conditional correctness: IF a trap is reported it must be locally stable.
+    # Vacuously true when there are none, which is the current state -- an
+    # empty list is not a failure.
+    report.check("every reported stable trap brackets a positive->negative "
+                 "sign change (local stability)",
+                 all(bracketed), {"checked": len(bracketed),
+                                  "bracketed": bracketed})
     report.data["trap_basins"] = basins
     narrow = [b for b in basins if b["basin_decades"] < 0.1]
     report.check("every stable trap has a basin wider than 0.1 decade",
                  not narrow, narrow, warn=True)
+
+    # The test that actually separates physics from numerics: a real trap keeps
+    # its basin width in decades as the grid is refined, while a discontinuity
+    # in the opacity table stays a fixed number of cells wide and so shrinks.
+    # Applies to whatever traps are reported; vacuous when there are none.
+    from workflows.config import DISK_ACCRETION_RATE_G_S_PER_MSUN
+
+    refinement: list[dict[str, Any]] = []
+    for resolution in (400, 1600):
+        refined_profile = build_pagn_disk_profile(
+            SMBH_MASS_MSUN, ALPHA, n_resolution=resolution,
+            accretion_rate_g_s=DISK_ACCRETION_RATE_G_S_PER_MSUN * SMBH_MASS_MSUN,
+            suppress_pagn_output=True,
+        )
+        refined_torque = compute_torque_profile(
+            refined_profile.disk, migrator_mass_msun=MIGRATOR_MASS_MSUN,
+            max_radius_rg=None, params=MigrationParameters(alpha=ALPHA),
+        )
+        refined_traps = classify_torque_traps(
+            refined_torque.radius_rg, torque_si_to_cgs(refined_torque.gamma_total_si),
+        )
+        refinement.append({
+            "n_resolution": resolution,
+            "stable_traps": int(refined_traps.stable_radius_rg.size),
+            "basin_decades": [float(v) for v in refined_traps.basin_dex],
+        })
+    report.data["trap_resolution_scan"] = refinement
+    coarse, fine = refinement
+    report.check("trap count does not grow when the grid is coarsened "
+                 "(a resolution-dependent trap is an artefact)",
+                 coarse["stable_traps"] <= fine["stable_traps"],
+                 refinement)
     report.check("no trap position is hard-coded anywhere in the trap module",
                  not any(token in (PROJECT_ROOT / "src/physical_process/migration/traps.py").read_text()
                          for token in ("700 *", "= 700", "r_trap =")))
@@ -643,11 +700,7 @@ def checkpoint_g() -> Report:
     min_frequency_hz = 1.0e-3
 
     profile, torque = _disk_and_torque(smbh_mass_msun, secondary_msun)
-    aspect = np.interp(torque.radius_cm, profile.radius_cm, profile.aspect_ratio)
-    selection = select_migration_torque_si(
-        torque, secondary_msun / smbh_mass_msun, aspect, ALPHA, DEFAULT_GAP_CRITERION,
-        consider_type_ii_migration=True)
-    torque_cgs = torque_si_to_cgs(selection.torque_si)
+    torque_cgs = torque_si_to_cgs(torque.gamma_total_si)
     secondary_g = secondary_msun * const.msun
     rg_cm = profile.gravitational_radius_cm
 
@@ -791,6 +844,7 @@ def checkpoint_h() -> Report:
         "migration_evaluated": result.migration_evaluated_count,
         "migration_finite": result.finite_migration_count,
         "migration_trap_bound": result.trap_bound_migration_count,
+        "migration_outward_blocked": result.outward_blocked_migration_count,
         "imri_candidates": result.imri_count,
         "no_imri": result.no_imri_count,
         "detectable_imris": result.detectable_imri_count,
@@ -812,6 +866,7 @@ def checkpoint_h() -> Report:
                  stages["detectable_imris"] <= stages["imri_candidates"])
     report.check("migration outcomes are partitioned (finite + trap-bound <= evaluated)",
                  stages["migration_finite"] + stages["migration_trap_bound"]
+                 + stages["migration_outward_blocked"]
                  <= stages["migration_evaluated"])
     report.check("every stage count is a nonnegative integer",
                  all(isinstance(v, (int, np.integer)) and v >= 0 for v in stages.values()))

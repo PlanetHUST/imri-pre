@@ -1,6 +1,6 @@
 {
-  "tree_path": "/home/planet/projects/ding/science/task_003/run/attachment/galaxy_1e12.csv",
-  "output_root": "/home/planet/projects/ding/science/task_003/run/attachment/output/round2/K_round1_regression/runs/w1",
+  "tree_path": "/home/planet/Phy/imri/galaxy_1e12.csv",
+  "output_root": "/home/planet/Phy/imri/output/round2/K_round1_regression/runs/w1",
   "jobs_total": 4,
   "status_counts": {
     "success": 4,
@@ -24,9 +24,9 @@
     "truncated_by_max_hosts": 1,
     "jobs_created": 4
   },
-  "succeeded_hosts_with_imri_candidates": 1,
-  "succeeded_hosts_with_physical_zero_imri": 3,
-  "runtime_s": 22.95497567500024,
+  "succeeded_hosts_with_imri_candidates": 2,
+  "succeeded_hosts_with_physical_zero_imri": 2,
+  "runtime_s": 67.75217693100421,
   "workers": 1,
   "master_seed": 2026
 }

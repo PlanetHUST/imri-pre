@@ -72,12 +72,12 @@
           15.0
         ],
         "snr": [
-          0.13037806359243093,
-          0.09112365148009005,
-          0.08837718603419588,
-          0.6722463059266522
+          11.335570065255677,
+          6.923597192711011,
+          3.031286112147686,
+          1.9722858069899052
         ],
-        "monotonic_decreasing": false
+        "monotonic_decreasing": true
       },
       "1e+05": {
         "redshift": [
@@ -87,12 +87,12 @@
           15.0
         ],
         "snr": [
-          0.6264428522553992,
-          0.44816614587473125,
-          1.1845001406772262,
+          31.883709565200597,
+          17.90563762987416,
+          5.752853616382351,
           1.6403074644735485
         ],
-        "monotonic_decreasing": false
+        "monotonic_decreasing": true
       },
       "1e+06": {
         "redshift": [
@@ -100,8 +100,8 @@
           1.0
         ],
         "snr": [
-          3.585000407817678,
-          3.3249731867474885
+          30.935621341217093,
+          9.436964473238916
         ],
         "monotonic_decreasing": true
       }
@@ -110,7 +110,7 @@
       {
         "redshift": 0.5,
         "primary_msun": 10000.0,
-        "snr": 0.13037806359243093,
+        "snr": 11.335570065255677,
         "status": "evaluated",
         "chirp_source_msun": 158.45764038704448,
         "chirp_detector_msun": 237.68646058056672,
@@ -119,7 +119,7 @@
       {
         "redshift": 0.5,
         "primary_msun": 100000.0,
-        "snr": 0.6264428522553992,
+        "snr": 31.883709565200597,
         "status": "evaluated",
         "chirp_source_msun": 398.0992088877796,
         "chirp_detector_msun": 597.1488133316693,
@@ -128,7 +128,7 @@
       {
         "redshift": 0.5,
         "primary_msun": 1000000.0,
-        "snr": 3.585000407817678,
+        "snr": 30.935621341217093,
         "status": "evaluated",
         "chirp_source_msun": 999.9980000119995,
         "chirp_detector_msun": 1499.9970000179992,
@@ -137,7 +137,7 @@
       {
         "redshift": 1.0,
         "primary_msun": 10000.0,
-        "snr": 0.09112365148009005,
+        "snr": 6.923597192711011,
         "status": "evaluated",
         "chirp_source_msun": 158.45764038704448,
         "chirp_detector_msun": 316.91528077408896,
@@ -146,7 +146,7 @@
       {
         "redshift": 1.0,
         "primary_msun": 100000.0,
-        "snr": 0.44816614587473125,
+        "snr": 17.90563762987416,
         "status": "evaluated",
         "chirp_source_msun": 398.0992088877796,
         "chirp_detector_msun": 796.1984177755592,
@@ -155,7 +155,7 @@
       {
         "redshift": 1.0,
         "primary_msun": 1000000.0,
-        "snr": 3.3249731867474885,
+        "snr": 9.436964473238916,
         "status": "evaluated",
         "chirp_source_msun": 999.9980000119995,
         "chirp_detector_msun": 1999.996000023999,
@@ -164,7 +164,7 @@
       {
         "redshift": 5.0,
         "primary_msun": 10000.0,
-        "snr": 0.08837718603419588,
+        "snr": 3.031286112147686,
         "status": "evaluated",
         "chirp_source_msun": 158.45764038704448,
         "chirp_detector_msun": 950.7458423222669,
@@ -173,7 +173,7 @@
       {
         "redshift": 5.0,
         "primary_msun": 100000.0,
-        "snr": 1.1845001406772262,
+        "snr": 5.752853616382351,
         "status": "evaluated",
         "chirp_source_msun": 398.0992088877796,
         "chirp_detector_msun": 2388.5952533266773,
@@ -191,7 +191,7 @@
       {
         "redshift": 15.0,
         "primary_msun": 10000.0,
-        "snr": 0.6722463059266522,
+        "snr": 1.9722858069899052,
         "status": "evaluated",
         "chirp_source_msun": 158.45764038704448,
         "chirp_detector_msun": 2535.3222461927116,

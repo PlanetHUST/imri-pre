@@ -117,6 +117,7 @@ class IMRISingleWorkflow:
                 disk_data["outer_radius_cm"],
                 self.config.use_disk_inner_radius,
                 cpu_count,
+                disk_data["density_g_cm3"],
             ),
             key=lambda item: item["idx"],
         )

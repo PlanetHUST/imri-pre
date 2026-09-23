@@ -13,34 +13,44 @@
       "detail": null
     },
     {
-      "check": "Type-II torque is inward (negative) everywhere",
+      "check": "gravitational torque equals (corotation + lindblad) * Gamma_0",
       "result": "PASS",
       "detail": null
     },
     {
-      "check": "the total torque changes sign (a trap can exist)",
+      "check": "total follows the fixed torque composition exactly",
+      "result": "PASS",
+      "detail": null
+    },
+    {
+      "check": "the gap-limited viscous torque is inward everywhere",
       "result": "PASS",
       "detail": {
-        "positive_cells": 507,
-        "negative_cells": 493
+        "max": -1.8628083768966157e+27
       }
     },
     {
-      "check": "Type-I equals (corotation*attenuation + lindblad)/denominator * Gamma_0",
+      "check": "the thermal torque is zero outside its validity regime",
       "result": "PASS",
-      "detail": null
+      "detail": {
+        "invalid_cells": 754,
+        "total_cells": 1000
+      }
     },
     {
-      "check": "gap attenuation is in [0, 1]",
+      "check": "gap depth is in [0, 1]",
       "result": "PASS",
       "detail": null
     }
   ],
   "data": {
-    "dominant_component_cells": {
-      "lindblad": 611,
-      "thermal": 389
+    "total_torque_sign_counts": {
+      "positive_cells": 0,
+      "negative_cells": 1000
     },
-    "sign_changes_total": 1
+    "dominant_component_cells": {
+      "lindblad": 1000
+    },
+    "sign_changes_total": 0
   }
 }

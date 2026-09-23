@@ -50,6 +50,7 @@ class DiskProfiles(TypedDict):
     outer_radius_cm: float
     radius_cm: FloatArray
     surface_density_g_cm2: FloatArray
+    density_g_cm3: FloatArray
     aspect_ratio: FloatArray
     gravitational_radius_cm: float
     torque_disk: NotRequired[object]
@@ -220,8 +221,10 @@ class IMRIDynSingleResult:
         self.migration_evaluated_count = 0
         self.finite_migration_count = 0
         self.trap_bound_migration_count = 0
+        self.outward_blocked_migration_count = 0
         self.migration_error_count = 0
         self.trap_bound_mass_msun = 0.0
+        self.outward_blocked_mass_msun = 0.0
         self.disk_inner_radius_cm: float | None = None
         self.disk_outer_radius_cm: float | None = None
         self.gravitational_radius_cm: float | None = None
@@ -280,8 +283,12 @@ class IMRIDynSingleResult:
             "migration_evaluated_count": self.migration_evaluated_count,
             "finite_migration_count": self.finite_migration_count,
             "trap_bound_migration_count": self.trap_bound_migration_count,
+            "outward_blocked_migration_count": (
+                self.outward_blocked_migration_count
+            ),
             "migration_error_count": self.migration_error_count,
             "trap_bound_mass_msun": self.trap_bound_mass_msun,
+            "outward_blocked_mass_msun": self.outward_blocked_mass_msun,
             "disk_inner_radius_cm": self.disk_inner_radius_cm,
             "disk_outer_radius_cm": self.disk_outer_radius_cm,
             "gravitational_radius_cm": self.gravitational_radius_cm,
@@ -445,10 +452,16 @@ class IMRIDynAveragedResult:
             "trap_bound_migration_count_mean": float(
                 np.mean(values("trap_bound_migration_count"))
             ),
+            "outward_blocked_migration_count_mean": float(
+                np.mean(values("outward_blocked_migration_count"))
+            ),
             "migration_error_count_mean": float(
                 np.mean(values("migration_error_count"))
             ),
             "trap_bound_mass_mean_msun": float(np.mean(values("trap_bound_mass_msun"))),
+            "outward_blocked_mass_mean_msun": float(
+                np.mean(values("outward_blocked_mass_msun"))
+            ),
             "mean_relaxation_time_geo_mean_myr": float(
                 np.mean(values("mean_relaxation_time_myr_geo"))
             ),

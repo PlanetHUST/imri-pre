@@ -1,7 +1,7 @@
 {
   "simulation_info": {
-    "date": "2026-09-18T16:14:45.393996",
-    "timestamp_s_since_epoch": 1789719285.3940134,
+    "date": "2026-09-21T17:39:14.326362",
+    "timestamp_s_since_epoch": 1789983554.3263748,
     "description": "Dynamical IMRI rate simulation with parallel damping"
   },
   "parameters": {
@@ -40,6 +40,7 @@
     "source_lisa_max_gw_frequency_hz": 1.6,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
+    "snr_window_placement": "optimal",
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
     "cosmic_merge_time_myr": 1000.0,
@@ -75,8 +76,8 @@
   "runtime_statistics": {
     "workflow": "imri",
     "total_simulations": 2,
-    "total_runtime_seconds": 2.3770077228546143,
-    "total_runtime_minutes": 0.03961679538091024,
-    "average_time_per_simulation_seconds": 1.1885038614273071
+    "total_runtime_seconds": 4.715814590454102,
+    "total_runtime_minutes": 0.07859690984090169,
+    "average_time_per_simulation_seconds": 2.357907295227051
   }
 }

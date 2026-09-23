@@ -43,15 +43,16 @@ Each arrow is owned by exactly one module. See
 [`docs/physics_model.md`](docs/physics_model.md) for the authoritative
 module-ownership table and the assumptions behind each stage.
 
-> **Gap criterion.** The production criterion is `kanagawa`
-> (`K = q²/(α h⁵) > 25`, i.e. a gap cleared below half the unperturbed surface
-> density — calibrated by `scripts/calibrate_gap_threshold.py`, overridable with
-> `--gap-threshold`). This puts most of the disk in the Type-II regime,
-> which is inward everywhere, so **migration traps do not operate for
-> `M• ≤ 10⁵ M⊙`**. The historical `kii` criterion remains available via
-> `--gap-open-condition kii` and reproduces pre-change results exactly.
-> See [`docs/physics_model.md`](docs/physics_model.md) §3 for the measured
-> consequences.
+> **Migration contract.** Production uses one signed torque:
+> `Gamma = f_gap Gamma_grav + Gamma_thermal`, with continuous Kanagawa depth
+> `f_gap = 1/(1+0.04K)` and `K=q²/(alpha h⁵)`. The thermal term follows the
+> local Grishin-2024 prescription on the pAGN disk. There is no classical
+> Type-II branch or runtime gap/model selector. Regime-limit flags are saved as
+> diagnostics rather than silently switching prescriptions. See
+> [`docs/physics_model.md`](docs/physics_model.md) §3.
+> The validation diagnostic also reports a clearly labelled no-trap extreme,
+> `Gamma_no-trap=-|Gamma|`, alongside the signed trap-aware outcome; it is not
+> used by production workflows.
 
 ---
 
@@ -190,17 +191,15 @@ runs while ignoring timings and paths.
 | `main.py` | CLI entry point and programmatic API |
 | `run_science_checkpoints.py` | Round-2 scientific checkpoints B–L |
 | `run_interface_checkpoints.py` | merger-tree interface checkpoints A–H |
-| `run_redshift_scan.py` | paired redshift scan driver |
+| `run_redshift_scan.py` | fixed-contract redshift scan driver |
 | `audit_repository.py` | dependency / duplicated-physics audit |
-| `calibrate_gap_threshold.py` | calibrate and sensitivity-test the gap threshold |
 | `compare_baseline.py` | scientific-output regression comparison |
 | `validate_damping_model.py` | damping invariants, scans and phase diagrams |
 | `validate_gas_gw_handoff.py` | gas/GW handoff regression checks |
 | `validate_lisa_detectability.py` | LISA PSD, cosmology, SNR and classification checks |
-| `validate_rate_plot_layer.py` | rate table/figure layer harness |
+| `validate_migration_contract.py` | fixed torque contract, validity flags, and trap/no-trap bounds |
 | `plot_disk_structure.py` | disk profiles and pAGN-vs-in-repo comparison |
-| `plot_migration_timescales.py` | signed-torque vs semi-analytic migration timescales |
-| `plot_migration_traps.py` | trap / anti-trap / LISA-entry radii versus SMBH mass |
+| `analyse_population_torque.py` | population occupancy of torque validity regimes and traps |
 | `report_event_summary.py` | print an event summary from a results directory |
 
 ---

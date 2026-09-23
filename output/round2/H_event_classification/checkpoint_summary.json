@@ -8,18 +8,19 @@
       "detail": {
         "initial_sampled": 1140,
         "disk_crossing": 23,
-        "embedded_stars": 4,
+        "embedded_stars": 6,
         "embedded_bhs": 0,
         "migration_formed_bhs": 0,
         "bh_candidates": 0,
-        "band_entry_evaluated": 4,
-        "migration_evaluated": 4,
-        "migration_finite": 4,
+        "band_entry_evaluated": 6,
+        "migration_evaluated": 6,
+        "migration_finite": 6,
         "migration_trap_bound": 0,
+        "migration_outward_blocked": 0,
         "imri_candidates": 0,
-        "no_imri": 4,
+        "no_imri": 6,
         "detectable_imris": 0,
-        "outside_or_failed": 19,
+        "outside_or_failed": 17,
         "migration_errors": 0,
         "profile_errors": 0,
         "band_entry_inside_isco": 0
@@ -53,7 +54,7 @@
     {
       "check": "every evaluated object carries an event-rate reason",
       "result": "PASS",
-      "detail": 4
+      "detail": 6
     },
     {
       "check": "a physical zero is distinguishable from a failure",
@@ -69,27 +70,28 @@
     "stages": {
       "initial_sampled": 1140,
       "disk_crossing": 23,
-      "embedded_stars": 4,
+      "embedded_stars": 6,
       "embedded_bhs": 0,
       "migration_formed_bhs": 0,
       "bh_candidates": 0,
-      "band_entry_evaluated": 4,
-      "migration_evaluated": 4,
-      "migration_finite": 4,
+      "band_entry_evaluated": 6,
+      "migration_evaluated": 6,
+      "migration_finite": 6,
       "migration_trap_bound": 0,
+      "migration_outward_blocked": 0,
       "imri_candidates": 0,
-      "no_imri": 4,
+      "no_imri": 6,
       "detectable_imris": 0,
-      "outside_or_failed": 19,
+      "outside_or_failed": 17,
       "migration_errors": 0,
       "profile_errors": 0,
       "band_entry_inside_isco": 0
     },
     "event_rate_reasons": {
-      "not_bh_before_gas_final": 4
+      "not_bh_before_gas_final": 6
     },
     "detect_rate_reasons": {
-      "not_imri_candidate": 4
+      "not_imri_candidate": 6
     }
   }
 }

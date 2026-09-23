@@ -7,7 +7,7 @@ import pandas as pd
 
 import physical_process.gw_frequency_radius as gw_helpers
 
-from .config import IMRIDynConfig, SECONDS_PER_MINUTE
+from .config import IMRIDynConfig, MIGRATION_CONTRACT, SECONDS_PER_MINUTE
 from .engine import IMRIDynEngine
 from .models import IMRIDynAveragedResult, IMRIDynSingleResult
 from .metadata import build_metadata
@@ -47,9 +47,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Repeats per point: {config.num_repeats}")
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
-    print(f"Disk migration model: {config.disk_model}")
-    print(f"Type-II migration: {config.consider_type_ii_migration}")
-    print(f"gap_opening_condition: {config.gap_opening_condition}")
+    print(f"Disk migration contract: {MIGRATION_CONTRACT}")
     print(f"Redshift: {config.redshift:.3e}")
     print(
         "LISA detector model: "

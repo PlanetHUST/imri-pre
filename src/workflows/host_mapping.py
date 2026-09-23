@@ -385,8 +385,6 @@ def config_kwargs(config: IMRIDynConfig) -> dict[str, Any]:
         "metallicity": config.metallicity,
         "initial_stellar_density_gamma": config.initial_stellar_density_gamma,
         "use_disk_inner_radius": config.use_disk_inner_radius,
-        "consider_type_ii_migration": config.consider_type_ii_migration,
-        "disk_model": config.disk_model,
         "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
         "lisa_max_gw_frequency_hz": config.lisa_max_gw_frequency_hz,
         "max_gw_time_myr": config.max_gw_time_myr,
@@ -395,6 +393,7 @@ def config_kwargs(config: IMRIDynConfig) -> dict[str, Any]:
         "hubble_constant_per_myr": config.hubble_constant_per_myr,
         "snr_threshold": config.snr_threshold,
         "lisa_mission_duration_years": config.lisa_mission_duration_years,
+        "snr_window_placement": config.snr_window_placement,
         "detector_hubble_constant_km_s_mpc": (
             config.detector_hubble_constant_km_s_mpc
         ),
@@ -409,8 +408,6 @@ def config_kwargs(config: IMRIDynConfig) -> dict[str, Any]:
         "nsc_radius_pc_at_reference_mass": config.nsc_radius_pc_at_reference_mass,
         "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
         "nsc_radius_reference_mass_msun": config.nsc_radius_reference_mass_msun,
-        "gap_opening_condition": config.gap_opening_condition,
-        "gap_parameter_threshold": config.gap_parameter_threshold,
     }
 
 

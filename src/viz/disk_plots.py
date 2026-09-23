@@ -25,11 +25,9 @@ import physical_process.constants as const  # noqa: E402
 from disk_quantity.disk_solve import radial_structure  # noqa: E402
 from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile  # noqa: E402
 from physical_process.migration import (  # noqa: E402
-    DEFAULT_GAP_CRITERION,
     MigrationParameters,
     classify_torque_traps,
     compute_torque_profile,
-    select_migration_torque_si,
 )
 
 RADIAL_AXIS_LABELSIZE = 26
@@ -137,8 +135,6 @@ def _disk_torque_payload(
     smbh_mass: float,
     alpha: float,
     migrator_mass_msun: float = 10.0,
-    min_trap_separation_cells: float = 1.0,
-    gap_opening_condition: str = DEFAULT_GAP_CRITERION,
 ) -> Dict[str, np.ndarray | float | str]:
     """Compute a pAGN torque profile using the main simulation torque model."""
     disk_profile = build_pagn_disk_profile(
@@ -154,8 +150,6 @@ def _disk_torque_payload(
         alpha=alpha,
         gamma_adiabat=5.0 / 3.0,
         hydrogen_fraction=0.7,
-        kappa_t=20.0,
-        kappa_norm=25.0,
     )
 
     torque_profile = compute_torque_profile(
@@ -166,33 +160,10 @@ def _disk_torque_payload(
         params=params,
     )
 
-    solved_disk_radius_m = np.asarray(
-        getattr(disk_profile.disk, "R"),
-        dtype=float,
-    )
-    solved_disk_scale_height_m = np.asarray(
-        getattr(disk_profile.disk, "h"),
-        dtype=float,
-    )
-    solved_disk_aspect_ratio = solved_disk_scale_height_m / solved_disk_radius_m
-    solved_order = np.argsort(solved_disk_radius_m)
-    local_aspect_ratio = np.interp(
-        np.asarray(torque_profile.radius_m, dtype=float),
-        solved_disk_radius_m[solved_order],
-        solved_disk_aspect_ratio[solved_order],
-    )
-    migration_torque_si = select_migration_torque_si(
-        torque_profile,
-        float(migrator_mass_msun) / float(smbh_mass),
-        local_aspect_ratio,
-        alpha,
-        gap_opening_condition,
-        consider_type_ii_migration=True,
-    ).torque_si
+    migration_torque_si = np.asarray(torque_profile.gamma_total_si, dtype=float)
     trap_radii = classify_torque_traps(
         torque_profile.radius_rg,
         migration_torque_si,
-        min_separation_cells=min_trap_separation_cells,
     )
 
     torque_radius_over_rg = np.asarray(torque_profile.radius_rg, dtype=float)
@@ -209,7 +180,9 @@ def _disk_torque_payload(
         "gamma_i_si": np.asarray(torque_profile.gamma_type_i_si, dtype=float),
         "gamma_th_si": np.asarray(torque_profile.gamma_th_si, dtype=float),
         "gamma_migration_si": migration_torque_si,
-        "gamma_ii_si": np.asarray(torque_profile.gamma_type_ii_si, dtype=float),
+        "thermal_torque_regime_valid": np.asarray(
+            torque_profile.thermal_torque_regime_valid, dtype=bool
+        ),
         "trap_radii_over_rg": np.asarray(trap_radii.stable_radius_rg, dtype=float),
         "anti_trap_radii_over_rg": np.asarray(
             trap_radii.anti_trap_radius_rg,
@@ -623,8 +596,6 @@ def plot_agn_disk_torque_profiles(
     alpha: float,
     smbh_masses: Sequence[float],
     migrator_mass_msun: float = 10.0,
-    min_trap_separation_cells: float = 1.0,
-    gap_opening_condition: str = DEFAULT_GAP_CRITERION,
 ) -> None:
     """Plot pAGN migration torque magnitudes using the main simulation model."""
 
@@ -633,8 +604,6 @@ def plot_agn_disk_torque_profiles(
             float(smbh_mass),
             alpha=alpha,
             migrator_mass_msun=migrator_mass_msun,
-            min_trap_separation_cells=min_trap_separation_cells,
-            gap_opening_condition=gap_opening_condition,
         )
         for smbh_mass in smbh_masses
     ]
@@ -648,15 +617,6 @@ def plot_agn_disk_torque_profiles(
         component_key="gamma_migration_si",
         ylabel=r"$|\Gamma_{\mathrm{migration}}|\;(\mathrm{N\,m})$",
         stem="tot_torque_profiles",
-        show_traps=True,
-    )
-    _plot_signed_torque_component(
-        torque_profiles,
-        colors,
-        output_dir=output_dir,
-        component_key="gamma_ii_si",
-        ylabel=r"$|\Gamma_{\mathrm{II}}|\;(\mathrm{N\,m})$",
-        stem="type_ii_torque_profiles",
         show_traps=True,
     )
     _plot_signed_torque_component(

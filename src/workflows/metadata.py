@@ -5,8 +5,13 @@ from datetime import datetime
 from typing import Any
 
 import physical_process.gw_frequency_radius as gw_helpers
+from physical_process.migration import (
+    CRIDA_DEEP_GAP_PARAMETER,
+    KANAGAWA_CALIBRATED_MAX_PARAMETER,
+    KANAGAWA_GAP_DEPTH_COEFFICIENT,
+)
 
-from .config import IMRIDynConfig
+from .config import IMRIDynConfig, MIGRATION_CONTRACT
 from lisa.snr import (
     COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
     LISA_AVERAGING_CONVENTION,
@@ -48,9 +53,20 @@ def build_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "disk_model": config.disk_model,
-            "consider_type_ii_migration": config.consider_type_ii_migration,
-            "gap_opening_condition": config.gap_opening_condition,
-            "gap_criterion": config.gap_criterion.to_dict(),
+            "migration_contract": {
+                "name": MIGRATION_CONTRACT,
+                "gravitational_torque": "jimenez_masset_2017_linear",
+                "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
+                "gap_depth": "kanagawa_1_over_1_plus_0p04K",
+                "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
+                "kanagawa_calibrated_max_parameter": (
+                    KANAGAWA_CALIBRATED_MAX_PARAMETER
+                ),
+                "deep_gap_diagnostic": "crida_parameter_le_1",
+                "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
+                "classical_type_ii_branch": False,
+                "embedded_bh_luminosity": "eddington_capped",
+            },
             "redshift": config.redshift,
             "hubble_constant_per_myr": config.hubble_constant_per_myr,
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,

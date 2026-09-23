@@ -11,6 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from physical_process.sampling import SOLAR_METALLICITY
+from lisa.snr import DEFAULT_SNR_WINDOW_PLACEMENT
 from workflows.config import IMRIDynConfig
 from workflows.host_mapping import (
     HostMappingError,
@@ -57,11 +58,11 @@ def _base_config(tmp_path) -> IMRIDynConfig:
         smbh_masses_msun=(1.0e5,), nsc_masses_msun=(2.0e5,), num_repeats=1,
         duty_cycle_myr=10.0, output_dir=tmp_path / "out", metallicity=1.0e-5,
         initial_stellar_density_gamma=1.75, use_disk_inner_radius=True,
-        consider_type_ii_migration=True, disk_model="torque_with_trap",
         lisa_min_gw_frequency_hz=1e-3, lisa_max_gw_frequency_hz=1e-1,
         max_gw_time_myr=13.6e3, gw_eccentricity=0.0, redshift=15.0,
         hubble_constant_per_myr=1.0 / 13.6e3, snr_threshold=20.0,
         lisa_mission_duration_years=4.0,
+        snr_window_placement=DEFAULT_SNR_WINDOW_PLACEMENT,
         detector_hubble_constant_km_s_mpc=67.4, detector_omega_m=0.315,
         cosmic_merge_time_myr=1.0e3, cosmic_merge_smbh_mass_factor=2.0,
         cosmic_merge_radius_factor=2.0, damping_cpu_count=1,

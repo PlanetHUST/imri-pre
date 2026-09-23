@@ -16,10 +16,15 @@ two bracketing radial samples.
 Numerical artefacts
 -------------------
 A tabulated torque profile can change sign twice within a couple of grid cells
-purely from interpolation noise.  Such pairs are not physical traps.
-``min_separation_cells`` discards a group of opposite-type roots whose mutual
-separation is smaller than that many local radial-grid intervals, which lets
-callers distinguish
+purely from interpolation noise -- the opacity table alone steps by up to 2.4
+decades between adjacent radial cells.  Such pairs are not physical traps.
+They are rejected by ``min_basin_dex``, which measures the width of the
+outward-torque region terminating at each trap in *decades of radius*.  That
+test is resolution independent: refining the grid leaves a real trap's width in
+dex unchanged while a table artefact keeps a fixed cell count and shrinks.  A
+cell-count criterion was previously used for this and has been removed -- it
+called the same feature resolved or unresolved depending only on how finely the
+disk happened to be sampled, which is not a property of the disk.
 
     torque zero -> stable trap / unstable zero / unresolved numerical wiggle
 
@@ -39,7 +44,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-DEFAULT_MIN_TRAP_SEPARATION_CELLS = 10
+#: Minimum basin width, in decades of radius, for a torque zero to count as a
+#: resolved trap.  Unlike a cell count this is resolution independent: a real
+#: trap keeps its width in dex as the grid is refined, while an opacity-table
+#: artefact stays a fixed *number of cells* wide and so shrinks in dex.
+#: A value of 0.02 dex rejects opacity-table single-cell wiggles while retaining
+#: zeros with a radially resolved convergent basin. Resolution checks should be
+#: repeated whenever the pAGN grid or opacity interpolation changes.
+DEFAULT_MIN_TRAP_BASIN_DEX = 0.02
 STABLE_TRAP_KIND = 1
 ANTI_TRAP_KIND = -1
 
@@ -52,6 +64,8 @@ class TorqueTrapRadii:
     anti_trap_radius_rg: np.ndarray
     boundary_radius_rg: np.ndarray
     unresolved_radius_rg: np.ndarray
+    #: Basin width [decades of radius] for each entry of ``stable_radius_rg``.
+    basin_dex: np.ndarray
 
     @property
     def trap_count(self) -> int:
@@ -76,51 +90,16 @@ class TorqueTrapRadii:
 
 def _empty_torque_traps() -> TorqueTrapRadii:
     empty = np.array([], dtype=float)
-    return TorqueTrapRadii(empty, empty.copy(), empty.copy(), empty.copy())
-
-
-def _resolved_crossing_mask(
-    root_radius_rg: np.ndarray,
-    crossing_kind: np.ndarray,
-    local_width_rg: np.ndarray,
-    min_separation_cells: float,
-) -> np.ndarray:
-    """Return which roots survive the minimum-separation filter."""
-    keep = np.ones(root_radius_rg.size, dtype=bool)
-    if min_separation_cells <= 0.0 or root_radius_rg.size < 2:
-        return keep
-
-    group = [0]
-
-    def flush_group() -> None:
-        if len(group) < 2:
-            return
-        group_kind = crossing_kind[np.asarray(group, dtype=int)]
-        if np.unique(group_kind).size < 2:
-            return
-        keep[group] = False
-
-    for crossing_index in range(1, root_radius_rg.size):
-        previous_index = group[-1]
-        separation_rg = root_radius_rg[crossing_index] - root_radius_rg[previous_index]
-        local_resolution_rg = min(
-            local_width_rg[crossing_index],
-            local_width_rg[previous_index],
-        )
-        if separation_rg < min_separation_cells * local_resolution_rg:
-            group.append(crossing_index)
-            continue
-        flush_group()
-        group = [crossing_index]
-    flush_group()
-    return keep
+    return TorqueTrapRadii(
+        empty, empty.copy(), empty.copy(), empty.copy(), empty.copy()
+    )
 
 
 def classify_torque_traps(
     radius_rg: np.ndarray,
     torque_values: np.ndarray,
     *,
-    min_separation_cells: float = DEFAULT_MIN_TRAP_SEPARATION_CELLS,
+    min_basin_dex: float = DEFAULT_MIN_TRAP_BASIN_DEX,
 ) -> TorqueTrapRadii:
     """Locate and classify the torque zeros of one migration torque profile.
 
@@ -131,18 +110,22 @@ def classify_torque_traps(
     torque_values
         Signed total migration torque on the same grid.  Positive means
         outward.
-    min_separation_cells
-        Opposite-type roots closer than this many local grid intervals are
-        reported as ``unresolved_radius_rg`` instead of traps.
+    min_basin_dex
+        A stable trap whose basin -- the width of the outward-torque region
+        terminating at it -- is narrower than this many decades of radius is
+        reported as ``unresolved_radius_rg`` instead of a trap.  Resolution
+        independent: refining the grid widens a genuine trap in cells but
+        leaves its width in dex unchanged, while a table artefact keeps a fixed
+        cell width and shrinks in dex.
 
     Returns
     -------
     TorqueTrapRadii
-        Stable traps, anti-traps, boundary crossings and unresolved wiggles.
+        Stable traps, anti-traps, boundary crossings and unresolved wiggles,
+        with ``basin_dex`` giving each stable trap's measured basin width.
     """
     radius_rg = np.asarray(radius_rg, dtype=float)
     values = np.asarray(torque_values, dtype=float)
-    min_separation_cells = float(min_separation_cells)
 
     finite = np.isfinite(radius_rg) & np.isfinite(values) & (values != 0.0)
     radius_rg = radius_rg[finite]
@@ -150,8 +133,6 @@ def classify_torque_traps(
 
     if (
         values.size < 2
-        or not np.isfinite(min_separation_cells)
-        or min_separation_cells < 0.0
     ):
         return _empty_torque_traps()
 
@@ -161,7 +142,6 @@ def classify_torque_traps(
 
     candidate_roots_rg: list[float] = []
     candidate_kinds: list[int] = []
-    local_width_rg: list[float] = []
     is_boundary: list[bool] = []
     last_interval = values.size - 2
     for index in np.where(np.sign(values[1:]) != np.sign(values[:-1]))[0]:
@@ -181,7 +161,6 @@ def classify_torque_traps(
 
         candidate_roots_rg.append(root_rg)
         candidate_kinds.append(kind)
-        local_width_rg.append(outer_radius_rg - inner_radius_rg)
         is_boundary.append(index == 0 or index == last_interval)
 
     if not candidate_roots_rg:
@@ -189,23 +168,116 @@ def classify_torque_traps(
 
     roots = np.asarray(candidate_roots_rg, dtype=float)
     kinds = np.asarray(candidate_kinds, dtype=int)
-    widths = np.asarray(local_width_rg, dtype=float)
     boundary = np.asarray(is_boundary, dtype=bool)
     root_order = np.argsort(roots)
-    roots, kinds, widths, boundary = (
+    roots, kinds, boundary = (
         roots[root_order],
         kinds[root_order],
-        widths[root_order],
         boundary[root_order],
     )
-    keep = _resolved_crossing_mask(roots, kinds, widths, min_separation_cells)
+    keep = np.ones(roots.size, dtype=bool)
 
+    # Width, in decades of radius, of the outward-torque region each root
+    # bounds: inward from a stable trap (which sits at that region's outer
+    # edge) and outward from an anti-trap (which sits at its inner edge). A
+    # spurious pair bounds the same narrow spike, so both are rejected
+    # together.
+    #
+    # This is the resolution-independent test. A physical trap is the outer
+    # edge of a radially extended outward-torque region, so refining the grid
+    # adds cells and leaves the width in dex unchanged. A discontinuity in the
+    # opacity table instead produces a spike that stays a fixed *number of
+    # cells* wide, so its width in dex shrinks under refinement and it is
+    # rejected. Measuring the outer catchment instead would not discriminate:
+    # a one-cell spike sitting in an otherwise inward disk has an arbitrarily
+    # large outer catchment and would pass.
+    region_dex = np.zeros(roots.size, dtype=float)
+    for position in range(roots.size):
+        if kinds[position] == STABLE_TRAP_KIND:
+            bound_rg = roots[position - 1] if position > 0 else float(radius_rg[0])
+            inner_rg, outer_rg = bound_rg, roots[position]
+        else:
+            bound_rg = (
+                roots[position + 1]
+                if position + 1 < roots.size
+                else float(radius_rg[-1])
+            )
+            inner_rg, outer_rg = roots[position], bound_rg
+        if inner_rg > 0.0 and outer_rg > inner_rg:
+            region_dex[position] = float(np.log10(outer_rg / inner_rg))
+
+    min_basin_dex = float(min_basin_dex)
+    if np.isfinite(min_basin_dex) and min_basin_dex > 0.0:
+        keep = keep & (region_dex >= min_basin_dex)
+
+    stable = keep & (kinds == STABLE_TRAP_KIND)
+    basin_dex = region_dex
+
+    stable = keep & (kinds == STABLE_TRAP_KIND)
     return TorqueTrapRadii(
-        stable_radius_rg=roots[keep & (kinds == STABLE_TRAP_KIND)],
+        stable_radius_rg=roots[stable],
         anti_trap_radius_rg=roots[keep & (kinds == ANTI_TRAP_KIND)],
         boundary_radius_rg=roots[boundary],
         unresolved_radius_rg=roots[~keep],
+        basin_dex=basin_dex[stable],
     )
+
+
+def inward_delivery_blocked(
+    radius_rg: np.ndarray,
+    torque: np.ndarray,
+    inner_radius_rg: float | None = None,
+    outer_radius_rg: float | None = None,
+    min_basin_dex: float = DEFAULT_MIN_TRAP_BASIN_DEX,
+) -> tuple[bool, float | None]:
+    """Return ``(blocked, blocking_radius_rg)`` for one migration path.
+
+    This is the single definition of "gas cannot deliver this migrator inward",
+    shared by the trap classifier and the migration integrator so the two can
+    never disagree.  Previously the integrator blocked on a bare
+    ``any(torque >= 0)``, which promoted a single spurious positive cell -- the
+    opacity table steps by up to 2.4 decades between adjacent cells -- into a
+    permanent ``time = inf``, while the classifier filtered exactly those out.
+
+    Traps are classified on the **full** profile and only then tested against
+    ``[inner_radius_rg, outer_radius_rg]``.  Classifying on a truncated path
+    would measure each trap's basin against the path's own end rather than the
+    next real torque zero, which narrows it artificially and would reject
+    genuine traps that happen to sit near the start radius.
+
+    Two outcomes are distinguished, because they are different physics:
+
+    * a **resolved stable trap** inside the path returns its radius;
+    * **outward torque with no resolved trap** -- the migrator is being pushed
+      out of the domain, not held -- returns ``None`` as the radius.  Delivery
+      is still blocked, but the object is not trap-bound.
+    """
+    traps = classify_torque_traps(
+        radius_rg,
+        torque,
+        min_basin_dex=min_basin_dex,
+    )
+    stable = np.asarray(traps.stable_radius_rg, dtype=float)
+    if stable.size:
+        on_path = np.ones(stable.shape, dtype=bool)
+        if inner_radius_rg is not None:
+            on_path &= stable >= float(inner_radius_rg)
+        if outer_radius_rg is not None:
+            on_path &= stable <= float(outer_radius_rg)
+        if on_path.any():
+            return True, float(np.max(stable[on_path]))
+
+    values = np.asarray(torque, dtype=float)
+    radii = np.asarray(radius_rg, dtype=float)
+    within = np.ones(values.shape, dtype=bool)
+    if inner_radius_rg is not None:
+        within &= radii >= float(inner_radius_rg)
+    if outer_radius_rg is not None:
+        within &= radii <= float(outer_radius_rg)
+    finite = np.isfinite(values) & within
+    if finite.any() and np.any(values[finite] >= 0.0):
+        return True, None
+    return False, None
 
 
 def stable_blocking_radius_cm(
@@ -245,7 +317,6 @@ def stable_blocking_radius_cm(
 
 __all__ = [
     "ANTI_TRAP_KIND",
-    "DEFAULT_MIN_TRAP_SEPARATION_CELLS",
     "STABLE_TRAP_KIND",
     "TorqueTrapRadii",
     "classify_torque_traps",

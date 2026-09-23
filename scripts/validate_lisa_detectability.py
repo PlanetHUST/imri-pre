@@ -819,7 +819,7 @@ def validate_schema() -> None:
         "n_detector_numerical_failure",
     }.issubset(IMRI_RESULT_COLUMNS)
 
-    result = IMRIDynSingleResult(1.0e5, 2.0e5, 0, "semi_without_trap", 123)
+    result = IMRIDynSingleResult(1.0e5, 2.0e5, 0, "torque_with_trap", 123)
     result.imri_count = 1
     result.imri_mass_msun = 100.0
     result.imri_rate_per_myr = 0.1
@@ -828,7 +828,7 @@ def validate_schema() -> None:
     result.detectable_imri_rate_per_myr = np.nan
     result.detectable_imri_mass_rate_msun_per_myr = np.nan
     averaged = IMRIDynAveragedResult(
-        1.0e5, 2.0e5, "semi_without_trap", [result]
+        1.0e5, 2.0e5, "torque_with_trap", [result]
     ).to_dict()
     assert averaged["rate_evaluation_status"] == "complete"
     assert averaged["detector_rate_evaluation_status"] == (
@@ -843,7 +843,7 @@ def validate_schema() -> None:
 
 def validate_output_semantics() -> None:
     """Check that public CSV writers count finite physical entries."""
-    result = IMRIDynSingleResult(1.0e5, 2.0e5, 0, "semi_without_trap", 123)
+    result = IMRIDynSingleResult(1.0e5, 2.0e5, 0, "torque_with_trap", 123)
     result.imri_count = 2
     result.imri_mass_msun = 200.0
     result.imri_rate_per_myr = 0.2
@@ -883,10 +883,10 @@ def validate_output_semantics() -> None:
         },
     ])
     averaged = IMRIDynAveragedResult(
-        1.0e5, 2.0e5, "semi_without_trap", [result]
+        1.0e5, 2.0e5, "torque_with_trap", [result]
     )
     unavailable_result = IMRIDynSingleResult(
-        2.0e5, 2.0e5, 0, "semi_without_trap", 456
+        2.0e5, 2.0e5, 0, "torque_with_trap", 456
     )
     unavailable_result.imri_count = 1
     unavailable_result.imri_mass_msun = 100.0
@@ -907,7 +907,7 @@ def validate_output_semantics() -> None:
         ],
     )
     unavailable_averaged = IMRIDynAveragedResult(
-        2.0e5, 2.0e5, "semi_without_trap", [unavailable_result]
+        2.0e5, 2.0e5, "torque_with_trap", [unavailable_result]
     )
     config = object.__new__(IMRIDynConfig)
     config.redshift = 1.0
