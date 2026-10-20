@@ -26,8 +26,17 @@ Type-II model. It follows from dL/dr = (1/2)m*r*Omega and
 v_r = -(3/2)alpha*h^2*r*Omega*min(1,B).
 
 Production has no migration-model, gap-criterion or gap-threshold selector.
-The disk_model field remains a fixed compatibility label. Crida is diagnostic
-only. Malformed profiles do not fall back to a second transport prescription.
+The disk_model field remains a compatibility label for the two explicitly
+separated scenarios: the default `torque_with_trap` production contract and
+the comparison-only `semi_without_trap` implementation in
+[semi_analytic.py](../src/physical_process/migration/semi_analytic.py).
+Crida is diagnostic only in production. Malformed profiles do not fall back to
+a second transport prescription.
+
+The comparison scenario is assembled programmatically for controlled tests; it
+is not exposed by the CLI and is not a production alternative. It integrates
+local Type-I and Type-II timescales over `d ln R`, is always inward, and has no
+trap or outward-blocking outcome.
 
 ## Thermal treatment
 

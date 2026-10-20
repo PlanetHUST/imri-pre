@@ -3,6 +3,8 @@
 ``gap`` owns continuous depletion and deep-gap diagnostics; ``torque`` owns the
 single Jimenez-Masset plus Grishin-2024 torque; ``traps`` classifies signed
 zeros; and ``evolution`` integrates that torque without selecting alternatives.
+``semi_analytic`` preserves the archived integrated local Type-I/Type-II
+scenario for explicit comparison only; production never selects it.
 """
 
 from .evolution import (
@@ -37,6 +39,14 @@ from .torque import (
     compute_torque_profile,
     torque_si_to_cgs,
 )
+from .semi_analytic import (
+    GAP_OPENING_CONDITIONS,
+    TYPE_II_GAP_PARAMETER_THRESHOLD,
+    SemiAnalyticMigrationError,
+    gap_opening_mask,
+    migration_time_from_semi_analytic,
+    semi_analytic_migration_outcome,
+)
 from .traps import (
     TorqueTrapRadii,
     classify_torque_traps,
@@ -45,6 +55,7 @@ from .traps import (
 
 __all__ = [
     "CRIDA_DEEP_GAP_PARAMETER",
+    "GAP_OPENING_CONDITIONS",
     "GapDiagnostics",
     "KANAGAWA_CALIBRATED_MAX_PARAMETER",
     "KANAGAWA_DEEP_GAP_PARAMETER",
@@ -53,6 +64,8 @@ __all__ = [
     "MigrationOutcome",
     "MigrationParameters",
     "MigrationStatus",
+    "SemiAnalyticMigrationError",
+    "TYPE_II_GAP_PARAMETER_THRESHOLD",
     "ThermalTorqueTerms",
     "TorqueMigrationError",
     "TorqueMigrationOutcome",
@@ -65,11 +78,14 @@ __all__ = [
     "crida_gap_parameter",
     "find_closest_index",
     "gap_diagnostics",
+    "gap_opening_mask",
     "hill_radius_over_scale_height",
     "inward_only_counterfactual_torque",
     "kanagawa_gap_depth_fraction",
     "kanagawa_gap_parameter",
+    "migration_time_from_semi_analytic",
     "migration_time_from_torque",
+    "semi_analytic_migration_outcome",
     "stable_blocking_radius_cm",
     "torque_migration_outcome",
     "torque_si_to_cgs",

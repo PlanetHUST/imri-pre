@@ -61,7 +61,8 @@ the results and do not redefine those physical decisions.
 | Torque components | `physical_process.migration.torque` | Fixed gravitational + bounded thermal + gap-drift composition |
 | **Gap depletion and diagnostics** | `physical_process.migration.gap` | Continuous Kanagawa depth; Crida diagnostic only |
 | **Migration traps** | `physical_process.migration.traps` | Derived from torque zeros; nothing hard-coded |
-| Signed-torque integration | `physical_process.migration.evolution` | No runtime model selection |
+| Signed-torque integration | `physical_process.migration.evolution` | No runtime model selection in production |
+| Integrated semi-analytic migration (**comparison only**) | `physical_process.migration.semi_analytic` | Archived `semi_without_trap`; programmatic only, never a production CLI option; no traps |
 | GW orbital evolution | `physical_process.gw_frequency_radius` | Peters, circular |
 | Redshift-time relation | `physical_process.redshift_evolve` | Flat matter-plus-Lambda cosmic age, sharing H0 and Omega_m with detector distance |
 | Simplified SMBH merger | `physical_process.cosmic_merge` | |
@@ -74,7 +75,12 @@ the results and do not redefine those physical decisions.
 
 ## 3. Fixed torque and gap contract
 
-Production exposes one migration prescription and no model-selection flags:
+Production exposes one migration prescription and no model-selection flags.
+A comparison-only integrated semi-analytic scenario (the archived
+`semi_without_trap`) lives in
+[`migration/semi_analytic.py`](../src/physical_process/migration/semi_analytic.py);
+it is constructed programmatically for controlled experiments and is never
+selected by the production CLI. The production law is:
 
 ```
 Gamma_total = f_gap Gamma_grav + Gamma_thermal + (1-f_gap) Gamma_gap
@@ -210,8 +216,11 @@ cases, not capture-rate accuracy or population convergence.
 * Circular, coplanar migrator; thin, viscously relaxed, axisymmetric disk.
 * The only production law is the fixed Jimenez-Masset gravitational plus
   bounded Grishin-2024 thermal plus inertia-limited gap-drift torque in §3.
-* Kanagawa depletion is continuous. There is no Type-I/Type-II switch and no
-  semi-analytic production alternative.
+* Kanagawa depletion is continuous. There is no Type-I/Type-II switch in
+  production and no semi-analytic production alternative. The comparison-only
+  scenario integrates local Type-I timescales and switches to local Type-II
+  timescales where the selected gap-opening mask is true; it is inward-only,
+  has no traps, and is never selected by the CLI.
 * The signed-torque integrator preserves outward regions. A stable zero can
   block inward delivery and returns `status="trap_bound"`, `time = inf`, and
   the blocking radius; this is a physical outcome, not a numerical failure.
