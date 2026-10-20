@@ -63,7 +63,7 @@ the results and do not redefine those physical decisions.
 | **Migration traps** | `physical_process.migration.traps` | Derived from torque zeros; nothing hard-coded |
 | Signed-torque integration | `physical_process.migration.evolution` | No runtime model selection |
 | GW orbital evolution | `physical_process.gw_frequency_radius` | Peters, circular |
-| Redshift-time relation | `physical_process.redshift_evolve` | Power-law time/redshift approximation |
+| Redshift-time relation | `physical_process.redshift_evolve` | Flat matter-plus-Lambda cosmic age, sharing H0 and Omega_m with detector distance |
 | Simplified SMBH merger | `physical_process.cosmic_merge` | |
 | Gas/GW handoff | `workflows.event_rate` | `solve_gas_final_radius_cm` is defined once |
 | Event classification | `workflows.event_rate`, `workflows.event_work` | |
@@ -291,9 +291,26 @@ and must not be read as computing, a cosmic IMRI rate, a comoving rate density,
 an observer-frame all-sky rate, or a LISA-detectable cosmic rate. Checkpoint J
 asserts that no such column appears in the outputs.
 
+The source-frame clock and detector luminosity distance now share one flat
+matter-plus-Lambda cosmology with the configured `detector_hubble_constant_km_s_mpc`
+and `detector_omega_m`. Radiation is absent from both. `RedshiftEvolution`
+uses the analytic age relation
+
+\[
+t(z)=\frac{2}{3H_0\sqrt{\Omega_\Lambda}}
+\operatorname{asinh}\!\left[
+\sqrt{\frac{\Omega_\Lambda}{\Omega_m}}(1+z)^{-3/2}
+\right],\qquad \Omega_\Lambda=1-\Omega_m.
+\]
+
+Elapsed Myr start at the configured source
+redshift, and the GW continuation stops at the age of `z=0`. The old independent
+`hubble_constant_per_myr` input was removed.
+
 The live detector continuation still supports the legacy one-event cosmic
-merger when `cosmic_merge_time_myr` is finite (default 1000 Myr). Its mass and
-radius factors are explicit configuration. This differs from the fixed-host
-intent in the archived repair plan; documenting it does not resolve that
-modeling difference. The evolution time/redshift approximation also remains
-distinct from the luminosity-distance cosmology used for LISA SNR.
+merger when `cosmic_merge_time_myr` is finite (default 1000 Myr). It is a
+source-frame delay after the gas-final epoch; its mass and radius factors are
+explicit configuration. This differs from the fixed-host intent in the
+archived repair plan and remains a separate modeling assumption. The
+`max_gw_time_myr` compatibility parameter is recorded but is not currently
+used as an additional GW time cap.

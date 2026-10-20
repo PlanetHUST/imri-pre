@@ -22,7 +22,6 @@ from .config import (
     IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ,
     IMRI_MAX_GW_TIME_MYR,
-    IMRI_HUBBLE_CONSTANT_PER_MYR,
     IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
     IMRI_DETECTOR_OMEGA_M,
     IMRI_LISA_MISSION_DURATION_YEARS,
@@ -157,7 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-gw-time-myr",
         type=float,
         default=IMRI_MAX_GW_TIME_MYR,
-        help="maximum Peters GW time from the IMRI threshold to LISA entry",
+        help=(
+            "legacy recorded GW-time parameter; the active limit is the "
+            "cosmological z=0 age"
+        ),
     )
     parser.add_argument(
         "--gw-eccentricity",
@@ -172,12 +174,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=IMRI_REDSHIFT,
         help="source redshift used for LISA frequency and time-budget conversion",
-    )
-    parser.add_argument(
-        "--hubble-constant-per-myr",
-        type=float,
-        default=IMRI_HUBBLE_CONSTANT_PER_MYR,
-        help="linear redshift-time coefficient H0 in 1/Myr",
     )
     parser.add_argument(
         "--snr-threshold",
@@ -206,19 +202,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--detector-hubble-constant-km-s-mpc",
         type=float,
         default=IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC,
-        help="flat-LambdaCDM H0 used only for detector luminosity distance",
+        help="flat-LambdaCDM H0 shared by cosmic time and luminosity distance",
     )
     parser.add_argument(
         "--detector-omega-m",
         type=float,
         default=IMRI_DETECTOR_OMEGA_M,
-        help="flat-LambdaCDM matter density used only for detector distance",
+        help="flat-LambdaCDM matter density shared by cosmic time and distance",
     )
     parser.add_argument(
         "--cosmic-merge-time-myr",
         type=float,
         default=IMRI_COSMIC_MERGE_TIME_MYR,
-        help="source-frame time for one simplified central-SMBH merger",
+        help="source-frame delay after gas evolution for one simplified SMBH merger",
     )
     parser.add_argument(
         "--cosmic-merge-smbh-mass-factor",
@@ -415,7 +411,6 @@ def build_config_from_arguments(arguments: argparse.Namespace) -> IMRIDynConfig:
         max_gw_time_myr=arguments.max_gw_time_myr,
         gw_eccentricity=arguments.gw_eccentricity,
         redshift=arguments.redshift,
-        hubble_constant_per_myr=arguments.hubble_constant_per_myr,
         snr_threshold=arguments.snr_threshold,
         lisa_mission_duration_years=arguments.lisa_mission_duration_years,
         snr_window_placement=arguments.snr_window_placement,

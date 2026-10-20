@@ -37,7 +37,8 @@ SECONDARY_MASS_MSUN = 100.0
 LISA_MIN_FREQUENCY_HZ = 1.0e-3
 LISA_MAX_FREQUENCY_HZ = 1.0e-1
 INITIAL_REDSHIFT = 10.0
-HUBBLE_CONSTANT_PER_MYR = 1.0 / 13.6e3
+COSMOLOGY_H0_KM_S_MPC = 67.4
+COSMOLOGY_OMEGA_M = 0.315
 ECCENTRICITY = 0.0
 MISSION_DURATION_YEARS = 4.0
 SNR_THRESHOLD = 20.0
@@ -262,7 +263,6 @@ def _detect(
         r_gas_fin_cm=radius_cm,
         gas_final_time_myr=gas_final_time_myr,
         initial_redshift=initial_redshift,
-        hubble_constant_per_myr=HUBBLE_CONSTANT_PER_MYR,
         min_observed_frequency_hz=LISA_MIN_FREQUENCY_HZ,
         max_observed_frequency_hz=LISA_MAX_FREQUENCY_HZ,
         eccentricity=ECCENTRICITY,
@@ -271,8 +271,8 @@ def _detect(
         cosmic_merge_radius_factor=2.0,
         snr_threshold=SNR_THRESHOLD,
         mission_duration_years=MISSION_DURATION_YEARS,
-        detector_hubble_constant_km_s_mpc=67.4,
-        detector_omega_m=0.315,
+        detector_hubble_constant_km_s_mpc=COSMOLOGY_H0_KM_S_MPC,
+        detector_omega_m=COSMOLOGY_OMEGA_M,
     )
 
 
@@ -342,7 +342,7 @@ def build_duty_handoff_diagnostic() -> DutyHandoffDiagnostic:
             )
         )
     )
-    redshift_model = RedshiftEvolution(HUBBLE_CONSTANT_PER_MYR)
+    redshift_model = RedshiftEvolution(COSMOLOGY_H0_KM_S_MPC, COSMOLOGY_OMEGA_M)
     orbit_radius_cm: list[float] = []
     entry_radius_at_time_cm: list[float] = []
     redshifts: list[float] = []
@@ -433,7 +433,7 @@ def validate_duty_limited_handoff() -> None:
     assert misses_cosmic_time.detect_rate_reason != "not_imri_candidate"
 
     redshift_at_gas_fin = RedshiftEvolution(
-        HUBBLE_CONSTANT_PER_MYR
+        COSMOLOGY_H0_KM_S_MPC, COSMOLOGY_OMEGA_M
     ).redshift_evlove_with_time(1.0, event.gas_final_time_myr)
     print("\nRepresentative duty-limited gas -> GW case")
     print(f"initial_z={1.0:.9g}")
@@ -452,7 +452,7 @@ def validate_duty_limited_handoff() -> None:
 
 @cache
 def build_moving_entry_diagnostic() -> MovingEntryDiagnostic:
-    redshift_model = RedshiftEvolution(HUBBLE_CONSTANT_PER_MYR)
+    redshift_model = RedshiftEvolution(COSMOLOGY_H0_KM_S_MPC, COSMOLOGY_OMEGA_M)
     high_z_entry_radius_cm = gw_helpers.lisa_entry_radius_cm(
         PRIMARY_MASS_MSUN,
         SECONDARY_MASS_MSUN,

@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 import physical_process.gw_frequency_radius as gw_helpers
+from physical_process.redshift_evolve import RedshiftEvolution
 from physical_process.migration import (
     CRIDA_DEEP_GAP_PARAMETER,
     KANAGAWA_CALIBRATED_MAX_PARAMETER,
@@ -30,6 +31,10 @@ def build_metadata(
     runtime_stats: dict[str, float | int | str],
 ) -> dict[str, Any]:
     """Return configuration, derived model quantities, and runtime statistics."""
+    cosmic_clock = RedshiftEvolution(
+        config.detector_hubble_constant_km_s_mpc,
+        config.detector_omega_m,
+    )
     return {
         "simulation_info": {
             "date": datetime.now().isoformat(),
@@ -75,7 +80,15 @@ def build_metadata(
                 "embedded_bh_luminosity": "eddington_capped",
             },
             "redshift": config.redshift,
-            "hubble_constant_per_myr": config.hubble_constant_per_myr,
+            "cosmic_time_model": "flat_lcdm_matter_lambda",
+            "cosmic_time_origin": "source_redshift_at_agn_start",
+            "cosmic_time_hubble_constant_per_myr": (
+                cosmic_clock.hubble_constant_per_myr
+            ),
+            "cosmic_age_at_initial_redshift_myr": (
+                cosmic_clock.redshift_to_cosmic_time(config.redshift)
+            ),
+            "cosmic_age_at_z0_myr": cosmic_clock.redshift_to_cosmic_time(0.0),
             "lisa_min_gw_frequency_hz": config.lisa_min_gw_frequency_hz,
             "source_lisa_min_gw_frequency_hz": gw_helpers.source_frame_gw_frequency_hz(
                 config.lisa_min_gw_frequency_hz,
@@ -94,6 +107,7 @@ def build_metadata(
             ),
             "detector_omega_m": config.detector_omega_m,
             "cosmic_merge_time_myr": config.cosmic_merge_time_myr,
+            "cosmic_merge_time_origin": "post_gas_epoch",
             "cosmic_merge_smbh_mass_factor": config.cosmic_merge_smbh_mass_factor,
             "cosmic_merge_radius_factor": config.cosmic_merge_radius_factor,
             "max_gw_time_myr": config.max_gw_time_myr,

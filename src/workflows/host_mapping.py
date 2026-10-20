@@ -390,7 +390,6 @@ def config_kwargs(config: IMRIDynConfig) -> dict[str, Any]:
         "max_gw_time_myr": config.max_gw_time_myr,
         "gw_eccentricity": config.gw_eccentricity,
         "redshift": config.redshift,
-        "hubble_constant_per_myr": config.hubble_constant_per_myr,
         "snr_threshold": config.snr_threshold,
         "lisa_mission_duration_years": config.lisa_mission_duration_years,
         "snr_window_placement": config.snr_window_placement,

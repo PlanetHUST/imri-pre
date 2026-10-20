@@ -60,7 +60,7 @@ def _base_config(tmp_path) -> IMRIDynConfig:
         initial_stellar_density_gamma=1.75, use_disk_inner_radius=True,
         lisa_min_gw_frequency_hz=1e-3, lisa_max_gw_frequency_hz=1e-1,
         max_gw_time_myr=13.6e3, gw_eccentricity=0.0, redshift=15.0,
-        hubble_constant_per_myr=1.0 / 13.6e3, snr_threshold=20.0,
+        snr_threshold=20.0,
         lisa_mission_duration_years=4.0,
         snr_window_placement=DEFAULT_SNR_WINDOW_PLACEMENT,
         detector_hubble_constant_km_s_mpc=67.4, detector_omega_m=0.315,

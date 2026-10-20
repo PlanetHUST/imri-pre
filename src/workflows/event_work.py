@@ -290,7 +290,10 @@ class IMRIEventEvaluator:
         boundary: gw_helpers.CircularBandBoundary,
     ) -> IMRIEventRecord:
         redshift = self.config.redshift
-        redshift_model = RedshiftEvolution(self.config.hubble_constant_per_myr)
+        redshift_model = RedshiftEvolution(
+            self.config.detector_hubble_constant_km_s_mpc,
+            self.config.detector_omega_m,
+        )
         migrator_mass_msun = damping_result["mass_msun"]
         r_ini_cm = damping_result["final_semi_major_axis_cm"]
         total_mass_msun = result.m_smbh_msun + migrator_mass_msun
@@ -424,7 +427,6 @@ class IMRIEventEvaluator:
                 r_gas_fin_cm=event_decision.r_gas_fin_cm,
                 gas_final_time_myr=event_decision.gas_final_time_myr,
                 initial_redshift=redshift,
-                hubble_constant_per_myr=self.config.hubble_constant_per_myr,
                 min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
                 max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
                 eccentricity=self.config.gw_eccentricity,

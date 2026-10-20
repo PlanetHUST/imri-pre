@@ -32,7 +32,6 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "lisa_max_gw_frequency_hz": 1.0e-1,
     "max_gw_time_myr": 13.6e3,
     "gw_eccentricity": 0.0,
-    "hubble_constant_per_myr": 1.0 / 13.6e3,
     "snr_threshold": 20.0,
     "lisa_mission_duration_years": 4.0,
     "snr_window_placement": "optimal",
@@ -83,7 +82,6 @@ CONFIG_TEMPLATE_FIELDS = (
     "lisa_max_gw_frequency_hz",
     "max_gw_time_myr",
     "gw_eccentricity",
-    "hubble_constant_per_myr",
     "snr_threshold",
     "lisa_mission_duration_years",
     "snr_window_placement",
@@ -156,6 +154,12 @@ def load_config_template(path: Path | None) -> dict[str, Any]:
     source = payload.get("parameters", payload)
     if not isinstance(source, dict):
         raise ValueError("config JSON must contain an object")
+    if "hubble_constant_per_myr" in source:
+        warnings.warn(
+            "ignoring obsolete hubble_constant_per_myr; cosmic time now uses "
+            "detector_hubble_constant_km_s_mpc and detector_omega_m",
+            stacklevel=2,
+        )
     historical_detector_defaults = {
         "lisa_mission_duration_years": 4.0,
         "snr_window_placement": "optimal",

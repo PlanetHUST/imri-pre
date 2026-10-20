@@ -7,7 +7,7 @@ import numpy as np
 
 @dataclass(frozen=True)
 class CosmicMergeModel:
-    """One-event SMBH merger model used by the simplified detector stage."""
+    """One-event SMBH merger after a source-frame post-gas delay."""
 
     merge_time_myr: float
     smbh_mass_growth_factor: float = 2.0

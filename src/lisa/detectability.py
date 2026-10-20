@@ -300,7 +300,6 @@ def classify_detectability(
     r_gas_fin_cm: float,
     gas_final_time_myr: float,
     initial_redshift: float,
-    hubble_constant_per_myr: float,
     min_observed_frequency_hz: float,
     max_observed_frequency_hz: float,
     eccentricity: float,
@@ -370,7 +369,10 @@ def classify_detectability(
             snr_status="required_input_unavailable",
         )
 
-    redshift_model = RedshiftEvolution(hubble_constant_per_myr)
+    redshift_model = RedshiftEvolution(
+        detector_hubble_constant_km_s_mpc,
+        detector_omega_m,
+    )
     merge_model = CosmicMergeModel(
         merge_time_myr=cosmic_merge_time_myr,
         smbh_mass_growth_factor=cosmic_merge_smbh_mass_factor,

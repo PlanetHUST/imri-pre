@@ -7,8 +7,9 @@ is [workflows/event_work.py](../../src/workflows/event_work.py). Later sections
 that describe the 2026-09-02 repository are historical context. Current CLI,
 source ownership and fixed migration behavior are documented in
 [the engineering contract](../engineering_contract.md) and
-[physical model](../physics_model.md). This review does not retune the
-implemented detector equations.
+[physical model](../physics_model.md). The 2026-10-20 cosmic-clock update
+supersedes the historical separate time/distance cosmologies described below:
+both now use the configured flat-LambdaCDM H0 and Omega_m.
 
 Status: implemented authoritative specification
 
@@ -128,7 +129,7 @@ Current raw detector classes are `imri data`, `non-detectable`, and
 `misses_cosmic_time_before_merge`, `misses_cosmic_time_budget`,
 `outside_lisa_band`, and `band_entry_inside_isco`.
 
-### 3.3 Current redshift model
+### 3.3 Historical redshift model (2026-09-02)
 
 `src/workflows/redshift_evolve.py` uses
 
@@ -535,9 +536,10 @@ unavailable or configuration-invalid, according to the recorded decision.
 Metadata must also record fixed arm length, PSD equation/version, quadrature
 method and resolution/tolerance, ISCO convention, and radiation treatment.
 
-The existing `hubble_constant_per_myr` belongs to `RedshiftEvolution` and must
-not be silently reinterpreted as `km s^-1 Mpc^-1`. If the detector-time model
-is upgraded, deprecation/migration of that parameter must be explicit.
+The former `hubble_constant_per_myr` belonged to `RedshiftEvolution`; it was
+removed in the 2026-10-20 clock update. Old scan metadata carrying it produces
+an explicit warning, and the detector H0/Omega_m pair now drives time and
+distance together.
 
 `scripts/redshift_scan.py` has a strict required-field list. Every new detector
 parameter must enter its default template, strict field list, compatibility
@@ -682,9 +684,9 @@ inspiral SNR,” not a final LISA detection probability.
 
 ## 14. Resolved implementation decisions
 
-1. The existing `RedshiftEvolution` remains the owner of the astrophysical
-   event-time trajectory. Flat-LambdaCDM is a separate detector-distance model;
-   the two parameter sets have distinct names and metadata provenance.
+1. `RedshiftEvolution` remains the owner of the astrophysical event-time
+   trajectory. Since 2026-10-20 it uses the same flat-LambdaCDM H0/Omega_m
+   pair as the detector-distance model, with one explicit source-time origin.
 2. Detector distance uses the requested flat matter-plus-Lambda expression;
    radiation is explicitly omitted and recorded as such.
 3. Nonzero configured eccentricity leaves the intrinsic event intact but makes

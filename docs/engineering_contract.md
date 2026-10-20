@@ -43,6 +43,9 @@ Myr/Msun interfaces. pAGN solves in SI; its adapter converts disk quantities
 to CGS. Torque composition stays SI and converts once at the migration-time
 consumer. The LISA kernel has its own explicit SI boundary; frequencies passed
 to its public interface are observer-frame Hz and masses are source-frame.
+Cosmic age and luminosity distance share the configured flat-LambdaCDM H0 and
+Omega_m. Source-frame elapsed Myr begin at the host's specified redshift and
+the continuation ends at z=0; no independent Hubble-time setting remains.
 
 Use descriptive statuses rather than numeric sentinels. Preserve physical
 zero, unavailable, unsupported regime, numerical error, outward blockage and
