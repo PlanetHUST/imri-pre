@@ -12,7 +12,13 @@ from physical_process.migration import (
     KANAGAWA_GAP_DEPTH_COEFFICIENT,
 )
 
-from .config import IMRIDynConfig, MIGRATION_CONTRACT
+from .config import (
+    IMRIDynConfig,
+    MIGRATION_CONTRACT,
+    PAGN_ALPHA,
+    SEMI_WITHOUT_TRAP,
+    migration_contract_name,
+)
 from lisa.snr import (
     COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
     LISA_AVERAGING_CONVENTION,
@@ -24,6 +30,51 @@ from lisa.snr import (
     SNR_QUADRATURE_METHOD,
     SNR_QUADRATURE_RELATIVE_TOLERANCE,
 )
+
+
+def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
+    """Describe the active migration scenario and its equations."""
+    if config.disk_model == SEMI_WITHOUT_TRAP:
+        return {
+            "name": migration_contract_name(SEMI_WITHOUT_TRAP),
+            "scenario": "comparison_only_not_production",
+            "type_i_timescale": (
+                "t_I(R)=M_smbh^2*h^2/(2*m*Sigma*R^2*Omega)"
+            ),
+            "type_ii_timescale": "t_II(R)=1/(2*alpha*h^2*Omega)",
+            "integration": "t_mig=integral t_local(R) dlnR",
+            "gap_opening_condition": config.gap_opening_condition,
+            "type_ii_kanagawa_threshold": 11.0,
+            "consider_type_ii_migration": config.consider_type_ii_migration,
+            "alpha": PAGN_ALPHA,
+            "direction": "inward_only",
+            "traps": "not_represented",
+            "classical_type_ii_branch": config.consider_type_ii_migration,
+            "disk_profile": "pagn_sirko_thompson",
+            "omega_source": "project_keplerian_from_smbh_mass",
+        }
+
+    return {
+        "name": MIGRATION_CONTRACT,
+        "gravitational_torque": "jimenez_masset_2017_linear",
+        "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
+        "thermal_validity_policy": "exclude_outside_linear_regime",
+        "thermal_extrapolation_enabled": False,
+        "gap_depth": "kanagawa_1_over_1_plus_0p04K",
+        "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
+        "kanagawa_calibrated_max_parameter": (
+            KANAGAWA_CALIBRATED_MAX_PARAMETER
+        ),
+        "deep_gap_diagnostic": "crida_parameter_le_1",
+        "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
+        "gap_transport": (
+            "continuous_inertia_limited_viscous_drift_min_1_B"
+        ),
+        "disk_dominance_parameter": "B=Sigma*r^2/migrator_mass",
+        "wkb_jump_policy": "interpolate_log_slopes_across_flagged_cells",
+        "classical_type_ii_branch": False,
+        "embedded_bh_luminosity": "eddington_capped",
+    }
 
 
 def build_metadata(
@@ -58,27 +109,10 @@ def build_metadata(
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "disk_model": config.disk_model,
-            "migration_contract": {
-                "name": MIGRATION_CONTRACT,
-                "gravitational_torque": "jimenez_masset_2017_linear",
-                "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
-                "thermal_validity_policy": "exclude_outside_linear_regime",
-                "thermal_extrapolation_enabled": False,
-                "gap_depth": "kanagawa_1_over_1_plus_0p04K",
-                "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
-                "kanagawa_calibrated_max_parameter": (
-                    KANAGAWA_CALIBRATED_MAX_PARAMETER
-                ),
-                "deep_gap_diagnostic": "crida_parameter_le_1",
-                "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
-                "gap_transport": (
-                    "continuous_inertia_limited_viscous_drift_min_1_B"
-                ),
-                "disk_dominance_parameter": "B=Sigma*r^2/migrator_mass",
-                "wkb_jump_policy": "interpolate_log_slopes_across_flagged_cells",
-                "classical_type_ii_branch": False,
-                "embedded_bh_luminosity": "eddington_capped",
-            },
+            "disk_migration_scenario": config.disk_model,
+            "gap_opening_condition": config.gap_opening_condition,
+            "consider_type_ii_migration": config.consider_type_ii_migration,
+            "migration_contract": _migration_contract_metadata(config),
             "redshift": config.redshift,
             "cosmic_time_model": "flat_lcdm_matter_lambda",
             "cosmic_time_origin": "source_redshift_at_agn_start",

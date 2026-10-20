@@ -12,7 +12,7 @@ from physical_process import gw_frequency_radius as gw_helpers
 from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 
-from .config import IMRIDynConfig
+from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
 from lisa.detectability import (
     classify_detectability,
     solve_time_to_observed_lisa_entry,
@@ -322,15 +322,27 @@ class IMRIEventEvaluator:
                 mission_duration_years=self.config.lisa_mission_duration_years,
             )
         else:
-            torque_profile = self.engine.get_torque_profile(
-                disk_data,
-                agn_properties.smbh_mass_msun,
-                migrator_mass_msun,
-            )
-            migration_radius_cm = np.asarray(
-                torque_profile.radius_cm,
-                dtype=float,
-            )
+            torque_profile: TorqueProfile | None = None
+            if self.config.disk_model == TORQUE_WITH_TRAP:
+                torque_profile = self.engine.get_torque_profile(
+                    disk_data,
+                    agn_properties.smbh_mass_msun,
+                    migrator_mass_msun,
+                )
+                migration_radius_cm = np.asarray(
+                    torque_profile.radius_cm,
+                    dtype=float,
+                )
+            elif self.config.disk_model == SEMI_WITHOUT_TRAP:
+                migration_radius_cm = np.asarray(
+                    disk_data["radius_cm"],
+                    dtype=float,
+                )
+            else:
+                raise RuntimeError(
+                    "unsupported disk migration model: "
+                    f"{self.config.disk_model}"
+                )
             route = resolve_band_entry_route(
                 boundary,
                 disk_inner_radius_cm,
@@ -351,16 +363,31 @@ class IMRIEventEvaluator:
             ) -> disk_migration.MigrationOutcome:
                 key = (float(start_radius_cm), float(target_radius_cm))
                 if key not in migration_outcomes:
-                    migration_outcomes[key] = (
-                        self.torque_migration_outcome_to_radius(
-                            agn_properties,
-                            disk_data,
-                            damping_result["mass_g"],
-                            start_radius_cm,
-                            target_radius_cm,
-                            torque_profile=torque_profile,
+                    if self.config.disk_model == TORQUE_WITH_TRAP:
+                        if torque_profile is None:
+                            raise RuntimeError(
+                                "torque migration profile was not built"
+                            )
+                        migration_outcomes[key] = (
+                            self.torque_migration_outcome_to_radius(
+                                agn_properties,
+                                disk_data,
+                                damping_result["mass_g"],
+                                start_radius_cm,
+                                target_radius_cm,
+                                torque_profile=torque_profile,
+                            )
                         )
-                    )
+                    else:
+                        migration_outcomes[key] = (
+                            self.semi_analytic_migration_outcome_to_radius(
+                                agn_properties,
+                                disk_data,
+                                damping_result["mass_g"],
+                                start_radius_cm,
+                                target_radius_cm,
+                            )
+                        )
                 return migration_outcomes[key]
 
             def migration_time_myr_call(
@@ -647,6 +674,36 @@ class IMRIEventEvaluator:
             start_radius_cm,
             target_radius_cm,
             agn_properties.smbh_mass_msun,
+        )
+
+    def semi_analytic_migration_outcome_to_radius(
+        self,
+        agn_properties: AGNProperties,
+        disk_data: DiskProfiles,
+        mass_g: float,
+        start_radius_cm: float,
+        target_radius_cm: float,
+    ) -> disk_migration.MigrationOutcome:
+        """Return the integrated semi-analytic outcome for one radial path.
+
+        This path is selected only by the comparison-only ``semi_without_trap``
+        configuration; the production CLI never constructs it.
+        """
+        if "torque_alpha" not in disk_data:
+            raise MigrationProfileError(
+                "cached pAGN disk has no migration alpha"
+            )
+        return disk_migration.semi_analytic_migration_outcome(
+            np.asarray(disk_data["radius_cm"], dtype=float),
+            np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
+            np.asarray(disk_data["aspect_ratio"], dtype=float),
+            mass_g,
+            start_radius_cm,
+            target_radius_cm,
+            agn_properties.smbh_mass_msun,
+            float(disk_data["torque_alpha"]),
+            self.config.gap_opening_condition,
+            self.config.consider_type_ii_migration,
         )
 
     def _migration_torque_cgs(

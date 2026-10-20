@@ -13,9 +13,9 @@ from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
     IMRI_REPEAT_RESULTS_FILENAME,
-    MIGRATION_CONTRACT,
     METADATA_FILENAME,
     IMRIDynConfig,
+    migration_contract_name,
 )
 from .models import IMRIEventRecord, IMRIDynAveragedResult, IMRIDynSingleResult
 from lisa.snr import (
@@ -1122,7 +1122,7 @@ def save_migration_diagnostics(
         "base_seed": config.base_seed,
         "task_seed": result.task_seed,
         "duty_cycle_myr": json_float(config.duty_cycle_myr),
-        "migration_contract": MIGRATION_CONTRACT,
+        "migration_contract": migration_contract_name(config.disk_model),
         "rate_evaluation_status": rate_status,
         "detector_rate_evaluation_status": detector_rate_status,
         "physical_entry_imri_count": physical.count,

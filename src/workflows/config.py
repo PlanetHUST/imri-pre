@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from lisa.snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
+from physical_process.migration.semi_analytic import GAP_OPENING_CONDITIONS
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -36,9 +37,31 @@ IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
 TORQUE_WITH_TRAP = "torque_with_trap"
-DISK_MODELS = (TORQUE_WITH_TRAP,)
+SEMI_WITHOUT_TRAP = "semi_without_trap"
+DISK_MODELS = (TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
 DEFAULT_DISK_MODEL = TORQUE_WITH_TRAP
+DEFAULT_GAP_OPENING_CONDITION = "kii"
 MIGRATION_CONTRACT = "jm17_grishin2024_continuous_kanagawa"
+SEMI_ANALYTIC_MIGRATION_CONTRACT = "integrated_local_semi_analytic_type_i_ii"
+MIGRATION_CONTRACTS = {
+    TORQUE_WITH_TRAP: MIGRATION_CONTRACT,
+    SEMI_WITHOUT_TRAP: SEMI_ANALYTIC_MIGRATION_CONTRACT,
+}
+
+
+def migration_contract_name(disk_model: str) -> str:
+    """Return the contract label for a migration scenario.
+
+    The production CLI constructs only ``torque_with_trap``.
+    ``semi_without_trap`` is a comparison-only scenario assembled
+    programmatically; it is never selected by the production command line.
+    """
+    try:
+        return MIGRATION_CONTRACTS[disk_model]
+    except KeyError as error:
+        raise ValueError(
+            f"disk model must be one of {DISK_MODELS}"
+        ) from error
 
 
 class IMRIDynConfig:
@@ -64,6 +87,12 @@ class IMRIDynConfig:
         initial_stellar_density_gamma: float,
         # Disk-crossing and migration controls
         use_disk_inner_radius: bool,
+        # Comparison-only migration scenario selector. The production CLI passes
+        # only DEFAULT_DISK_MODEL; the semi-analytic branch is assembled by an
+        # explicit comparison script and is never a production CLI option.
+        disk_model: str = DEFAULT_DISK_MODEL,
+        gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
+        consider_type_ii_migration: bool = True,
         # Simplified IMRI controls
         lisa_min_gw_frequency_hz: float,
         lisa_max_gw_frequency_hz: float,
@@ -107,6 +136,15 @@ class IMRIDynConfig:
                 raise TypeError("base seed must be an integer or None")
             if base_seed < 0:
                 raise ValueError("base seed must be nonnegative")
+        if disk_model not in DISK_MODELS:
+            raise ValueError(f"disk model must be one of {DISK_MODELS}")
+        if gap_opening_condition not in GAP_OPENING_CONDITIONS:
+            raise ValueError(
+                "gap-opening condition must be one of "
+                f"{GAP_OPENING_CONDITIONS}"
+            )
+        if not isinstance(consider_type_ii_migration, bool):
+            raise TypeError("consider_type_ii_migration must be a bool")
         if not 0.0 < lisa_min_gw_frequency_hz < lisa_max_gw_frequency_hz:
             raise ValueError("LISA frequencies must satisfy 0 < f_min < f_max")
         if max_gw_time_myr <= 0.0:
@@ -157,8 +195,11 @@ class IMRIDynConfig:
         self.nsc_radius_reference_mass_msun = nsc_radius_reference_mass_msun
 
         self.use_disk_inner_radius = use_disk_inner_radius
-        # Kept as a persisted scenario label, not a user-selectable model.
-        self.disk_model = DEFAULT_DISK_MODEL
+        # The default is the fixed production torque contract. The semi-analytic
+        # value is a comparison-only label and is not exposed by the CLI.
+        self.disk_model = disk_model
+        self.gap_opening_condition = gap_opening_condition
+        self.consider_type_ii_migration = consider_type_ii_migration
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr
