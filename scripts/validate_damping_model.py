@@ -359,7 +359,10 @@ CASES = (
         inclination_deg=HIGH_INCLINATION_DEG,
         cos_omega=0.5,
         expected_node_flags=(True, True),
-        expected_status=DampingStatus.EMBEDDED_STAR,
+        # The crossing approximation ends at i <= H/R while e remains about
+        # 0.016. This is also true before numerical alignment; low inclination
+        # alone must not certify the circular-migration handoff.
+        expected_status=DampingStatus.DAMPING_INCOMPLETE,
         max_iter=50000,
     ),
 )
@@ -773,6 +776,7 @@ def _assert_worker_serialization(
         disk.profile.inner_radius_cm,
         disk.profile.outer_radius_cm,
         USE_DISK_INNER_RADIUS,
+        np.asarray(disk.profile.density_g_cm3, dtype=float),
     )
     task: DampingTask = {
         "task_kind": "diagnostic",

@@ -315,8 +315,10 @@ of its first 64 KiB — the raw CSV is never copied.
 
 ## 9. Validation
 
-`python scripts/interface_checkpoints.py` (results under
-`output/checkpoints/`). Final run: **A–C, E–H PASS; D WARN** (formatting only).
+`python scripts/run_interface_checkpoints.py` (results under
+`output/checkpoints/`). The following are historical interface-run results,
+not a rerun against the current physics: **A–C, E–H PASS; D WARN** (formatting
+only). Run the command again to establish a current baseline.
 
 | Checkpoint | What it proves | Result |
 |---|---|---|
@@ -400,8 +402,8 @@ absolute cosmic rate.
 | `src/workflows/host_mapping.py` | `HaloHost` → resolved local inputs; policy; domain |
 | `src/workflows/single_halo.py` | `run_single_halo`; `HaloSimulationResult`; statuses |
 | `src/workflows/tree_batch.py` | jobs, seeds, parallel executor, outputs, provenance |
-| `src/workflows/tree_batch_plots.py` | two batch interface figures |
-| `scripts/interface_checkpoints.py` | checkpoints A–H |
+| `src/viz/batch_plots.py` | two batch interface figures |
+| `scripts/run_interface_checkpoints.py` | checkpoints A–H |
 | `docs/merger_tree_interface.md` | this document |
 
 **Modified**

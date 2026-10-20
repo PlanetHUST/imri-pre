@@ -20,7 +20,9 @@ input/
 imri_redshift_scan_results/
 imri_dyn_results/
 figs/
-docs/
+# Maintained documentation and archived reference transcripts are source.
+# The standalone HTML export remains a generated local artifact.
+docs/*.html
 
 lisa_ref/
 # ============================================================

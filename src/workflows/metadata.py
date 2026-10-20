@@ -57,6 +57,8 @@ def build_metadata(
                 "name": MIGRATION_CONTRACT,
                 "gravitational_torque": "jimenez_masset_2017_linear",
                 "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
+                "thermal_validity_policy": "exclude_outside_linear_regime",
+                "thermal_extrapolation_enabled": False,
                 "gap_depth": "kanagawa_1_over_1_plus_0p04K",
                 "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
                 "kanagawa_calibrated_max_parameter": (
@@ -64,6 +66,11 @@ def build_metadata(
                 ),
                 "deep_gap_diagnostic": "crida_parameter_le_1",
                 "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
+                "gap_transport": (
+                    "continuous_inertia_limited_viscous_drift_min_1_B"
+                ),
+                "disk_dominance_parameter": "B=Sigma*r^2/migrator_mass",
+                "wkb_jump_policy": "interpolate_log_slopes_across_flagged_cells",
                 "classical_type_ii_branch": False,
                 "embedded_bh_luminosity": "eddington_capped",
             },

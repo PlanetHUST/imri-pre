@@ -1,0 +1,107 @@
+{
+  "archived_on": "2026-10-18",
+  "purpose": "Lossless source references preserved before documentation consolidation; historical contents do not define current runtime behavior.",
+  "backup_archive": "/tmp/imri-doc-cleanup.0fNyyg/before.tar.gz",
+  "entries": [
+    {
+      "original_path": "docs/bug_fix_plan.md",
+      "archive_path": "docs/archive/design/bug_fix_plan.md",
+      "sha256": "16f12eed0cf8b3b5050b73bc7004a69460c45b95389811be264eaf7b2f0d6455"
+    },
+    {
+      "original_path": "docs/reference/engineering_contract.md",
+      "archive_path": "docs/archive/design/engineering_contract_reference.md",
+      "sha256": "46ffd2d32fc7a560254c2d716fa76bd10a5a2d4a1860ce1e756a06a6d2f5dded"
+    },
+    {
+      "original_path": "docs/reference/history.md",
+      "archive_path": "docs/archive/design/history_reference.md",
+      "sha256": "9f43a303a074ef0579a733ef3757da9ffdcaf5b4b73e4c8bf65bca9e941b1410"
+    },
+    {
+      "original_path": "docs/migration_model_alignment.md",
+      "archive_path": "docs/archive/design/migration_model_alignment.md",
+      "sha256": "e79ef4451760cc79e52710756beadac9986a5991b353b7adfd9910eb744e3b80"
+    },
+    {
+      "original_path": "docs/reference/physical_model.md",
+      "archive_path": "docs/archive/design/physical_model_reference.md",
+      "sha256": "48cf9580acf586ca468140a305f64597b377990a1bcf216cb373c50088019f33"
+    },
+    {
+      "original_path": "docs/script_reorganization.md",
+      "archive_path": "docs/archive/design/script_reorganization.md",
+      "sha256": "79e54fbeb6927775a8501b9ab57a7b1c7a20bad2899360454153b6ee4d889a32"
+    },
+    {
+      "original_path": "docs/project/01_environment_build.md",
+      "archive_path": "docs/archive/project_before_cleanup/01_environment_build.md",
+      "sha256": "771212538d7865cbeb1ec85af7b43ebdb2cb4826b54cd74898dbee6cf49bad84"
+    },
+    {
+      "original_path": "docs/project/02_population_sampling.md",
+      "archive_path": "docs/archive/project_before_cleanup/02_population_sampling.md",
+      "sha256": "4600d530b26d34f0e9f5cae283aacaf09102e74b3a472aad4a95797eaf5c8de9"
+    },
+    {
+      "original_path": "docs/project/03_disk_embedding_dynamics.md",
+      "archive_path": "docs/archive/project_before_cleanup/03_disk_embedding_dynamics.md",
+      "sha256": "e9fde6eac60540c57b385708a1413cc53503932c272bff44871dfc6998c3ed70"
+    },
+    {
+      "original_path": "docs/project/04_gas_migration.md",
+      "archive_path": "docs/archive/project_before_cleanup/04_gas_migration.md",
+      "sha256": "91d2c9d46bde4c3b757a67dafdbebb9546bb9fcba3cd76c1859ee2e8ec2bed64"
+    },
+    {
+      "original_path": "docs/project/05_gw_event_classification.md",
+      "archive_path": "docs/archive/project_before_cleanup/05_gw_event_classification.md",
+      "sha256": "e029f2b5a9c7d0a172404f7d7bc590a55768c1457f86b629a27d0e1e02768057"
+    },
+    {
+      "original_path": "docs/project/06_cosmology_detectability.md",
+      "archive_path": "docs/archive/project_before_cleanup/06_cosmology_detectability.md",
+      "sha256": "4af0efb565970723efe6e60ed231bd9b3ad27838429b6a515e78a65f9a186e36"
+    },
+    {
+      "original_path": "docs/project/07_workflow_orchestration.md",
+      "archive_path": "docs/archive/project_before_cleanup/07_workflow_orchestration.md",
+      "sha256": "a510097ac8dc781e218bb483fd09658032eb543f9cb0318e968b897f4c2db7ad"
+    },
+    {
+      "original_path": "docs/project/08_data_io.md",
+      "archive_path": "docs/archive/project_before_cleanup/08_data_io.md",
+      "sha256": "b1ffdc3de4c26b019d1f21432ed312f835317034f912467463258cba1cf2a32d"
+    },
+    {
+      "original_path": "docs/project/09_analysis_visualization.md",
+      "archive_path": "docs/archive/project_before_cleanup/09_analysis_visualization.md",
+      "sha256": "d0f78a45721eb0056e6c4b7f047dc1fd371db03bc2daf43a13f2070aaf2f7ab9"
+    },
+    {
+      "original_path": "docs/project/10_validation_diagnostics.md",
+      "archive_path": "docs/archive/project_before_cleanup/10_validation_diagnostics.md",
+      "sha256": "56818d03223a739e4bcf41dc5cc322c325aea886b700198a1c338c8b2e290e55"
+    },
+    {
+      "original_path": "docs/project/README.md",
+      "archive_path": "docs/archive/project_before_cleanup/README.md",
+      "sha256": "82ca860bb5ee312b20dd51a3fe31cc4020f7ee14e54bd282cff74f3de691e64d"
+    },
+    {
+      "original_path": "docs/project/overview.md",
+      "archive_path": "docs/archive/project_before_cleanup/overview.md",
+      "sha256": "e376f931ab0f0099bdd2c625a18a7147be6c259305d34cac1023a6cb0b51603e"
+    },
+    {
+      "original_path": "2026-09-18-163756-read-instructionsmd-carefully-and-complete-t.txt",
+      "archive_path": "docs/archive/transcripts/2026-09-18-163756-read-instructionsmd-carefully-and-complete-t.txt",
+      "sha256": "ba1d1345763037d193fc35d112f61d725d2986e588a0acd44ec3848a9ec5d0d3"
+    },
+    {
+      "original_path": "2026-09-21-204204-hello.txt",
+      "archive_path": "docs/archive/transcripts/2026-09-21-204204-hello.txt",
+      "sha256": "8ea653536392e9f1ce733032f49a0f1d54ffb129043bc0a97e093b131bd029e5"
+    }
+  ]
+}

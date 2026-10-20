@@ -14,6 +14,11 @@ The project answers two questions:
 
 It deliberately stops at host-level results. **No cosmic rate is computed.**
 
+Start with the [documentation map](docs/README.md) for current contracts and
+the part-by-part source guide. The former root text exports are preserved in
+[the reference archive](docs/archive/README.md); their durable decisions and
+later corrections are combined in [the decision history](docs/reference/history.md).
+
 ---
 
 ## What one simulation means
@@ -44,11 +49,13 @@ Each arrow is owned by exactly one module. See
 module-ownership table and the assumptions behind each stage.
 
 > **Migration contract.** Production uses one signed torque:
-> `Gamma = f_gap Gamma_grav + Gamma_thermal`, with continuous Kanagawa depth
-> `f_gap = 1/(1+0.04K)` and `K=q²/(alpha h⁵)`. The thermal term follows the
-> local Grishin-2024 prescription on the pAGN disk. There is no classical
-> Type-II branch or runtime gap/model selector. Regime-limit flags are saved as
-> diagnostics rather than silently switching prescriptions. See
+> `Gamma = f_gap Gamma_grav + Gamma_thermal + (1-f_gap) Gamma_gap`, with
+> continuous Kanagawa depth `f_gap = 1/(1+0.04K)` and
+> `K=q²/(alpha h⁵)`. `Gamma_gap` is the inward viscous-drift limit slowed by
+> the local disk-to-migrator mass ratio. The thermal term follows the local
+> Grishin-2024 prescription on the pAGN disk and is applied only where its
+> linear validity checks pass. There is no runtime torque/gap selector.
+> Regime-limit flags are persisted with the profile. See
 > [`docs/physics_model.md`](docs/physics_model.md) §3.
 > The validation diagnostic also reports a clearly labelled no-trap extreme,
 > `Gamma_no-trap=-|Gamma|`, alongside the signed trap-aware outcome; it is not
@@ -92,6 +99,9 @@ python scripts/main.py 2 output/dyn_results 4 \
 ```
 
 Positional arguments are `num_repeats`, `output_dir`, `damping_cpu_count`.
+The optional `--base-seed` defaults to `None`; pass it explicitly for paired,
+reproducible runs. The single-halo main workflow writes scientific CSV/JSON
+without automatically invoking the saved-result figure functions.
 
 ### A merger-tree batch
 
@@ -157,15 +167,17 @@ A merger-tree batch adds `config/` (resolved config + provenance), `hosts/`,
 and `summary.json`.
 
 **Reading a zero correctly:** a job with `status = success` and `n_imri = 0` is
-a *physical zero*. Any other status means the model could not be evaluated, and
-its physical columns are `NaN`, never `0`.
+an evaluated zero only when its rate validity is complete. Check `rate_status`
+and `detector_rate_status` too: successful execution does not guarantee that
+every physical/detector result is available. Failed jobs retain unavailable
+physical columns instead of zeros.
 
 ---
 
 ## Validation
 
 ```bash
-python tests/run_tests.py                    # automated correctness (no pytest needed)
+PYTHONPATH=src python tests/run_tests.py       # automated correctness (no pytest needed)
 python scripts/run_science_checkpoints.py    # scientific checkpoints B–L
 python scripts/run_interface_checkpoints.py  # merger-tree interface checkpoints A–H
 ```
@@ -195,6 +207,7 @@ runs while ignoring timings and paths.
 | `audit_repository.py` | dependency / duplicated-physics audit |
 | `compare_baseline.py` | scientific-output regression comparison |
 | `validate_damping_model.py` | damping invariants, scans and phase diagrams |
+| `compare_damping_reference.py` | shared-input comparison with both TDE damping sources |
 | `validate_gas_gw_handoff.py` | gas/GW handoff regression checks |
 | `validate_lisa_detectability.py` | LISA PSD, cosmology, SNR and classification checks |
 | `validate_migration_contract.py` | fixed torque contract, validity flags, and trap/no-trap bounds |
@@ -210,3 +223,7 @@ Python ≥ 3.10 with `numpy`, `scipy`, `pandas`, `matplotlib` and `pagn`.
 Install for development with `pip install -e .`; the package puts `src/` on the
 path, so `physical_process`, `disk_quantity`, `lisa`, `viz` and `workflows` are
 importable directly.
+
+This cleanup changes documentation and reference locations only. Existing
+scientific outputs under `output/` and `figs/` remain evidence for the source
+and inputs that produced them, rather than current numerical baselines.

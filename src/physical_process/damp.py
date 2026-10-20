@@ -29,7 +29,6 @@ FloatArray = npt.NDArray[np.float64]
 MAX_EMBEDDED_ECCENTRICITY = 0.01
 DEGREES_PER_RADIAN = 180.0 / np.pi
 INITIAL_TIME_STEP_FRACTION = 0.01
-MIN_TIME_STEP_FRACTION = 1.0e-6
 MAX_TIME_STEP_FRACTION = 0.1
 MAX_ACCEPTED_RELATIVE_CHANGE = 0.01
 GROW_TIME_STEP_RELATIVE_CHANGE = 0.001
@@ -841,7 +840,14 @@ class DampingCalculator:
         max_iter: int = 50000,
         history: list[OrbitalState] | None = None,
     ) -> DampingOutcome:
-        """Integrate disk-crossing damping and return the complete final state."""
+        """Integrate disk-crossing damping and return the complete final state.
+
+        Adaptive trials follow ``cos_tde_revised/damp.py``: rejected trials
+        reuse the unchanged state's orbital terms and may shrink below the
+        former 1e-6 fraction floor. ``max_iter`` limits accepted steps.
+        Numerical failure is distinct from running out of AGN time. The
+        corrected node physics and circular-migration eligibility remain IMRI's.
+        """
         if mass_g <= 0.0:
             raise ValueError("damped object mass must be positive")
         if formation_time_myr < 0.0:
@@ -854,12 +860,12 @@ class DampingCalculator:
         duty_cycle_s = self.agn_properties.agn_lifetime_myr * const.Myr
         time_step_fraction = INITIAL_TIME_STEP_FRACTION
         iteration = 0
+        retry_timescales = None
+        retry_coefficients = None
         if history is not None:
             history.append(state)
 
         while not self.inclination_is_damped(state) and iteration < max_iter:
-            iteration += 1
-
             if state.time_s >= duty_cycle_s:
                 return self._outcome(
                     DampingStatus.DAMPING_INCOMPLETE,
@@ -883,11 +889,13 @@ class DampingCalculator:
                 state.time_s,
                 formation_time_s,
             )
-            timescales = self.timescale_calc.compute_all_timescales(
-                mass_g,
-                state,
-                current_obj_type,
-            )
+            if retry_timescales is None:
+                retry_timescales = self.timescale_calc.compute_all_timescales(
+                    mass_g,
+                    state,
+                    current_obj_type,
+                )
+            timescales = retry_timescales
             if timescales is None:
                 return self._outcome(
                     DampingStatus.OUTSIDE_DISK,
@@ -902,6 +910,15 @@ class DampingCalculator:
                 time_step_fraction,
             )
 
+            if retry_coefficients is None:
+                retry_coefficients = self.compute_ode_coefficients(
+                    state,
+                    drag_time_1_s,
+                    drag_time_2_s,
+                    crossing_time_1_s,
+                    crossing_time_2_s,
+                    timescales["active_node_mask"],
+                )
             (
                 delta_axis_1_cm_per_orbit,
                 delta_axis_2_cm_per_orbit,
@@ -909,14 +926,7 @@ class DampingCalculator:
                 delta_inclination_2_rad_per_orbit,
                 delta_eccentricity_1_per_orbit,
                 delta_eccentricity_2_per_orbit,
-            ) = self.compute_ode_coefficients(
-                state,
-                drag_time_1_s,
-                drag_time_2_s,
-                crossing_time_1_s,
-                crossing_time_2_s,
-                timescales["active_node_mask"],
-            )
+            ) = retry_coefficients
             delta_axis_per_orbit_cm = (
                 delta_axis_1_cm_per_orbit + delta_axis_2_cm_per_orbit
             )
@@ -940,6 +950,12 @@ class DampingCalculator:
                 state.inclination_rad
                 + delta_inclination_per_orbit_rad * time_step_s / orbital_period_s
             )
+            if not np.all(np.isfinite((
+                new_semi_major_axis_cm, new_eccentricity, new_inclination_rad,
+            ))):
+                return self._outcome(
+                    DampingStatus.CALCULATION_ERROR, state, initial_state,
+                )
 
             relative_axis_change = (
                 abs(
@@ -961,30 +977,48 @@ class DampingCalculator:
                 relative_axis_change, relative_inclination_change
             )
             if maximum_relative_change > MAX_ACCEPTED_RELATIVE_CHANGE:
-                time_step_fraction *= SHRINK_TIME_STEP_FACTOR
-                time_step_fraction = max(time_step_fraction, MIN_TIME_STEP_FRACTION)
+                time_step_fraction *= min(
+                    SHRINK_TIME_STEP_FACTOR,
+                    0.9 * MAX_ACCEPTED_RELATIVE_CHANGE / maximum_relative_change,
+                )
+                if time_step_fraction <= 0.0:
+                    return self._outcome(
+                        DampingStatus.CALCULATION_ERROR, state, initial_state,
+                    )
                 continue  # redo iteration with smaller step
             if maximum_relative_change < GROW_TIME_STEP_RELATIVE_CHANGE:
                 time_step_fraction *= GROW_TIME_STEP_FACTOR
                 time_step_fraction = min(time_step_fraction, MAX_TIME_STEP_FRACTION)
 
+            if state.time_s + time_step_s <= state.time_s:
+                return self._outcome(
+                    DampingStatus.CALCULATION_ERROR, state, initial_state,
+                )
             state = state.update(
                 semi_major_axis_cm=float(new_semi_major_axis_cm),
                 eccentricity=float(new_eccentricity),
                 inclination_rad=float(new_inclination_rad),
                 time_s=float(state.time_s + time_step_s),
             )
+            retry_timescales = None
+            retry_coefficients = None
+            iteration += 1
             if history is not None:
                 history.append(state)
 
-            if iteration >= max_iter:
-                if self.verbose:
-                    print(f"Warning: Maximum iterations ({max_iter}) reached")
-                return self._outcome(
-                    DampingStatus.DAMPING_INCOMPLETE,
-                    state,
-                    initial_state,
-                )
+        if (
+            max_iter > 0
+            and iteration >= max_iter
+            and not self.inclination_is_damped(state)
+        ):
+            if self.verbose:
+                print(f"Warning: Maximum iterations ({max_iter}) reached")
+            status = (
+                DampingStatus.DAMPING_INCOMPLETE
+                if state.time_s >= duty_cycle_s
+                else DampingStatus.CALCULATION_ERROR
+            )
+            return self._outcome(status, state, initial_state)
 
         return self._determine_final_state(
             state,

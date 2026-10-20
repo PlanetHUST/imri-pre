@@ -1,5 +1,10 @@
 # Round-2 report: scientific refactor, physical transparency, repository consolidation
 
+> Historical implementation report. Its model selectors, file counts, numerical
+> tables and PASS/WARN statements describe the recorded snapshot, not current
+> defaults or a fresh validation. Use [the documentation map](README.md),
+> [current physics](physics_model.md) and [decision history](reference/history.md).
+
 ---
 
 ## A. Original architecture

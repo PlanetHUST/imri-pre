@@ -68,18 +68,20 @@ CLASSIFICATION: dict[str, dict[str, Any]] = {
         role="canonical", physics=True, duplicate=False),
     # ---- physics: migration (Round-2 canonical package) -------------------
     "src/physical_process/migration/torque.py": dict(
-        purpose="Lindblad / corotation / thermal / Type-II torque components",
+        purpose=(
+            "Fixed gravitational, bounded thermal and inertia-limited gap torque"
+        ),
         role="canonical", physics=True, duplicate=False,
-        note="Owns no threshold; its gap parameter delegates to gap.py."),
+        note="Uses the continuous depth supplied by gap.py; exposes no selector."),
     "src/physical_process/migration/gap.py": dict(
-        purpose="Every gap parameter, threshold and gap-open decision",
+        purpose="Continuous Kanagawa depletion and Crida deep-gap diagnostics",
         role="canonical", physics=True, duplicate=False,
-        note="Sole definition of kii / kanagawa / crida. See F1."),
+        note="Sole definition of the production gap quantity. See F1."),
     "src/physical_process/migration/traps.py": dict(
         purpose="Trap identification from torque zeros (stable/anti/boundary/unresolved)",
         role="canonical", physics=True, duplicate=False),
     "src/physical_process/migration/evolution.py": dict(
-        purpose="Regime selection and radial migration integration",
+        purpose="Signed radial migration integration and blockage statuses",
         role="canonical", physics=True, duplicate=False),
     # ---- physics: disk ----------------------------------------------------
     "src/disk_quantity/opacity.py": dict(
@@ -158,7 +160,10 @@ CLASSIFICATION: dict[str, dict[str, Any]] = {
 FINDINGS: list[dict[str, Any]] = [
     dict(
         id="F1-gap-parameter-inconsistency",
-        resolution="EXPOSED: both parameters named, documented and configurable in migration/gap.py; 'kanagawa' added as an opt-in criterion; default unchanged. The physical question remains OPEN.",
+        resolution=(
+            "FIXED: production has one Kanagawa depletion parameter and no "
+            "runtime gap criterion or Type-II selector; Crida is diagnostic only."
+        ),
         severity="high",
         title="Two different quantities are both called the gap parameter K",
         detail=(
@@ -171,16 +176,17 @@ FINDINGS: list[dict[str, Any]] = [
             "orders of magnitude for thin disks."
         ),
         action=(
-            "Make both explicit and separately named in a canonical gap module, "
-            "expose the exponent and threshold as named documented parameters, "
-            "add an opt-in 'kanagawa' criterion, and keep 'kii' as the default so "
-            "no production result changes. Report the discrepancy as an "
-            "unresolved model ambiguity."
+            "Use K=q^2/(alpha*h^5) only for continuous Kanagawa depletion, "
+            "retain Crida only as a deep-gap diagnostic, and remove branch "
+            "selectors from configuration and orchestration."
         ),
     ),
     dict(
         id="F2-script-local-gap-physics",
-        resolution='FIXED: both scripts call gap_diagnostics(); enforced by tests/test_architecture.py.',
+        resolution=(
+            "FIXED: the obsolete comparison scripts were removed; all retained "
+            "diagnostics call physical_process.migration."
+        ),
         severity="high",
         title="trap_plot.py and migration_test.py reimplement the gap diagnostics",
         detail=(

@@ -1,8 +1,9 @@
 """Validate the fixed migration contract on real pAGN disk solutions.
 
-This diagnostic deliberately reports, rather than hides, cells where the
-Grishin-2024 linear thermal theory or the simple Kanagawa depth fit is being
-extrapolated. It writes one compact row per central mass.
+This diagnostic reports, rather than hides, cells where the Grishin-2024
+linear thermal theory is excluded or the simple Kanagawa depth fit is being
+extrapolated. It also compares signed production transport with the explicit
+inward-only no-trap counterfactual. It writes one compact row per central mass.
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ SOURCE_ROOT = PROJECT_ROOT / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
+from physical_process import constants as const  # noqa: E402
 from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile  # noqa: E402
 from physical_process.migration import (  # noqa: E402
     MigrationParameters,
@@ -30,7 +32,6 @@ from physical_process.migration import (  # noqa: E402
     torque_migration_outcome,
     torque_si_to_cgs,
 )
-from physical_process import constants as const  # noqa: E402
 from workflows.config import (  # noqa: E402
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     MIGRATION_CONTRACT,
@@ -91,6 +92,7 @@ def validate_mass(
         torque.gamma_type_i_si,
         torque.gamma_th_si,
         torque.gap_depth_fraction,
+        torque.gamma_secondary_dominated_si,
     )
     if not np.array_equal(torque.gamma_total_si, recomposed):
         raise AssertionError("production total torque does not match its contract")
@@ -143,6 +145,9 @@ def validate_mass(
         "thermal_regime_valid_fraction": float(
             torque.thermal_torque_regime_valid.mean()
         ),
+        "thermal_applied_fraction": float(torque.thermal_validity_weight.mean()),
+        "wkb_invalid_fraction": float(torque.wkb_invalid.mean()),
+        "median_disk_dominance_b": _finite_median(torque.disk_dominance_b),
         "median_gap_depth_fraction": _finite_median(torque.gap_depth_fraction),
         "median_hill_over_height": _finite_median(
             torque.hill_radius_over_scale_height

@@ -94,11 +94,19 @@ def test_secondary_dominated_torque_is_inertia_limited() -> None:
 
     alpha, radius_m, aspect, omega = 0.1, 1.0e12, 0.01, 1.0e-8
     sigma = 1.0e3
-    viscous = -1.5 * alpha * aspect**2 * sigma * radius_m**4 * omega**2
+    disk_dominated_mass_kg = 1.0e20
+    viscous = (
+        -0.75
+        * alpha
+        * aspect**2
+        * disk_dominated_mass_kg
+        * radius_m**2
+        * omega**2
+    )
 
     # B >> 1: disk-dominated, classical viscous rate.
     heavy_disk = comp_secondary_dominated_torque_si(
-        alpha, sigma, radius_m, aspect, omega, 1.0e20
+        alpha, sigma, radius_m, aspect, omega, disk_dominated_mass_kg
     )
     assert np.isclose(heavy_disk, viscous, rtol=1.0e-12)
 
@@ -109,7 +117,20 @@ def test_secondary_dominated_torque_is_inertia_limited() -> None:
     light_disk = comp_secondary_dominated_torque_si(
         alpha, sigma, radius_m, aspect, omega, light_disk_mass_kg
     )
-    assert np.isclose(light_disk, viscous * disk_dominance, rtol=1.0e-12)
+    light_viscous = (
+        -0.75
+        * alpha
+        * aspect**2
+        * light_disk_mass_kg
+        * radius_m**2
+        * omega**2
+    )
+    assert np.isclose(light_disk, light_viscous * disk_dominance, rtol=1.0e-12)
+    assert np.isclose(
+        light_disk,
+        -0.75 * alpha * aspect**2 * sigma * radius_m**4 * omega**2,
+        rtol=1.0e-12,
+    )
 
     # Always inward: a viscously accreting disk drags the secondary in.
     assert light_disk < 0.0 and heavy_disk < 0.0

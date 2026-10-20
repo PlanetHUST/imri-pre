@@ -363,17 +363,17 @@ def comp_secondary_dominated_torque_si(
 
     In this project ``B ~ 1e-3``: the migrator outweighs the gas it is embedded
     in by three orders of magnitude, so it cannot be advected at the viscous
-    speed.  In that inertia-limited regime the migration rate is reduced by
-    roughly ``B`` (Syer & Clarke 1995; Ivanov, Papaloizou & Polnarev 1999;
-    Duffell et al. 2014; Duermann & Kley 2015; Kanagawa et al. 2018):
+    speed. In this deliberately simple limiting model the migration rate is
+    reduced by ``B``:
 
         v_r  = -(3/2) alpha h^2 r Omega * min(1, B)
-        Gamma_sd = (dL/dr) v_r = -(3/2) alpha h^2 Sigma r^4 Omega^2 min(1, B)
+        Gamma_sd = (dL/dr) v_r
+                 = -(3/4) alpha h^2 m r^2 Omega^2 min(1, B)
 
-    using ``dL/dr = (1/2) m r Omega`` and ``B = Sigma r^2 / m``, so the torque
-    is written in terms of the disk mass rather than the migrator mass and the
-    rate saturates at the classical viscous value when ``B >= 1``.  It is
-    negative-definite: a viscously accreting disk drags the secondary inward.
+    using ``dL/dr = (1/2) m r Omega``. For ``B < 1`` this is equivalently
+    ``-(3/4) alpha h^2 Sigma r^4 Omega^2``; for ``B >= 1`` the radial rate
+    saturates at the classical viscous drift speed. It is negative-definite: a
+    viscously accreting disk drags the secondary inward.
 
     ``min(1, B)`` is a deliberately conservative interpolation.  It reproduces
     classical Type-II for a disk-dominated secondary and the inertia-limited
@@ -390,11 +390,11 @@ def comp_secondary_dominated_torque_si(
     )
     inertia_factor = np.minimum(1.0, disk_dominance)
     return (
-        -1.5
+        -0.75
         * alpha
         * aspect**2
-        * surface_density
-        * radius**4
+        * float(migrator_mass_kg)
+        * radius**2
         * omega**2
         * inertia_factor
     )
