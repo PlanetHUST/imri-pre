@@ -20,6 +20,7 @@ from .config import (
     migration_contract_name,
 )
 from lisa.snr import (
+    COUPLED_TRACK_SNR_RELATIVE_TOLERANCE,
     COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE,
     LISA_AVERAGING_CONVENTION,
     LISA_ARM_LENGTH_M,
@@ -113,6 +114,19 @@ def build_metadata(
             "gap_opening_condition": config.gap_opening_condition,
             "consider_type_ii_migration": config.consider_type_ii_migration,
             "migration_contract": _migration_contract_metadata(config),
+            "orbit_model": "circular_coupled_gas_gw_v1",
+            "orbit_assumptions": {
+                "eccentricity_at_embedding": "projected_to_zero_after_e_le_0.01_damping",
+                "component_masses": "fixed",
+                "disk_background": "static_until_duty_cycle_end",
+                "gas_and_gw": "simultaneous_signed_radial_drift",
+                "band_entry": "first_observed_frequency_crossing",
+                "gas_active_snr": "first_order_circular_coupled_track",
+            },
+            "legacy_route_columns": (
+                "initial_redshift_geometry_and_evaluation_compatibility_only;"
+                "not_a_gas_gw_crossover_or_coupled_trap_census"
+            ),
             "redshift": config.redshift,
             "cosmic_time_model": "flat_lcdm_matter_lambda",
             "cosmic_time_origin": "source_redshift_at_agn_start",
@@ -141,7 +155,7 @@ def build_metadata(
             ),
             "detector_omega_m": config.detector_omega_m,
             "cosmic_merge_time_myr": config.cosmic_merge_time_myr,
-            "cosmic_merge_time_origin": "post_gas_epoch",
+            "cosmic_merge_time_origin": "disabled_in_coupled_orbit",
             "cosmic_merge_smbh_mass_factor": config.cosmic_merge_smbh_mass_factor,
             "cosmic_merge_radius_factor": config.cosmic_merge_radius_factor,
             "max_gw_time_myr": config.max_gw_time_myr,
@@ -174,6 +188,13 @@ def build_metadata(
             "snr_quadrature_relative_tolerance": (
                 SNR_QUADRATURE_RELATIVE_TOLERANCE
             ),
+            "coupled_track_snr_model": (
+                "quadrupole_spa_amplitude_actual_in_band_residence_time"
+            ),
+            "coupled_track_snr_relative_tolerance": (
+                COUPLED_TRACK_SNR_RELATIVE_TOLERANCE
+            ),
+            "environmental_phase_template": False,
             "frequency_frame": "observer",
             "mass_inputs_frame": "source",
             "noise_quantity": "effective_strain_psd_hz_inverse",

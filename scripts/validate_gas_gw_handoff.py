@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Focused regression harness for gas delivery and moving LISA entry."""
+"""Historical gas-only/GW-only routing regression, not the production orbit.
+
+Use ``validate_coupled_orbit.py`` for the current simultaneous gas+GW path.
+"""
 
 from __future__ import annotations
 

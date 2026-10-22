@@ -64,7 +64,7 @@ def _base_config(tmp_path) -> IMRIDynConfig:
         lisa_mission_duration_years=4.0,
         snr_window_placement=DEFAULT_SNR_WINDOW_PLACEMENT,
         detector_hubble_constant_km_s_mpc=67.4, detector_omega_m=0.315,
-        cosmic_merge_time_myr=1.0e3, cosmic_merge_smbh_mass_factor=2.0,
+        cosmic_merge_time_myr=np.inf, cosmic_merge_smbh_mass_factor=2.0,
         cosmic_merge_radius_factor=2.0, damping_cpu_count=1,
         checkpoint_grid_interval=5, print_debug_results=False, base_seed=0,
     )

@@ -5,9 +5,14 @@ from dataclasses import dataclass
 import numpy as np
 
 import physical_process.gw_frequency_radius as gw_helpers
+from physical_process.orbital_evolution import CircularBandTrack, CircularOrbitOutcome
 
 from physical_process.cosmic_merge import CosmicMergeModel
-from .snr import DEFAULT_SNR_WINDOW_PLACEMENT, evaluate_lisa_inspiral_snr
+from .snr import (
+    DEFAULT_SNR_WINDOW_PLACEMENT,
+    evaluate_lisa_coupled_track_snr,
+    evaluate_lisa_inspiral_snr,
+)
 from physical_process.redshift_evolve import RedshiftEvolution
 
 DETECTION_CLASS_DETECTABLE = "imri data"
@@ -44,6 +49,7 @@ class DetectRateDecision:
     snr_observation_duration_years: float = np.nan
     snr_observation_case: str = "not_evaluated"
     snr_window_placement: str = "not_evaluated"
+    snr_observation_redshift: float = np.nan
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,185 @@ class ObservedLisaEntryOutcome:
     entry_radius_cm: float
     source_frequency_hz: float
     observed_frequency_hz: float
+
+
+def classify_coupled_entry(
+    *,
+    orbit: CircularOrbitOutcome,
+    bh_candidate: bool,
+    is_imri_candidate: bool | None,
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    min_observed_frequency_hz: float,
+    max_observed_frequency_hz: float,
+    snr_threshold: float,
+    mission_duration_years: float,
+    detector_hubble_constant_km_s_mpc: float,
+    detector_omega_m: float,
+    snr_window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
+    band_track: CircularBandTrack | None = None,
+) -> DetectRateDecision:
+    """Classify one entry, using its coupled in-band continuation when needed."""
+    if is_imri_candidate is None:
+        return unsupported_band_entry_decision(
+            primary_mass_msun=primary_mass_msun,
+            current_radius_cm=orbit.final_radius_cm,
+            mission_duration_years=mission_duration_years,
+        )
+    if not bh_candidate:
+        return DetectRateDecision(
+            detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
+            is_lisa_detectable=None,
+            snr_proxy=np.nan,
+            source_frequency_hz=np.nan,
+            observed_frequency_hz=np.nan,
+            detection_time_myr=np.inf,
+            detection_redshift=np.nan,
+            final_smbh_mass_msun=primary_mass_msun,
+            final_radius_cm=orbit.final_radius_cm,
+            final_entry_radius_cm=np.nan,
+            gw_time_after_gas_myr=np.nan,
+            cosmic_merge_applied=False,
+            detect_rate_reason="not_bh_by_band_entry",
+            mission_duration_years=mission_duration_years,
+        )
+    if not np.isfinite(orbit.entry_time_myr):
+        return _not_detected_due_to_time(
+            primary_mass_msun=primary_mass_msun,
+            radius_cm=orbit.final_radius_cm,
+            entry_radius_cm=np.nan,
+            gw_time_after_gas_myr=np.inf,
+            detection_redshift=orbit.final_redshift,
+            cosmic_merge_applied=False,
+            reason=orbit.status,
+            mission_duration_years=mission_duration_years,
+            snr_window_placement=snr_window_placement,
+        )
+
+    source_frequency_hz = gw_helpers.gw_frequency_hz(
+        primary_mass_msun + secondary_mass_msun,
+        orbit.entry_radius_cm,
+    )
+    observed_frequency_hz = source_frequency_hz / (1.0 + orbit.entry_redshift)
+    gw_time_after_gas_myr = (
+        orbit.entry_time_myr - orbit.disk_off_time_myr
+        if np.isfinite(orbit.disk_off_time_myr)
+        else np.nan
+    )
+    if orbit.gas_active_at_entry and band_track is None:
+        return DetectRateDecision(
+            detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
+            is_lisa_detectable=None,
+            snr_proxy=np.nan,
+            source_frequency_hz=source_frequency_hz,
+            observed_frequency_hz=observed_frequency_hz,
+            detection_time_myr=orbit.entry_time_myr,
+            detection_redshift=orbit.entry_redshift,
+            final_smbh_mass_msun=primary_mass_msun,
+            final_radius_cm=orbit.entry_radius_cm,
+            final_entry_radius_cm=orbit.entry_radius_cm,
+            gw_time_after_gas_myr=gw_time_after_gas_myr,
+            cosmic_merge_applied=False,
+            detect_rate_reason="coupled_band_track_required_for_gas_active_entry",
+            snr_status="required_input_unavailable",
+            mission_duration_years=mission_duration_years,
+            snr_window_placement=snr_window_placement,
+        )
+
+    if orbit.gas_active_at_entry:
+        if band_track is None:
+            raise RuntimeError("coupled band track was not supplied")
+        try:
+            snr_result = evaluate_lisa_coupled_track_snr(
+                track=band_track,
+                m1_source_msun=primary_mass_msun,
+                m2_source_msun=secondary_mass_msun,
+                mission_duration_years=mission_duration_years,
+                detector_min_frequency_hz=min_observed_frequency_hz,
+                detector_max_frequency_hz=max_observed_frequency_hz,
+                snr_threshold=snr_threshold,
+                hubble_constant_km_s_mpc=detector_hubble_constant_km_s_mpc,
+                omega_m=detector_omega_m,
+                window_placement=snr_window_placement,
+            )
+        except (ValueError, ArithmeticError, OverflowError) as error:
+            numerical_failure = isinstance(error, (ArithmeticError, OverflowError))
+            return DetectRateDecision(
+                detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
+                is_lisa_detectable=None,
+                snr_proxy=np.nan,
+                source_frequency_hz=source_frequency_hz,
+                observed_frequency_hz=observed_frequency_hz,
+                detection_time_myr=orbit.entry_time_myr,
+                detection_redshift=orbit.entry_redshift,
+                final_smbh_mass_msun=primary_mass_msun,
+                final_radius_cm=orbit.entry_radius_cm,
+                final_entry_radius_cm=orbit.entry_radius_cm,
+                gw_time_after_gas_myr=gw_time_after_gas_myr,
+                cosmic_merge_applied=False,
+                detect_rate_reason=(
+                    "coupled_track_snr_numerical_failure"
+                    if numerical_failure
+                    else "coupled_track_snr_required_input_unavailable"
+                ),
+                snr_status=(
+                    "numerical_failure"
+                    if numerical_failure
+                    else "required_input_unavailable"
+                ),
+                mission_duration_years=mission_duration_years,
+                snr_window_placement=snr_window_placement,
+            )
+    else:
+        snr_result = evaluate_lisa_inspiral_snr(
+            m1_source_msun=primary_mass_msun,
+            m2_source_msun=secondary_mass_msun,
+            redshift=orbit.entry_redshift,
+            current_observed_frequency_hz=observed_frequency_hz,
+            mission_duration_years=mission_duration_years,
+            detector_min_frequency_hz=min_observed_frequency_hz,
+            detector_max_frequency_hz=max_observed_frequency_hz,
+            snr_threshold=snr_threshold,
+            hubble_constant_km_s_mpc=detector_hubble_constant_km_s_mpc,
+            omega_m=detector_omega_m,
+            eccentricity=0.0,
+            window_placement=snr_window_placement,
+        )
+    detect_rate_class = (
+        DETECTION_CLASS_DETECTABLE
+        if snr_result.is_detectable is True
+        else DETECTION_CLASS_NOT_DETECTABLE
+        if snr_result.is_detectable is False
+        else DETECTION_CLASS_NOT_EVALUATED
+    )
+    return DetectRateDecision(
+        detect_rate_class=detect_rate_class,
+        is_lisa_detectable=snr_result.is_detectable,
+        snr_proxy=snr_result.lisa_snr,
+        source_frequency_hz=source_frequency_hz,
+        observed_frequency_hz=observed_frequency_hz,
+        detection_time_myr=orbit.entry_time_myr,
+        detection_redshift=orbit.entry_redshift,
+        final_smbh_mass_msun=primary_mass_msun,
+        final_radius_cm=orbit.entry_radius_cm,
+        final_entry_radius_cm=orbit.entry_radius_cm,
+        gw_time_after_gas_myr=gw_time_after_gas_myr,
+        cosmic_merge_applied=False,
+        detect_rate_reason=snr_result.reason,
+        lisa_snr=snr_result.lisa_snr,
+        snr_status=snr_result.status,
+        chirp_mass_source_msun=snr_result.chirp_mass_source_msun,
+        chirp_mass_detector_msun=snr_result.chirp_mass_detector_msun,
+        luminosity_distance_mpc=snr_result.luminosity_distance_mpc,
+        snr_f_low_hz=snr_result.f_low_hz,
+        snr_f_high_hz=snr_result.f_high_hz,
+        f_isco_observer_hz=snr_result.f_isco_observer_hz,
+        mission_duration_years=snr_result.mission_duration_years,
+        snr_observation_duration_years=snr_result.observation_duration_years,
+        snr_observation_case=snr_result.observation_case,
+        snr_window_placement=snr_result.window_placement,
+        snr_observation_redshift=snr_result.redshift,
+    )
 
 
 def solve_time_to_observed_lisa_entry(

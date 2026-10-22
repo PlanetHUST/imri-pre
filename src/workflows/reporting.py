@@ -92,26 +92,22 @@ def print_result_summary(result: IMRIDynSingleResult) -> None:
         f"{result.detector_numerical_failure_imri_count}"
     )
     print(
-        "  Band entry            : "
+        "  Initial-z geometry    : "
         f"evaluated={result.band_entry_evaluated_count}, "
         f"in_domain={result.entry_in_migration_domain_count}, "
-        f"handoff={result.entry_handoff_count}, "
+        f"below_gas_domain={result.entry_handoff_count}, "
         f"inside_isco={result.band_entry_inside_isco_count}, "
         f"profile_error={result.profile_error_count}"
     )
     print(
-        "  Migration             : "
+        "  Legacy route counters : "
         f"evaluated={result.migration_evaluated_count}, "
         f"finite={result.finite_migration_count}, "
         f"trap_bound={result.trap_bound_migration_count}, "
         f"outward_blocked={result.outward_blocked_migration_count}, "
         f"errors={result.migration_error_count}"
     )
-    print(f"  Trap-bound mass       : {result.trap_bound_mass_msun:.6e} Msun")
-    print(
-        "  Outward-blocked mass  : "
-        f"{result.outward_blocked_mass_msun:.6e} Msun"
-    )
+    print("  Coupled trap census   : use per-object orbit/torque diagnostics")
     print("  IMRI candidate rate   : " f"{rate_text(result.imri_rate_per_myr, '/Myr')}")
     print(
         "  detectable IMRI rate  : "

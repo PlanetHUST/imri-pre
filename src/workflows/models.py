@@ -133,6 +133,18 @@ class IMRIEventRecord(TypedDict):
     gw_time_to_entry_myr: float
     gw_time_after_gas_myr: float
     detection_time_myr: float
+    orbit_model: str
+    orbit_stop_reason: str
+    band_entry_time_myr: float
+    band_entry_radius_cm: float
+    band_entry_redshift: float
+    orbit_final_time_myr: float
+    orbit_final_radius_cm: float
+    orbit_final_redshift: float
+    disk_off_time_myr: float
+    disk_off_radius_cm: float
+    disk_off_reason: str
+    gas_active_at_entry: bool | None
     final_smbh_mass_msun: float
     cosmic_merge_applied: bool
     bh_candidate: bool
@@ -150,6 +162,7 @@ class IMRIEventRecord(TypedDict):
     snr_observation_duration_years: float
     snr_observation_case: str
     snr_window_placement: str
+    snr_observation_redshift: float
     snr_threshold: float
     monte_carlo_event_weight: float
     intrinsic_rate_contribution_per_myr: float

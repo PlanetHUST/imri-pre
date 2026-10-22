@@ -1,6 +1,6 @@
 # Execution, ownership and verification contract
 
-Reviewed against the current files on 2026-10-18. This guide describes present
+Reviewed against the current files on 2026-10-22. This guide describes present
 behavior; archived plans record requested or earlier behavior.
 
 ## Execution path
@@ -26,10 +26,11 @@ to one when it was not explicitly set.
 | Population and orbital geometry | [sampling.py](../src/physical_process/sampling.py), [nsc_orbital.py](../src/physical_process/nsc_orbital.py) |
 | Damping and typed outcome | [damp.py](../src/physical_process/damp.py) |
 | Signed torque, gap diagnostics, trap classification, integration | [migration/](../src/physical_process/migration/) |
-| Gas/GW competition and intrinsic candidacy | [event_rate.py](../src/workflows/event_rate.py) |
+| Coupled circular gas/GW orbit | [orbital_evolution.py](../src/physical_process/orbital_evolution.py) |
+| Intrinsic first-entry candidacy | [event_rate.py](../src/workflows/event_rate.py) |
 | Per-object routing and final event assembly | [event_work.py](../src/workflows/event_work.py) |
-| LISA PSD, waveform, cosmology and SNR | [lisa/snr.py](../src/lisa/snr.py) |
-| Post-gas entry evolution and detector decision | [lisa/detectability.py](../src/lisa/detectability.py) |
+| LISA PSD, vacuum waveform/SNR, and first-order coupled-track SNR | [lisa/snr.py](../src/lisa/snr.py) |
+| Supplied-entry detector decision | [lisa/detectability.py](../src/lisa/detectability.py) |
 | Schema, persistence and metadata | [models.py](../src/workflows/models.py), [outputs.py](../src/workflows/outputs.py), [metadata.py](../src/workflows/metadata.py) |
 | Figures and saved-result analysis | [viz/](../src/viz/), [run_figures.py](../src/workflows/run_figures.py) |
 
@@ -65,9 +66,12 @@ global NumPy stream once per repeat. Redshift is excluded from that identity.
 Tree mode derives a host base seed from master seed and stable tree identity,
 then uses the same per-repeat rule. Match all other inputs for comparisons.
 
-Production has one migration contract. The diagnostic no-trap extreme reflects
-the sign of the same torque; it is not a selectable second production model.
-See [migration_model_alignment.md](migration_model_alignment.md).
+The main CLI uses the signed torque/trap prescription. The comparison-only
+`semi_without_trap` branch uses its existing inward Type-I/II timescale law.
+Both now feed one coupled orbit interface and must be compared with identical
+seed and upstream object ledger. The older sign-reflection no-trap diagnostic
+is not a selectable production model. See
+[migration_model_alignment.md](migration_model_alignment.md).
 
 ## CLI and artifacts
 
@@ -106,6 +110,7 @@ plots and a fixed default seed are not implemented by this CLI.
 | python scripts/compare_damping_reference.py --output-dir output/diagnostics/damping_reference | Matched inputs against both TDE sources |
 | python scripts/validate_migration_contract.py --output-csv output/diagnostics/migration.csv | Fixed torque composition, validity and signed/no-trap comparison |
 | python scripts/validate_gas_gw_handoff.py --help | Gas/GW routing diagnostic options |
+| python scripts/validate_coupled_orbit.py /tmp/imri-coupled-check | Seed-paired reduced runs and upstream-ledger reconciliation for both scenarios |
 | python scripts/validate_lisa_detectability.py --help | LISA detector diagnostic options |
 | python scripts/plot_disk_structure.py | Generates the configured torque/disk plots under figs/; constants are in the script and there is no argument parser |
 | python scripts/analyse_population_torque.py --help | Saved-population torque regime analysis |

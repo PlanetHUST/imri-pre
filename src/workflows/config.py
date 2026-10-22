@@ -33,7 +33,7 @@ IMRI_LISA_MISSION_DURATION_YEARS = 4.0
 IMRI_SNR_WINDOW_PLACEMENT = DEFAULT_SNR_WINDOW_PLACEMENT
 IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC = 67.4
 IMRI_DETECTOR_OMEGA_M = 0.315
-IMRI_COSMIC_MERGE_TIME_MYR = 1.0e3
+IMRI_COSMIC_MERGE_TIME_MYR = np.inf
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
 TORQUE_WITH_TRAP = "torque_with_trap"
@@ -149,8 +149,8 @@ class IMRIDynConfig:
             raise ValueError("LISA frequencies must satisfy 0 < f_min < f_max")
         if max_gw_time_myr <= 0.0:
             raise ValueError("maximum GW time must be positive")
-        if not 0.0 <= gw_eccentricity < 1.0:
-            raise ValueError("GW eccentricity must satisfy 0 <= e < 1")
+        if gw_eccentricity != 0.0:
+            raise ValueError("the coupled circular orbit requires gw_eccentricity=0")
         if not np.isfinite(redshift) or redshift < 0.0:
             raise ValueError("redshift must be nonnegative")
         if not np.isfinite(snr_threshold) or snr_threshold <= 0.0:
@@ -168,10 +168,11 @@ class IMRIDynConfig:
             raise ValueError("detector H0 must be finite and positive")
         if not np.isfinite(detector_omega_m) or not 0.0 < detector_omega_m < 1.0:
             raise ValueError("detector Omega_m must satisfy 0 < Omega_m < 1")
-        if not np.isfinite(cosmic_merge_time_myr) and cosmic_merge_time_myr != np.inf:
-            raise ValueError("cosmic merge time must be finite or infinity")
-        if cosmic_merge_time_myr <= 0.0:
-            raise ValueError("cosmic merge time must be positive")
+        if cosmic_merge_time_myr != np.inf:
+            raise ValueError(
+                "the coupled fixed-mass orbit requires cosmic merger disabled "
+                "(cosmic_merge_time_myr=inf)"
+            )
         if (
             not np.isfinite(cosmic_merge_smbh_mass_factor)
             or cosmic_merge_smbh_mass_factor <= 0.0

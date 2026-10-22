@@ -1,23 +1,15 @@
 # IMRI in nuclear star clusters and AGN disks
 
-Simulates the formation and LISA detectability of **intermediate-mass-ratio
-inspirals (IMRIs)**: stellar-mass compact objects in a nuclear star cluster
-(NSC) that cross an AGN disk, are damped into it, migrate through it, and
-inspiral into the central massive black hole.
+Simulates the formation and LISA detectability of **intermediate-mass-ratio inspirals (IMRIs)**: stellar-mass compact objects in a nuclear star cluster (NSC) that cross an AGN disk, are damped into it, migrate through it, and inspiral into the central massive black hole.
 
 The project answers two questions:
 
-1. **one halo** — for a given host (redshift, SMBH mass, NSC mass,
-   metallicity), how many IMRI candidates form and how many would LISA see?
-2. **many halos** — given a merger-tree CSV of hosts, run that simulation for
-   each selected host, reproducibly and in parallel.
+1. **One halo** — for a given host (redshift, SMBH mass, NSC mass, metallicity), how many IMRI candidates form and how many would LISA see?
+2. **Many halos** — given a merger-tree CSV of hosts, run that simulation for each selected host, reproducibly and in parallel.
 
-It deliberately stops at host-level results. **No cosmic rate is computed.**
+It deliberately stops at host-level results now. **No cosmic rate is computed.** It is left for future updates
 
-Start with the [documentation map](docs/README.md) for current contracts and
-the part-by-part source guide. The former root text exports are preserved in
-[the reference archive](docs/archive/README.md); their durable decisions and
-later corrections are combined in [the decision history](docs/reference/history.md).
+Start with the [documentation map](docs/README.md) for current contracts and the part-by-part source guide. The former root text exports are preserved in [the reference archive](docs/archive/README.md); their durable decisions and later corrections are combined in [the decision history](docs/reference/history.md).
 
 ---
 
@@ -154,13 +146,13 @@ results.
 
 ## Where outputs go
 
-| Path | Contents |
-|---|---|
-| `<output_dir>/imri_averaged_results.csv` | one row per grid point, averaged over repeats |
-| `<output_dir>/imri_repeat_results.csv` | one row per Monte Carlo repeat, with its seed |
-| `<output_dir>/imri_events.csv` | one row per evaluated object, with its classification reason |
-| `<output_dir>/simulation_metadata.json` | resolved configuration and model identifiers |
-| `<output_dir>/intermediate/` | per-repeat migration diagnostics |
+| Path                                     | Contents                                                     |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| `<output_dir>/imri_averaged_results.csv` | one row per grid point, averaged over repeats                |
+| `<output_dir>/imri_repeat_results.csv`   | one row per Monte Carlo repeat, with its seed                |
+| `<output_dir>/imri_events.csv`           | one row per evaluated object, with its classification reason |
+| `<output_dir>/simulation_metadata.json`  | resolved configuration and model identifiers                 |
+| `<output_dir>/intermediate/`             | per-repeat migration diagnostics                             |
 
 A merger-tree batch adds `config/` (resolved config + provenance), `hosts/`,
 `jobs/job_summary.csv`, `simulations/<job_id>/`, `diagnostics/`, `figures/`
@@ -184,12 +176,12 @@ python scripts/run_interface_checkpoints.py  # merger-tree interface checkpoints
 
 The four scripts most worth running first:
 
-| Script | Question it answers |
-|---|---|
-| `tests/run_tests.py` | Do the canonical modules still behave correctly? |
+| Script                               | Question it answers                                                           |
+| ------------------------------------ | ----------------------------------------------------------------------------- |
+| `tests/run_tests.py`                 | Do the canonical modules still behave correctly?                              |
 | `scripts/run_science_checkpoints.py` | Is each physical subsystem sane, and does the end-to-end pipeline still work? |
-| `scripts/audit_repository.py` | Has duplicated or script-local physics crept back in? |
-| `scripts/compare_baseline.py` | Did a refactor change any scientific output? |
+| `scripts/audit_repository.py`        | Has duplicated or script-local physics crept back in?                         |
+| `scripts/compare_baseline.py`        | Did a refactor change any scientific output?                                  |
 
 `compare_baseline.py capture <run> <file>` then `check <run> <file>` compares
 runs while ignoring timings and paths.
@@ -198,22 +190,22 @@ runs while ignoring timings and paths.
 
 ## Scripts
 
-| Script | Purpose |
-|---|---|
-| `main.py` | CLI entry point and programmatic API |
-| `run_science_checkpoints.py` | Round-2 scientific checkpoints B–L |
-| `run_interface_checkpoints.py` | merger-tree interface checkpoints A–H |
-| `run_redshift_scan.py` | fixed-contract redshift scan driver |
-| `audit_repository.py` | dependency / duplicated-physics audit |
-| `compare_baseline.py` | scientific-output regression comparison |
-| `validate_damping_model.py` | damping invariants, scans and phase diagrams |
-| `compare_damping_reference.py` | shared-input comparison with both TDE damping sources |
-| `validate_gas_gw_handoff.py` | gas/GW handoff regression checks |
-| `validate_lisa_detectability.py` | LISA PSD, cosmology, SNR and classification checks |
+| Script                           | Purpose                                                        |
+| -------------------------------- | -------------------------------------------------------------- |
+| `main.py`                        | CLI entry point and programmatic API                           |
+| `run_science_checkpoints.py`     | Round-2 scientific checkpoints B–L                             |
+| `run_interface_checkpoints.py`   | merger-tree interface checkpoints A–H                          |
+| `run_redshift_scan.py`           | fixed-contract redshift scan driver                            |
+| `audit_repository.py`            | dependency / duplicated-physics audit                          |
+| `compare_baseline.py`            | scientific-output regression comparison                        |
+| `validate_damping_model.py`      | damping invariants, scans and phase diagrams                   |
+| `compare_damping_reference.py`   | shared-input comparison with both TDE damping sources          |
+| `validate_gas_gw_handoff.py`     | gas/GW handoff regression checks                               |
+| `validate_lisa_detectability.py` | LISA PSD, cosmology, SNR and classification checks             |
 | `validate_migration_contract.py` | fixed torque contract, validity flags, and trap/no-trap bounds |
-| `plot_disk_structure.py` | disk profiles and pAGN-vs-in-repo comparison |
-| `analyse_population_torque.py` | population occupancy of torque validity regimes and traps |
-| `report_event_summary.py` | print an event summary from a results directory |
+| `plot_disk_structure.py`         | disk profiles and pAGN-vs-in-repo comparison                   |
+| `analyse_population_torque.py`   | population occupancy of torque validity regimes and traps      |
+| `report_event_summary.py`        | print an event summary from a results directory                |
 
 ---
 

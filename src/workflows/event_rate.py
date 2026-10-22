@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from physical_process.damp import DampingStatus
+from physical_process.orbital_evolution import CircularOrbitOutcome
 
 BH_ORIGIN_EMBEDDED = "ebh"
 BH_ORIGIN_MIGRATION_FORMED = "mfbh"
@@ -22,17 +23,11 @@ def is_physical_imri_entry(
 ) -> bool | None:
     """Return whether an object is a *counted* IMRI candidate.
 
-    ``classify_event_rate`` decides candidacy from the gas stop reason alone,
-    because it runs before the GW stage knows when -- or whether -- the object
-    reaches the LISA band.  Two of its candidate reasons (``duty_cycle_limited``
-    and ``gas_to_gw_handoff``) admit objects whose band entry never happens, so
-    candidacy alone is not the quantity the rate is built from.
-
-    This predicate is the single definition of a counted candidate: the gas
-    stage produced a candidate *and* the object actually reaches the band in
-    finite time.  Every layer -- the in-model tally, the per-event
-    ``event_rate_class`` column and the averaged CSV -- must use it, otherwise
-    the per-event table disagrees with the headline count.
+    The coupled classifier already uses first physical band entry. This
+    shared predicate guards that finite entry when translating the event to
+    the in-model tally, the per-event
+    ``event_rate_class`` column and the averaged CSV. The historical
+    gas-only/GW-only classifier also uses it for its standalone diagnostics.
 
     Returns ``None`` when candidacy itself was not evaluated, preserving the
     "a zero is always explainable" status semantics.
@@ -61,6 +56,72 @@ class EventRateDecision:
     gas_stop_reason: str
     event_rate_class: str
     event_rate_reason: str
+
+
+def classify_coupled_event(
+    *,
+    object_status: DampingStatus,
+    formation_time_myr: float,
+    embed_time_myr: float,
+    orbit: CircularOrbitOutcome,
+) -> EventRateDecision:
+    """Classify BH eligibility at the coupled orbit's first band entry."""
+    has_entry = np.isfinite(orbit.entry_time_myr)
+    embedded_bh = object_status is DampingStatus.EMBEDDED_BH
+    formed_by_entry = bool(
+        object_status is DampingStatus.EMBEDDED_STAR
+        and has_entry
+        and np.isfinite(formation_time_myr)
+        and formation_time_myr <= orbit.entry_time_myr
+    )
+    bh_candidate = embedded_bh or formed_by_entry
+    if embedded_bh:
+        bh_origin = BH_ORIGIN_EMBEDDED
+        bh_embedding_time_myr = embed_time_myr
+    elif formed_by_entry:
+        bh_origin = BH_ORIGIN_MIGRATION_FORMED
+        bh_embedding_time_myr = formation_time_myr
+    else:
+        bh_origin = BH_ORIGIN_NOT_FORMED
+        bh_embedding_time_myr = np.nan
+    unsupported = orbit.status in {
+        "initial_orbit_at_or_inside_isco",
+        "isco_before_entry",
+    }
+    is_imri_candidate: bool | None = (
+        None if unsupported else bool(bh_candidate and has_entry)
+    )
+    reason = (
+        "bh_not_formed_by_band_entry"
+        if has_entry and not bh_candidate
+        else orbit.status
+    )
+    return EventRateDecision(
+        bh_origin=bh_origin,
+        bh_candidate=bh_candidate,
+        is_imri_candidate=is_imri_candidate,
+        bh_embedding_time_myr=bh_embedding_time_myr,
+        gas_elapsed_time_myr=(
+            orbit.disk_off_time_myr - embed_time_myr
+            if np.isfinite(orbit.disk_off_time_myr)
+            else np.nan
+        ),
+        gas_final_time_myr=orbit.disk_off_time_myr,
+        migration_time_to_entry_myr=np.nan,
+        migration_time_to_gas_target_myr=np.nan,
+        gw_time_to_entry_myr=np.nan,
+        gw_time_gas_target_to_entry_myr=np.nan,
+        r_gas_fin_cm=orbit.disk_off_radius_cm,
+        gas_stop_reason=orbit.disk_off_reason,
+        event_rate_class=(
+            EVENT_RATE_NOT_EVALUATED
+            if is_imri_candidate is None
+            else EVENT_RATE_IMRI_CANDIDATE
+            if is_imri_candidate
+            else EVENT_RATE_NO_IMRI
+        ),
+        event_rate_reason=reason,
+    )
 
 
 MigrationTimeFunction = Callable[[float, float], float]

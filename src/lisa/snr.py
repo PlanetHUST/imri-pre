@@ -8,9 +8,10 @@ frame and are redshifted exactly once inside this module.
 
 from dataclasses import dataclass
 from math import cos, exp, isclose, log, pi, sin, sqrt, tanh
+from warnings import catch_warnings, simplefilter
 
 import numpy as np
-from scipy.integrate import quad
+from scipy.integrate import IntegrationWarning, quad
 
 from physical_process.constants import (
     GRAVITATIONAL_CONSTANT_SI,
@@ -18,7 +19,9 @@ from physical_process.constants import (
     MPC_M,
     SOLAR_MASS_KG,
     SPEED_OF_LIGHT_M_S,
+    MEGAYEAR_S,
 )
+from physical_process.orbital_evolution import CircularBandTrack
 
 LISA_ARM_LENGTH_M = 2.5e9
 LISA_TRANSFER_FREQUENCY_HZ = SPEED_OF_LIGHT_M_S / (2.0 * pi * LISA_ARM_LENGTH_M)
@@ -31,6 +34,7 @@ LISA_COSMOLOGY_MODEL = "flat_lcdm_matter_lambda"
 LISA_ISCO_MODEL = "schwarzschild_isco_6gm_over_c2"
 SNR_QUADRATURE_METHOD = "scipy_quad_log_frequency"
 SNR_QUADRATURE_RELATIVE_TOLERANCE = 1.0e-8
+COUPLED_TRACK_SNR_RELATIVE_TOLERANCE = 1.0e-5
 COSMOLOGY_QUADRATURE_RELATIVE_TOLERANCE = 1.0e-11
 
 DEFAULT_DETECTOR_H0_KM_S_MPC = 67.4
@@ -508,6 +512,203 @@ def integrated_lisa_snr(
     if not np.isfinite(snr_squared) or snr_squared < 0.0:
         raise ArithmeticError("integrated LISA SNR squared is invalid")
     return float(sqrt(snr_squared))
+
+
+def evaluate_lisa_coupled_track_snr(
+    *,
+    track: CircularBandTrack,
+    m1_source_msun: float,
+    m2_source_msun: float,
+    mission_duration_years: float,
+    detector_min_frequency_hz: float,
+    detector_max_frequency_hz: float,
+    snr_threshold: float,
+    hubble_constant_km_s_mpc: float = DEFAULT_DETECTOR_H0_KM_S_MPC,
+    omega_m: float = DEFAULT_DETECTOR_OMEGA_M,
+    window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
+) -> LISASNRResult:
+    """First-order quadrupole SNR along the actual coupled circular track.
+
+    The vacuum SPA amplitude squared is multiplied by the vacuum chirp rate
+    and integrated over *actual observer time*. This preserves the same RCL
+    normalization while replacing vacuum residence time by the coupled one.
+    It does not model an environmental phase template or dephasing losses.
+    """
+    _validate_window_placement(window_placement)
+    _confusion_parameters(mission_duration_years)
+    if (
+        not np.isfinite(snr_threshold)
+        or snr_threshold <= 0.0
+        or not 0.0 < detector_min_frequency_hz < detector_max_frequency_hz
+    ):
+        raise ValueError("invalid SNR threshold or detector frequency band")
+
+    def redshift_at(time_myr: float) -> float:
+        return track.redshift_model.redshift_evlove_with_time(
+            track.initial_redshift, time_myr
+        )
+
+    use_optimal_end = (
+        window_placement == SNR_WINDOW_PLACEMENT_OPTIMAL
+        and track.status in {"isco", "detector_max"}
+    )
+    window_case = (
+        "coupled_optimal_loud_end"
+        if use_optimal_end
+        else "coupled_band_entry"
+        if window_placement == SNR_WINDOW_PLACEMENT_BAND_ENTRY
+        else "coupled_optimal_upper_unreached_entry_fallback"
+    )
+    anchor_time_myr = (
+        track.end_time_myr if use_optimal_end else track.entry_time_myr
+    )
+    anchor_redshift = redshift_at(anchor_time_myr)
+    mission_source_myr = mission_duration_years / (
+        1.0e6 * (1.0 + anchor_redshift)
+    )
+    if use_optimal_end:
+        start_time_myr = max(
+            track.entry_time_myr, track.end_time_myr - mission_source_myr
+        )
+        end_time_myr = track.end_time_myr
+    else:
+        start_time_myr = track.entry_time_myr
+        end_time_myr = min(
+            track.end_time_myr, track.entry_time_myr + mission_source_myr
+        )
+    midpoint_myr = 0.5 * (start_time_myr + end_time_myr)
+    observation_redshift = redshift_at(midpoint_myr)
+    chirp_source_msun = source_chirp_mass_msun(
+        m1_source_msun, m2_source_msun
+    )
+    chirp_detector_msun = (1.0 + observation_redshift) * chirp_source_msun
+    distance_mpc = luminosity_distance_mpc(
+        observation_redshift,
+        hubble_constant_km_s_mpc=hubble_constant_km_s_mpc,
+        omega_m=omega_m,
+    )
+    f_isco_source_hz = schwarzschild_isco_gw_frequency_source_hz(
+        m1_source_msun + m2_source_msun
+    )
+    f_isco_observer_hz = f_isco_source_hz / (1.0 + observation_redshift)
+    f_entry_hz = track.observed_frequency_hz_at(track.entry_time_myr)
+    sampled_frequency_hz = np.array(
+        [
+            track.observed_frequency_hz_at(float(time_myr))
+            for time_myr in np.linspace(start_time_myr, end_time_myr, 33)
+        ]
+    )
+    f_low_hz = float(np.min(sampled_frequency_hz))
+    f_high_hz = float(np.max(sampled_frequency_hz))
+    duration_myr = end_time_myr - start_time_myr
+    common = dict(
+        m1_source_msun=m1_source_msun,
+        m2_source_msun=m2_source_msun,
+        redshift=observation_redshift,
+        chirp_mass_source_msun=chirp_source_msun,
+        chirp_mass_detector_msun=chirp_detector_msun,
+        luminosity_distance_mpc=distance_mpc,
+        f_isco_source_hz=f_isco_source_hz,
+        f_isco_observer_hz=f_isco_observer_hz,
+        current_observed_frequency_hz=f_entry_hz,
+        f_low_hz=f_low_hz,
+        f_high_hz=f_high_hz,
+        mission_duration_years=mission_duration_years,
+        observation_duration_years=(
+            duration_myr * 1.0e6 * (1.0 + observation_redshift)
+        ),
+        observation_case=f"{window_case}:{track.status}",
+        window_placement=window_placement,
+        snr_threshold=snr_threshold,
+    )
+    if distance_mpc <= 0.0:
+        raise ValueError("coupled-track SNR requires positive luminosity distance")
+    if duration_myr <= 0.0:
+        return LISASNRResult(
+            status=SNR_STATUS_NO_OVERLAP,
+            reason="no_lisa_frequency_overlap",
+            is_detectable=False,
+            lisa_snr=0.0,
+            **common,
+        )
+
+    chirp_mass_time_s = (
+        GRAVITATIONAL_CONSTANT_SI
+        * chirp_detector_msun
+        * SOLAR_MASS_KG
+        / SPEED_OF_LIGHT_M_S**3
+    )
+
+    def time_fraction_integrand(fraction: float) -> float:
+        time_myr = start_time_myr + fraction * duration_myr
+        frequency_hz = track.observed_frequency_hz_at(time_myr)
+        if not detector_min_frequency_hz <= frequency_hz <= detector_max_frequency_hz:
+            return 0.0
+        vacuum_chirp_hz_s = (
+            96.0 / 5.0
+            * pi ** (8.0 / 3.0)
+            * chirp_mass_time_s ** (5.0 / 3.0)
+            * frequency_hz ** (11.0 / 3.0)
+        )
+        amplitude_hz_inverse = fourier_inspiral_amplitude_hz_inverse(
+            frequency_hz, chirp_detector_msun, distance_mpc
+        )
+        return (
+            amplitude_hz_inverse**2
+            * vacuum_chirp_hz_s
+            / lisa_effective_strain_psd_hz(frequency_hz, mission_duration_years)
+        )
+
+    try:
+        with catch_warnings():
+            simplefilter("error", IntegrationWarning)
+            integral, estimated_error = quad(
+                time_fraction_integrand,
+                0.0,
+                1.0,
+                epsabs=0.0,
+                epsrel=COUPLED_TRACK_SNR_RELATIVE_TOLERANCE,
+                limit=300,
+                points=(
+                    [(track.gas_end_time_myr - start_time_myr) / duration_myr]
+                    if start_time_myr < track.gas_end_time_myr < end_time_myr
+                    else None
+                ),
+            )
+    except IntegrationWarning as error:
+        raise ArithmeticError("coupled-track SNR quadrature did not converge") from error
+    if integral > 0.0 and estimated_error > 5.0e-4 * integral:
+        raise ArithmeticError("coupled-track SNR quadrature error is too large")
+    if integral == 0.0:
+        return LISASNRResult(
+            status=SNR_STATUS_NO_OVERLAP,
+            reason="no_lisa_frequency_overlap",
+            is_detectable=False,
+            lisa_snr=0.0,
+            **common,
+        )
+    snr_squared = (
+        16.0 / 5.0
+        * integral
+        * duration_myr
+        * MEGAYEAR_S
+        * (1.0 + observation_redshift)
+    )
+    if not np.isfinite(snr_squared) or snr_squared < 0.0:
+        raise ArithmeticError("coupled-track SNR squared is invalid")
+    snr = sqrt(snr_squared)
+    detectable = snr >= snr_threshold
+    return LISASNRResult(
+        status=SNR_STATUS_EVALUATED,
+        reason=(
+            "lisa_coupled_first_order_snr_above_threshold"
+            if detectable
+            else "lisa_coupled_first_order_snr_below_threshold"
+        ),
+        is_detectable=detectable,
+        lisa_snr=snr,
+        **common,
+    )
 
 
 def evaluate_lisa_inspiral_snr(

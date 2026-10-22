@@ -2,7 +2,7 @@
 
 This document states **which module is authoritative** for each piece of
 physics, what each one assumes, and where the model's known ambiguities are.
-Reviewed against the working source on 2026-10-18. It describes current
+Reviewed against the working source on 2026-10-22. It describes current
 implementation choices and explicitly identified limits. Historical session
 decisions are reconciled in [reference/history.md](reference/history.md);
 original exports are preserved in [archive/](archive/README.md).
@@ -30,18 +30,18 @@ host (z, M_smbh, M_nsc, Z)
    │        ├─ traps ................. .traps       torque zeros -> stable / anti / boundary
    │        └─ radial integration .... .evolution   effective torque -> dr/dt -> time
    │
-   ├─► gas / GW competition .......... workflows.event_rate.solve_gas_final_radius_cm
-   │        └─ GW orbital evolution .. physical_process.gw_frequency_radius (Peters)
+   ├─► one circular gas + GW orbit .... physical_process.orbital_evolution
+   │        └─ moving band boundary .. physical_process.redshift_evolve
    │
-   ├─► event classification .......... workflows.event_rate.classify_event_rate
+   ├─► event classification .......... workflows.event_rate.classify_coupled_event
    │                                   workflows.event_work (per-object orchestration)
    │
    └─► LISA .......................... lisa.snr          sensitivity, waveform, SNR
             └─ detectability ......... lisa.detectability band entry + threshold decision
 ```
 
-`workflows/` coordinates the stages; its `event_rate.py` owns the gas/GW
-coupling and intrinsic classification shown above. Figures in `viz/` consume
+`workflows/` coordinates the stages; `orbital_evolution.py` owns the coupled
+radius trajectory and `event_rate.py` classifies its first entry. Figures in `viz/` consume
 the results and do not redefine those physical decisions.
 
 ---
@@ -61,12 +61,12 @@ the results and do not redefine those physical decisions.
 | Torque components | `physical_process.migration.torque` | Fixed gravitational + bounded thermal + gap-drift composition |
 | **Gap depletion and diagnostics** | `physical_process.migration.gap` | Continuous Kanagawa depth; Crida diagnostic only |
 | **Migration traps** | `physical_process.migration.traps` | Derived from torque zeros; nothing hard-coded |
-| Signed-torque integration | `physical_process.migration.evolution` | No runtime model selection in production |
+| Gas-only signed-torque integration | `physical_process.migration.evolution` | Historical diagnostic only; production converts the signed torque to radial drift for the coupled orbit |
 | Integrated semi-analytic migration (**comparison only**) | `physical_process.migration.semi_analytic` | Archived `semi_without_trap`; programmatic only, never a production CLI option; no traps |
-| GW orbital evolution | `physical_process.gw_frequency_radius` | Peters, circular |
+| Coupled circular orbit | `physical_process.orbital_evolution` | Signed gas drift and Peters GW drift act simultaneously until gas ceases; vacuum `r^4` continuation |
 | Redshift-time relation | `physical_process.redshift_evolve` | Flat matter-plus-Lambda cosmic age, sharing H0 and Omega_m with detector distance |
-| Simplified SMBH merger | `physical_process.cosmic_merge` | |
-| Gas/GW handoff | `workflows.event_rate` | `solve_gas_final_radius_cm` is defined once |
+| Simplified SMBH merger | `physical_process.cosmic_merge` | Legacy standalone diagnostic only; disabled in coupled fixed-mass production |
+| Legacy gas/GW routing | `workflows.event_rate` | `solve_gas_final_radius_cm` remains for historical diagnostic tests, not production event physics |
 | Event classification | `workflows.event_rate`, `workflows.event_work` | |
 | LISA sensitivity / SNR | `lisa.snr` | Robson, Cornish & Liu (2019) analytic two-channel |
 | LISA detectability | `lisa.detectability` | Threshold decision only |
@@ -221,13 +221,16 @@ cases, not capture-rate accuracy or population convergence.
   scenario integrates local Type-I timescales and switches to local Type-II
   timescales where the selected gap-opening mask is true; it is inward-only,
   has no traps, and is never selected by the CLI.
-* The signed-torque integrator preserves outward regions. A stable zero can
-  block inward delivery and returns `status="trap_bound"`, `time = inf`, and
-  the blocking radius; this is a physical outcome, not a numerical failure.
+* The standalone gas-only signed-torque integrator preserves outward regions
+  and may return `trap_bound`. Production instead combines this signed gas
+  drift with inward GW drift; a gas-torque zero is not automatically a net
+  orbital stall or a permanent block. The legacy route/trap counters are not
+  a coupled-orbit trap census.
 
 ### Traps
-* A trap is a torque zero with positive torque inside and negative outside;
-  the opposite ordering is an anti-trap. Nothing is hard-coded.
+* A gas trap is a torque zero with positive torque inside and negative outside;
+  the opposite ordering is an anti-trap. Nothing is hard-coded. A stationary
+  coupled orbit instead requires gas torque to balance the negative GW torque.
 * Whether a trap exists is a **result**, not an assumption, and comes from the
   fixed total torque in §3.
 * Trap **basins** measure the radial width of the outward-torque region. A
@@ -236,13 +239,23 @@ cases, not capture-rate accuracy or population convergence.
   actual physical domain and migrator masses; it is not guaranteed by the
   current jump repair or by a historical checkpoint.
 
-### GW and handoff
-* Peters circular evolution has the expected `a⁴` coalescence-time scaling
-  at fixed masses; the gas/GW diagnostic checks the numerical routing.
-* The handoff criterion is defined **exactly once**
-  (`solve_gas_final_radius_cm`) and returns an explicit stop reason.
-* Eccentric GW evolution is **not** supported by the SNR path: a non-zero
-  eccentricity returns `snr_model_unavailable_nonzero_eccentricity`.
+### Coupled gas and GW orbit
+* After the embedding rule accepts `e <= 0.01`, the orbit is explicitly
+  projected to `e=0`. This is a controlled approximation: the circular
+  Peters law preserves zero eccentricity, while the gas prescription assumes
+  an adiabatically circular response. The configuration rejects nonzero GW
+  eccentricity; stellar/remnant masses are fixed pending SEVN integration.
+* For circular `L=mu sqrt(GMr)`, the signed gas torque gives
+  `dr/dt|gas=Gamma_gas/(dL/dr)` and GW gives
+  `dr/dt|GW=-beta/r^3`, with both applied on the same orbit. The frequency
+  crossing is found against the evolving observed-frame redshift. There is
+  no selected gas/GW crossover or gas-final radius.
+* Gas stops at the AGN duty deadline or radial profile edge; thereafter the
+  exact vacuum `r^4` law applies. A net-torque zero can stall the gas-active
+  orbit without blocking its later GW continuation.
+* Legacy `band_entry_status` and migration counters are geometric/compatibility
+  diagnostics; `orbit_stop_reason`, entry and disk-off fields are the physical
+  result. `r_handoff` and old split-time fields are unavailable (`NaN`).
 
 ### LISA
 * Component masses enter in the source frame and are redshifted once inside
@@ -266,7 +279,7 @@ cases, not capture-rate accuracy or population convergence.
 | Aspect ratio | `h > 0` and finite | never reported as gap-open |
 | Opacity `(logT, logR)` | the tabulated grid | **clipped** to the edge, silently |
 | Migration path | inside the torque radial domain | `TorqueMigrationError` |
-| Eccentricity (SNR) | exactly 0 | `model_unavailable` status |
+| Eccentricity (coupled orbit) | exactly 0 after embedding projection | nonzero configuration rejected |
 | LISA mission duration | 0.5, 1, 2, 4 yr | `ValueError` (confusion-noise table) |
 | Redshift | finite, ≥ 0 | rejected at configuration time |
 
@@ -286,10 +299,20 @@ Execution state and physical outcome are kept strictly separate.
 * `migration_status="trap_bound"` requires a resolved stable torque zero;
   `migration_status="outward_blocked"` means an outward region blocks inward
   delivery without a resolved trap. Both are physical barriers, not errors.
-* `classify_event_rate` first produces gas-stage candidacy. The counted
-  numerator additionally uses `is_physical_imri_entry` to require finite
-  physical band entry. AGN shutdown alone is not a completed IMRI event.
-  Gas evolution is bounded by the episode; subsequent GW entry may occur later.
+* `classify_coupled_event` counts a BH only when it exists by the coupled
+  orbit's first finite observed-band entry before ISCO and `z=0`. A stellar
+  entry before BH formation is not counted. Entry is not coalescence.
+* Gas-active entries use a first-order circular-quadrupole SNR integrated over
+  the actual in-band coupled trajectory. In observer time the implementation
+  integrates `(16/5) A_vac(f)^2 dot_f_GW(f)/S_n(f) dt_obs`, retaining the
+  existing sky/inclination normalization and LISA noise. This is the
+  stationary-phase amplitude/residence-time identity, not an environmental
+  phase template or a matched-filter recovery guarantee. A mission window is
+  placed at band entry or against the track's loud end per configuration; if
+  no loud end is reached before `z=0`, the optimal request falls back to the
+  band-entry window and records that case.
+* After disk-off, the existing vacuum SNR remains in use. Missing input,
+  numerical failure, evaluated nondetection and no overlap stay distinct.
 
 ---
 
@@ -316,10 +339,7 @@ Elapsed Myr start at the configured source
 redshift, and the GW continuation stops at the age of `z=0`. The old independent
 `hubble_constant_per_myr` input was removed.
 
-The live detector continuation still supports the legacy one-event cosmic
-merger when `cosmic_merge_time_myr` is finite (default 1000 Myr). It is a
-source-frame delay after the gas-final epoch; its mass and radius factors are
-explicit configuration. This differs from the fixed-host intent in the
-archived repair plan and remains a separate modeling assumption. The
-`max_gw_time_myr` compatibility parameter is recorded but is not currently
-used as an additional GW time cap.
+The coupled workflow rejects finite `cosmic_merge_time_myr`; its default is
+infinity and component masses stay fixed. The old one-event merger remains
+only in the standalone legacy detector function. `max_gw_time_myr` is a
+recorded compatibility parameter, not an additional physical cutoff.

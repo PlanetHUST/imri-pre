@@ -1,8 +1,10 @@
-"""Routing tests for the gas / GW handoff.
+"""Historical routing tests for the superseded gas / GW handoff.
 
 The ordering under test comes from ``docs/bug_fix_plan.md`` Task G: a gas
 torque barrier blocks *gas delivery*, not GW evolution, so a finite direct-GW
 route must be allowed to win before the migrator is declared trap-bound.
+The production workflow now uses a simultaneous circular gas+GW orbit; these
+tests protect the retained standalone diagnostic only.
 """
 
 import numpy as np

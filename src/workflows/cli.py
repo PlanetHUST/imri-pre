@@ -32,6 +32,7 @@ from .config import (
     IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR,
     IMRI_COSMIC_MERGE_TIME_MYR,
     IMRIDynConfig,
+    DEFAULT_DISK_MODEL,
     SECONDS_PER_MINUTE,
 )
 from .host_mapping import (
@@ -214,7 +215,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--cosmic-merge-time-myr",
         type=float,
         default=IMRI_COSMIC_MERGE_TIME_MYR,
-        help="source-frame delay after gas evolution for one simplified SMBH merger",
+        help="legacy setting; coupled fixed-mass orbit requires inf (disabled)",
     )
     parser.add_argument(
         "--cosmic-merge-smbh-mass-factor",
@@ -395,8 +396,10 @@ TREE_ONLY_OPTIONS = (
 )
 
 
-def build_config_from_arguments(arguments: argparse.Namespace) -> IMRIDynConfig:
-    """Build the (base) configuration from parsed CLI arguments."""
+def build_config_from_arguments(
+    arguments: argparse.Namespace, *, disk_model: str = DEFAULT_DISK_MODEL
+) -> IMRIDynConfig:
+    """Build a validated configuration; CLI always uses the default scenario."""
     return IMRIDynConfig(
         smbh_masses_msun=arguments.smbh_masses,
         nsc_masses_msun=arguments.nsc_masses,
@@ -406,6 +409,7 @@ def build_config_from_arguments(arguments: argparse.Namespace) -> IMRIDynConfig:
         metallicity=arguments.metallicity,
         initial_stellar_density_gamma=arguments.initial_stellar_density_gamma,
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
+        disk_model=disk_model,
         lisa_min_gw_frequency_hz=arguments.lisa_min_gw_frequency_hz,
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
         max_gw_time_myr=arguments.max_gw_time_myr,

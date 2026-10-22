@@ -37,7 +37,7 @@ DEFAULT_CONFIG_TEMPLATE: dict[str, Any] = {
     "snr_window_placement": "optimal",
     "detector_hubble_constant_km_s_mpc": 67.4,
     "detector_omega_m": 0.315,
-    "cosmic_merge_time_myr": 1.0e3,
+    "cosmic_merge_time_myr": np.inf,
     "cosmic_merge_smbh_mass_factor": 2.0,
     "cosmic_merge_radius_factor": 2.0,
     "damping_cpu_count": None,

@@ -100,6 +100,65 @@ def gap_opening_mask(
     )
 
 
+def semi_analytic_local_time_s(
+    radius_cm: FloatArray,
+    surface_density_g_cm2: FloatArray,
+    aspect_ratio: FloatArray,
+    migrator_mass_g: float,
+    smbh_mass_msun: float,
+    alpha: float,
+    gap_opening_condition: GapOpeningCondition = "kii",
+    consider_type_ii_migration: bool = True,
+) -> FloatArray:
+    """Return the comparison law's positive local ``r/|dr/dt|`` in seconds."""
+    radius = np.asarray(radius_cm, dtype=float)
+    surface_density = np.asarray(surface_density_g_cm2, dtype=float)
+    local_aspect_ratio = np.asarray(aspect_ratio, dtype=float)
+    if not (
+        radius.ndim == surface_density.ndim == local_aspect_ratio.ndim == 1
+        and radius.shape == surface_density.shape == local_aspect_ratio.shape
+        and radius.size >= 2
+    ):
+        raise SemiAnalyticMigrationError("semi-analytic profile arrays must align")
+    if not all(
+        np.all(np.isfinite(values) & (values > 0.0))
+        for values in (radius, surface_density, local_aspect_ratio)
+    ):
+        raise SemiAnalyticMigrationError("semi-analytic profile contains invalid samples")
+    if migrator_mass_g <= 0.0 or smbh_mass_msun <= 0.0 or alpha <= 0.0:
+        raise SemiAnalyticMigrationError("migrator, SMBH, and alpha must be positive")
+    smbh_mass_g = smbh_mass_msun * const.msun
+    mass_ratio = migrator_mass_g / smbh_mass_g
+    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / radius**3)
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        type_i_time_s = (
+            smbh_mass_g**2
+            * local_aspect_ratio**2
+            / (
+                2.0
+                * migrator_mass_g
+                * surface_density
+                * radius**2
+                * orbital_frequency_rad_s
+            )
+        )
+        type_ii_time_s = 1.0 / (
+            2.0 * alpha * local_aspect_ratio**2 * orbital_frequency_rad_s
+        )
+    if consider_type_ii_migration:
+        type_ii_mask = gap_opening_mask(
+            mass_ratio, local_aspect_ratio, alpha, gap_opening_condition
+        )
+    else:
+        type_ii_mask = np.zeros(radius.shape, dtype=bool)
+    local_time_s = np.where(type_ii_mask, type_ii_time_s, type_i_time_s)
+    if not np.all(np.isfinite(local_time_s) & (local_time_s > 0.0)):
+        raise SemiAnalyticMigrationError(
+            "semi-analytic local migration time contains invalid samples"
+        )
+    return np.asarray(local_time_s, dtype=float)
+
+
 def semi_analytic_migration_outcome(
     radius_grid_cm: FloatArray,
     surface_density_g_cm2: FloatArray,
@@ -183,39 +242,16 @@ def semi_analytic_migration_outcome(
             "requested migration path lies outside the semi-analytic profile domain"
         )
 
-    smbh_mass_g = smbh_mass_msun * const.msun
-    mass_ratio = migrator_mass_g / smbh_mass_g
-    orbital_frequency_rad_s = np.sqrt(const.G * smbh_mass_g / radius_cm**3)
-    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
-        type_i_time_s = (
-            smbh_mass_g**2
-            * local_aspect_ratio**2
-            / (
-                2.0
-                * migrator_mass_g
-                * surface_density
-                * radius_cm**2
-                * orbital_frequency_rad_s
-            )
-        )
-        type_ii_time_s = 1.0 / (
-            2.0 * alpha * local_aspect_ratio**2 * orbital_frequency_rad_s
-        )
-
-    if consider_type_ii_migration:
-        type_ii_mask = gap_opening_mask(
-            mass_ratio,
-            local_aspect_ratio,
-            alpha,
-            gap_opening_condition,
-        )
-    else:
-        type_ii_mask = np.zeros(radius_cm.shape, dtype=bool)
-    local_time_s = np.where(type_ii_mask, type_ii_time_s, type_i_time_s)
-    if not np.all(np.isfinite(local_time_s) & (local_time_s > 0.0)):
-        raise SemiAnalyticMigrationError(
-            "semi-analytic local migration time contains invalid samples"
-        )
+    local_time_s = semi_analytic_local_time_s(
+        radius_cm,
+        surface_density,
+        local_aspect_ratio,
+        migrator_mass_g,
+        smbh_mass_msun,
+        alpha,
+        gap_opening_condition,
+        consider_type_ii_migration,
+    )
 
     target_radius_cm = max(r_fin_cm, float(radius_cm[0]))
     start_radius_cm = min(r_ini_cm, float(radius_cm[-1]))
@@ -280,5 +316,6 @@ __all__ = [
     "TYPE_II_GAP_PARAMETER_THRESHOLD",
     "gap_opening_mask",
     "migration_time_from_semi_analytic",
+    "semi_analytic_local_time_s",
     "semi_analytic_migration_outcome",
 ]
