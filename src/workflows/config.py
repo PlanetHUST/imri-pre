@@ -22,6 +22,7 @@ DISK_ACCRETION_RATE_G_S_PER_MSUN = 1.44e18
 IMRI_AVERAGED_RESULTS_FILENAME = "imri_averaged_results.csv"
 IMRI_EVENTS_FILENAME = "imri_events.csv"
 IMRI_REPEAT_RESULTS_FILENAME = "imri_repeat_results.csv"
+IMRI_REPLENISHMENT_LEDGER_FILENAME = "imri_replenishment_ledger.csv"
 METADATA_FILENAME = "simulation_metadata.json"
 IMRI_LISA_MIN_GW_FREQUENCY_HZ = 1.0e-3
 IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
@@ -112,6 +113,7 @@ class IMRIDynConfig:
         checkpoint_grid_interval: int,
         print_debug_results: bool,
         base_seed: int | None = None,
+        consumption_replenishment: bool = True,
         # Internal NSC model parameters
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
@@ -136,6 +138,8 @@ class IMRIDynConfig:
                 raise TypeError("base seed must be an integer or None")
             if base_seed < 0:
                 raise ValueError("base seed must be nonnegative")
+        if not isinstance(consumption_replenishment, bool):
+            raise TypeError("consumption_replenishment must be a bool")
         if disk_model not in DISK_MODELS:
             raise ValueError(f"disk model must be one of {DISK_MODELS}")
         if gap_opening_condition not in GAP_OPENING_CONDITIONS:
@@ -221,6 +225,7 @@ class IMRIDynConfig:
         self.checkpoint_grid_interval = checkpoint_grid_interval
         self.print_debug_results = print_debug_results
         self.base_seed = int(base_seed) if base_seed is not None else None
+        self.consumption_replenishment = consumption_replenishment
 
     def get_param_grid(self) -> tuple[FloatArray, FloatArray]:
         """Return the explicitly selected SMBH and NSC masses [Msun]."""

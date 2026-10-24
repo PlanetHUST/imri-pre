@@ -8,7 +8,7 @@ behavior. Earlier generated explanations are preserved in the
 | Part | Guide | Main boundary |
 | --- | --- | --- |
 | 01 | [Environment and disk](01_environment_build.md) | disk_quantity/pagn_disk_adapter.py |
-| 02 | [Population, orbits and crossing](02_population_sampling.md) | physical_process/sampling.py |
+| 02 | [Population, orbits, crossing and finite NSC supply](02_population_sampling.md) | physical_process/sampling.py, workflows/replenishment.py |
 | 03 | [Damping and embedding](03_disk_embedding_dynamics.md) | physical_process/damp.py |
 | 04 | [Signed migration, gaps and traps](04_gas_migration.md) | physical_process/migration/torque.py |
 | 05 | [Gas/GW routing and intrinsic events](05_gw_event_classification.md) | physical_process/gw_frequency_radius.py |

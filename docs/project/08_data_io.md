@@ -18,7 +18,7 @@ Persistence records the physical outcomes already computed by the stage owners.
 
 ## Boundaries
 
-Canonical local files are imri_events.csv, imri_repeat_results.csv, imri_averaged_results.csv, simulation_metadata.json and intermediate/migration_*.json. A successful job can still have unavailable rates; inspect rate_status and detector_rate_status. Keep null/unavailable, valid zero, numerical failure and physical stopping distinct. Read schemas from source rather than annotation order or old sample CSVs.
+Canonical local files are imri_events.csv, imri_repeat_results.csv, imri_averaged_results.csv, imri_replenishment_ledger.csv, simulation_metadata.json and intermediate/migration_*.json. The replenishment ledger links each in-episode ISCO consumption to one donor injection or source exhaustion; repeat and averaged rows carry finite source balances. A successful job can still have unavailable rates; inspect rate_status and detector_rate_status. Keep null/unavailable, valid zero, numerical failure and physical stopping distinct. Read schemas from source rather than annotation order or old sample CSVs.
 
 ## Contracts and evidence
 

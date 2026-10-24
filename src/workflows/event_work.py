@@ -13,6 +13,7 @@ from physical_process.agn import AGNProperties
 from physical_process.damp import DampingStatus
 from physical_process.orbital_evolution import (
     continue_circular_band_track,
+    continue_to_isco,
     evolve_circular_orbit,
 )
 from physical_process.migration.semi_analytic import semi_analytic_local_time_s
@@ -139,10 +140,11 @@ class IMRIEventEvaluator:
         agn_properties: AGNProperties,
         disk_data: DiskProfiles,
         damping_results: Sequence[DampingResult],
-    ) -> None:
+    ) -> list[IMRIEventRecord]:
         """Classify embedded BHs and delayed-BH embedded stars as IMRI candidates."""
 
         rg_cm = disk_data["gravitational_radius_cm"]
+        classified_events: list[IMRIEventRecord] = []
         for damping_result in damping_results:
             if damping_result["status"] is DampingStatus.EMBEDDED_STAR:
                 result.embedded_star_count += 1
@@ -192,6 +194,9 @@ class IMRIEventEvaluator:
                 continue
 
             result.imri_events.append(event)
+            classified_events.append(event)
+            if event["consumption_status"] == "numerical_failure":
+                result.replenishment_unavailable_count += 1
             if event["band_entry_status"] == BAND_ENTRY_INSIDE_ISCO:
                 result.band_entry_inside_isco_count += 1
             else:
@@ -264,7 +269,11 @@ class IMRIEventEvaluator:
             elif event["is_imri_candidate"] is False:
                 result.no_imri_count += 1
 
-        if result.band_entry_inside_isco_count > 0 or result.profile_error_count > 0:
+        if (
+            result.band_entry_inside_isco_count > 0
+            or result.profile_error_count > 0
+            or result.replenishment_unavailable_count > 0
+        ):
             result.imri_rate_per_myr = np.nan
             result.imri_mass_rate_msun_per_myr = np.nan
         else:
@@ -276,6 +285,7 @@ class IMRIEventEvaluator:
         detector_rate_unavailable = (
             result.band_entry_inside_isco_count > 0
             or result.profile_error_count > 0
+            or result.replenishment_unavailable_count > 0
             or result.detector_unavailable_imri_count > 0
         )
         if detector_rate_unavailable:
@@ -288,6 +298,7 @@ class IMRIEventEvaluator:
             result.detectable_imri_mass_rate_msun_per_myr = (
                 result.detectable_imri_mass_msun / self.duty_cycle_myr
             )
+        return classified_events
 
     def _imri_event_record(
         self,
@@ -518,6 +529,39 @@ class IMRIEventEvaluator:
             event_decision.is_imri_candidate,
             float(detect_decision.detection_time_myr),
         )
+        consumption_time_myr = np.nan
+        consumption_status = "not_imri_candidate"
+        if counted_imri_candidate is True and self.config.consumption_replenishment:
+            if orbit_decision is None:
+                raise RuntimeError("physical IMRI entry has no coupled orbit")
+            try:
+                isco_track = continue_to_isco(
+                    entry=orbit_decision,
+                    primary_mass_msun=result.m_smbh_msun,
+                    secondary_mass_msun=migrator_mass_msun,
+                    initial_redshift=redshift,
+                    duty_cycle_myr=self.config.duty_cycle_myr,
+                    disk_inner_radius_cm=disk_inner_radius_cm,
+                    gas_radius_cm=migration_radius_cm,
+                    gas_drift_cm_s=gas_drift_cm_s,
+                    redshift_model=redshift_model,
+                )
+            except ArithmeticError:
+                consumption_status = "numerical_failure"
+            else:
+                if isco_track.status == "isco":
+                    consumption_time_myr = isco_track.end_time_myr
+                    consumption_status = (
+                        "isco_within_duty_cycle"
+                        if consumption_time_myr < self.duty_cycle_myr
+                        else "isco_after_duty_cycle"
+                    )
+                elif isco_track.status == "cosmic_time_limit":
+                    consumption_status = "cosmic_time_limit"
+                else:
+                    consumption_status = "numerical_failure"
+        elif counted_imri_candidate is True:
+            consumption_status = "replenishment_disabled"
         counted_event_rate_class = (
             event_decision.event_rate_class
             if counted_imri_candidate is None or counted_imri_candidate
@@ -550,6 +594,15 @@ class IMRIEventEvaluator:
             "redshift": redshift,
             "detection_redshift": detect_decision.detection_redshift,
             "object_index": damping_result["idx"],
+            "task_kind": damping_result["task_kind"],
+            "source_id": damping_result.get("source_id", damping_result["idx"]),
+            "origin_primary_idx": damping_result.get(
+                "origin_primary_idx", damping_result["idx"]
+            ),
+            "copy_number": damping_result.get("copy_number", 0),
+            "injection_time_myr": damping_result["state_time_myr"],
+            "consumption_time_myr": consumption_time_myr,
+            "consumption_status": consumption_status,
             "mass_msun": migrator_mass_msun,
             "mass_ratio_secondary_to_primary": (
                 migrator_mass_msun / detect_decision.final_smbh_mass_msun

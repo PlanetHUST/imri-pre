@@ -404,6 +404,7 @@ def config_kwargs(config: IMRIDynConfig) -> dict[str, Any]:
         "checkpoint_grid_interval": config.checkpoint_grid_interval,
         "print_debug_results": config.print_debug_results,
         "base_seed": config.base_seed,
+        "consumption_replenishment": config.consumption_replenishment,
         "nsc_radius_pc_at_reference_mass": config.nsc_radius_pc_at_reference_mass,
         "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
         "nsc_radius_reference_mass_msun": config.nsc_radius_reference_mass_msun,

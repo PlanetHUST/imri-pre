@@ -15,7 +15,9 @@ from .runtime import vprint
 _WORKER_CALCULATOR: DampingCalculator | None = None
 
 
-def build_damping_tasks(population: GeometricPopulation) -> list[DampingTask]:
+def build_damping_tasks(
+    population: GeometricPopulation, selected_indices: Sequence[int] | None = None
+) -> list[DampingTask]:
     """Serialize one selected population for the damping worker boundary."""
     return [
         {
@@ -28,6 +30,13 @@ def build_damping_tasks(population: GeometricPopulation) -> list[DampingTask]:
             "cos_omega": float(population["cos_omega"][index]),
             "formation_time_myr": float(population["formation_time_myr"][index]),
             "state_time_s": 0.0,
+            "source_id": (
+                int(selected_indices[index])
+                if selected_indices is not None
+                else index
+            ),
+            "origin_primary_idx": index,
+            "copy_number": 0,
         }
         for index in range(len(population["mass_msun"]))
     ]
@@ -77,6 +86,13 @@ def process_damping_task(task: DampingTask) -> DampingResult:
     """Run one damping task for a disk-crossing object."""
     if _WORKER_CALCULATOR is None:
         raise RuntimeError("damping worker was not initialized")
+    return damp_task_with_calculator(task, _WORKER_CALCULATOR)
+
+
+def damp_task_with_calculator(
+    task: DampingTask, calculator: DampingCalculator
+) -> DampingResult:
+    """Run one task with a reusable calculator in a causal replacement chain."""
 
     state = OrbitalState(
         semi_major_axis_cm=task["semi_major_axis_cm"],
@@ -86,7 +102,7 @@ def process_damping_task(task: DampingTask) -> DampingResult:
         time_s=task["state_time_s"],
     )
     try:
-        outcome = _WORKER_CALCULATOR.damping_simulation(
+        outcome = calculator.damping_simulation(
             task["mass_g"],
             state,
             task["formation_time_myr"],
@@ -121,6 +137,9 @@ def process_damping_task(task: DampingTask) -> DampingResult:
         "initial_cos_omega": task["cos_omega"],
         "mass_g": task["mass_g"],
         "mass_msun": task["mass_g"] / const.msun,
+        "source_id": task.get("source_id", task["idx"]),
+        "origin_primary_idx": task.get("origin_primary_idx", task["idx"]),
+        "copy_number": task.get("copy_number", 0),
     }
     if error is not None:
         result["error"] = error

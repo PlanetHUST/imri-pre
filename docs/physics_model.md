@@ -35,6 +35,7 @@ host (z, M_smbh, M_nsc, Z)
    │
    ├─► event classification .......... workflows.event_rate.classify_coupled_event
    │                                   workflows.event_work (per-object orchestration)
+   ├─► ISCO consumption / NSC supply . workflows.replenishment
    │
    └─► LISA .......................... lisa.snr          sensitivity, waveform, SNR
             └─ detectability ......... lisa.detectability band entry + threshold decision
@@ -68,6 +69,7 @@ the results and do not redefine those physical decisions.
 | Simplified SMBH merger | `physical_process.cosmic_merge` | Legacy standalone diagnostic only; disabled in coupled fixed-mass production |
 | Legacy gas/GW routing | `workflows.event_rate` | `solve_gas_final_radius_cm` remains for historical diagnostic tests, not production event physics |
 | Event classification | `workflows.event_rate`, `workflows.event_work` | |
+| Finite NSC replenishment | `workflows.replenishment` | One donor per eligible ISCO consumption during the AGN episode; no relaxation-clock injections |
 | LISA sensitivity / SNR | `lisa.snr` | Robson, Cornish & Liu (2019) analytic two-channel |
 | LISA detectability | `lisa.detectability` | Threshold decision only |
 
@@ -256,6 +258,21 @@ cases, not capture-rate accuracy or population convergence.
 * Legacy `band_entry_status` and migration counters are geometric/compatibility
   diagnostics; `orbit_stop_reason`, entry and disk-off fields are the physical
   result. `r_handoff` and old split-time fields are unavailable (`NaN`).
+
+### NSC replenishment
+* An initially selected disk-crossing orbit is a supply channel. A counted
+  physical IMRI entry reopens it only after the same coupled orbit reaches
+  ISCO before the AGN duty deadline. Band entry alone does not refill it.
+* Each reopening injects one unique, initially sampled non-crossing NSC object
+  into that channel's initial orbit. Its mass and absolute stellar lifetime
+  remain its own. The replacement follows the production damping, migration,
+  event and detector stages and may itself reopen the channel at ISCO.
+* The source is finite and has no inflow. The two-body relaxation time remains
+  a diagnostic; it does not set the injection clock. The per-repeat source
+  count and mass and each consumption/injection are persisted for auditing.
+* A failed ISCO continuation is marked `numerical_failure`. The resulting
+  population rate is incomplete because another injection may be missing;
+  the already classified event remains in the event table.
 
 ### LISA
 * Component masses enter in the source frame and are redshifted once inside

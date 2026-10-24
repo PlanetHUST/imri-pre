@@ -21,6 +21,9 @@ class DampingTask(TypedDict):
     cos_omega: float
     formation_time_myr: float
     state_time_s: float
+    source_id: NotRequired[int]
+    origin_primary_idx: NotRequired[int]
+    copy_number: NotRequired[int]
 
 
 class DampingResult(TypedDict):
@@ -42,6 +45,9 @@ class DampingResult(TypedDict):
     initial_cos_omega: float
     mass_g: float
     mass_msun: float
+    source_id: NotRequired[int]
+    origin_primary_idx: NotRequired[int]
+    copy_number: NotRequired[int]
     error: NotRequired[str]
 
 
@@ -86,6 +92,13 @@ class IMRIEventRecord(TypedDict):
     redshift: float
     detection_redshift: float
     object_index: int
+    task_kind: str
+    source_id: int
+    origin_primary_idx: int
+    copy_number: int
+    injection_time_myr: float
+    consumption_time_myr: float
+    consumption_status: str
     mass_msun: float
     mass_ratio_secondary_to_primary: float
     bh_origin: str
@@ -243,6 +256,15 @@ class IMRIDynSingleResult:
         self.gravitational_radius_cm: float | None = None
         self.nsc_radius_cm: float | None = None
         self.mean_relaxation_time_myr_geo = np.nan
+        self.replenishment_source_initial_count = 0
+        self.replenishment_source_remaining_count = 0
+        self.replenishment_source_initial_mass_msun = 0.0
+        self.replenishment_source_remaining_mass_msun = 0.0
+        self.replenishment_injection_count = 0
+        self.replenishment_consumption_count = 0
+        self.replenishment_source_exhausted_count = 0
+        self.replenishment_unavailable_count = 0
+        self.replenishment_ledger: list[dict[str, Any]] = []
         self.imri_events: list[IMRIEventRecord] = []
         self.migration_errors: list[MigrationErrorRecord] = []
 
@@ -307,6 +329,14 @@ class IMRIDynSingleResult:
             "gravitational_radius_cm": self.gravitational_radius_cm,
             "nsc_radius_cm": self.nsc_radius_cm,
             "mean_relaxation_time_myr_geo": self.mean_relaxation_time_myr_geo,
+            "replenishment_source_initial_count": self.replenishment_source_initial_count,
+            "replenishment_source_remaining_count": self.replenishment_source_remaining_count,
+            "replenishment_source_initial_mass_msun": self.replenishment_source_initial_mass_msun,
+            "replenishment_source_remaining_mass_msun": self.replenishment_source_remaining_mass_msun,
+            "replenishment_injection_count": self.replenishment_injection_count,
+            "replenishment_consumption_count": self.replenishment_consumption_count,
+            "replenishment_source_exhausted_count": self.replenishment_source_exhausted_count,
+            "replenishment_unavailable_count": self.replenishment_unavailable_count,
         }
 
 
@@ -334,8 +364,13 @@ class IMRIDynAveragedResult:
 
         inside_isco_count = float(np.sum(values("band_entry_inside_isco_count")))
         profile_error_count = float(np.sum(values("profile_error_count")))
+        replenishment_unavailable_count = float(
+            np.sum(values("replenishment_unavailable_count"))
+        )
         rate_evaluation_complete = (
-            inside_isco_count == 0.0 and profile_error_count == 0.0
+            inside_isco_count == 0.0
+            and profile_error_count == 0.0
+            and replenishment_unavailable_count == 0.0
         )
         detector_unavailable_count = float(
             np.sum(values("detector_unavailable_imri_count"))
@@ -349,6 +384,8 @@ class IMRIDynAveragedResult:
             rate_evaluation_status = "not_evaluated_band_entry_inside_isco"
         elif profile_error_count > 0.0:
             rate_evaluation_status = "incomplete_profile_error"
+        elif replenishment_unavailable_count > 0.0:
+            rate_evaluation_status = "incomplete_replenishment_consumption_unavailable"
         else:
             rate_evaluation_status = "complete"
 
@@ -477,5 +514,29 @@ class IMRIDynAveragedResult:
             ),
             "mean_relaxation_time_geo_mean_myr": float(
                 np.mean(values("mean_relaxation_time_myr_geo"))
+            ),
+            "replenishment_source_initial_count_mean": float(
+                np.mean(values("replenishment_source_initial_count"))
+            ),
+            "replenishment_source_remaining_count_mean": float(
+                np.mean(values("replenishment_source_remaining_count"))
+            ),
+            "replenishment_source_initial_mass_mean_msun": float(
+                np.mean(values("replenishment_source_initial_mass_msun"))
+            ),
+            "replenishment_source_remaining_mass_mean_msun": float(
+                np.mean(values("replenishment_source_remaining_mass_msun"))
+            ),
+            "replenishment_injection_count_mean": float(
+                np.mean(values("replenishment_injection_count"))
+            ),
+            "replenishment_consumption_count_mean": float(
+                np.mean(values("replenishment_consumption_count"))
+            ),
+            "replenishment_source_exhausted_count_mean": float(
+                np.mean(values("replenishment_source_exhausted_count"))
+            ),
+            "replenishment_unavailable_count_mean": float(
+                np.mean(values("replenishment_unavailable_count"))
             ),
         }

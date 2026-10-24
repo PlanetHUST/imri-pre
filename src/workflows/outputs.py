@@ -13,6 +13,7 @@ from .config import (
     IMRI_AVERAGED_RESULTS_FILENAME,
     IMRI_EVENTS_FILENAME,
     IMRI_REPEAT_RESULTS_FILENAME,
+    IMRI_REPLENISHMENT_LEDGER_FILENAME,
     METADATA_FILENAME,
     IMRIDynConfig,
     migration_contract_name,
@@ -38,6 +39,14 @@ IMRI_RESULT_COLUMN_MAP = [
     ("disk_outer_radius_rg", "r_disk_out_rg"),
     ("f_geo_mean", "f_geo"),
     ("disk_crossing_objects_mean", "n_disk_cross"),
+    ("replenishment_source_initial_count_mean", "n_source_initial"),
+    ("replenishment_source_remaining_count_mean", "n_source_remaining"),
+    ("replenishment_source_initial_mass_mean_msun", "m_source_initial_msun"),
+    ("replenishment_source_remaining_mass_mean_msun", "m_source_remaining_msun"),
+    ("replenishment_injection_count_mean", "n_replenished"),
+    ("replenishment_consumption_count_mean", "n_isco_consumed"),
+    ("replenishment_source_exhausted_count_mean", "n_source_exhausted"),
+    ("replenishment_unavailable_count_mean", "n_replenishment_unavailable"),
     ("embedded_star_count_mean", "n_emb_star"),
     ("embedded_bh_count_mean", "n_emb_bh"),
     ("migration_formed_bh_count_mean", "n_mfbh"),
@@ -90,6 +99,13 @@ IMRI_EVENT_COLUMNS = [
     "redshift",
     "detection_redshift",
     "object_index",
+    "task_kind",
+    "source_id",
+    "origin_primary_idx",
+    "copy_number",
+    "injection_time_myr",
+    "consumption_time_myr",
+    "consumption_status",
     "mass_msun",
     "mass_ratio_secondary_to_primary",
     "bh_origin",
@@ -189,6 +205,14 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "duty_cycle_myr",
     "n_sampled",
     "n_disk_cross",
+    "n_source_initial",
+    "n_source_remaining",
+    "m_source_initial_msun",
+    "m_source_remaining_msun",
+    "n_replenished",
+    "n_isco_consumed",
+    "n_source_exhausted",
+    "n_replenishment_unavailable",
     "f_geo",
     "n_emb_star",
     "n_emb_bh",
@@ -219,6 +243,26 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "n_mig_trap",
     "n_mig_outward_blocked",
     "n_mig_error",
+]
+
+IMRI_REPLENISHMENT_LEDGER_COLUMNS = [
+    "m_smbh_msun",
+    "m_nsc_msun",
+    "repeat",
+    "disk_model",
+    "origin_primary_idx",
+    "predecessor_object_index",
+    "predecessor_event_id",
+    "consumption_time_myr",
+    "injection_time_myr",
+    "source_id",
+    "source_mass_msun",
+    "replacement_object_index",
+    "copy_number",
+    "replacement_damping_status",
+    "replacement_event_id",
+    "replacement_consumption_time_myr",
+    "status",
 ]
 
 EVENT_HIDDEN_COLUMNS = {
@@ -832,6 +876,8 @@ def _rate_evaluation_status(result: IMRIDynSingleResult) -> str:
         return "not_evaluated_band_entry_inside_isco"
     if result.profile_error_count:
         return "incomplete_profile_error"
+    if result.replenishment_unavailable_count:
+        return "incomplete_replenishment_consumption_unavailable"
     physical_entry_unavailable = any(
         _boolean_state(event["is_imri_candidate"]) is True
         and not np.isfinite(float(event["detection_time_myr"]))
@@ -877,6 +923,14 @@ def _repeat_output_record(
         "duty_cycle_myr": config.duty_cycle_myr,
         "n_sampled": result.total_sampled_objects,
         "n_disk_cross": result.disk_crossing_objects,
+        "n_source_initial": result.replenishment_source_initial_count,
+        "n_source_remaining": result.replenishment_source_remaining_count,
+        "m_source_initial_msun": result.replenishment_source_initial_mass_msun,
+        "m_source_remaining_msun": result.replenishment_source_remaining_mass_msun,
+        "n_replenished": result.replenishment_injection_count,
+        "n_isco_consumed": result.replenishment_consumption_count,
+        "n_source_exhausted": result.replenishment_source_exhausted_count,
+        "n_replenishment_unavailable": result.replenishment_unavailable_count,
         "f_geo": result.f_geo,
         "n_emb_star": result.embedded_star_count,
         "n_emb_bh": result.embedded_bh_count,
@@ -932,6 +986,33 @@ def save_repeat_results(
     _validate_rate_output(frame)
     path = output_dir / IMRI_REPEAT_RESULTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.6e")
+    print(f"saved: {path}")
+    return frame
+
+
+def save_replenishment_ledger(
+    averaged_results: Sequence[IMRIDynAveragedResult], output_dir: Path
+) -> pd.DataFrame:
+    """Persist the causal consumption and unique-donor injection ledger."""
+    rows = [
+        row
+        for averaged_result in averaged_results
+        for result in averaged_result.results
+        for row in result.replenishment_ledger
+    ]
+    frame = pd.DataFrame.from_records(
+        rows, columns=IMRI_REPLENISHMENT_LEDGER_COLUMNS
+    )
+    for averaged_result in averaged_results:
+        for result in averaged_result.results:
+            if len(result.replenishment_ledger) != result.replenishment_consumption_count:
+                raise ValueError("consumption ledger length does not match its count")
+            if result.replenishment_injection_count != sum(
+                row["status"] == "injected" for row in result.replenishment_ledger
+            ):
+                raise ValueError("replacement ledger count does not match injections")
+    path = output_dir / IMRI_REPLENISHMENT_LEDGER_FILENAME
+    frame.to_csv(path, index=False, float_format="%.9e")
     print(f"saved: {path}")
     return frame
 

@@ -21,6 +21,8 @@ One *single-halo run* is one complete Monte Carlo experiment for one host:
 sample an NSC population  →  select disk-crossing orbits  →  damp them into the disk
    →  migrate the embedded objects  →  resolve gas vs GW competition
    →  classify IMRI candidates  →  evaluate LISA SNR and detectability
+   →  at ISCO consumption, refill the vacated orbit from the finite NSC pool
+   →  repeat damping and classification until no channel or donor remains
 ```
 
 It runs the configured number of Monte Carlo repeats internally and reports
@@ -34,6 +36,7 @@ their average. One merger-tree *job* is exactly one such run.
 host  →  AGN disk  →  compact-object population  →  disk crossing  →  damping
       →  migration (torque → gap → traps → radial evolution)
       →  gas/GW handoff  →  IMRI event classification  →  LISA SNR → detectability
+                                              └→ ISCO consumption → replenishment
 ```
 
 Each arrow is owned by exactly one module. See
@@ -94,6 +97,10 @@ Positional arguments are `num_repeats`, `output_dir`, `damping_cpu_count`.
 The optional `--base-seed` defaults to `None`; pass it explicitly for paired,
 reproducible runs. The single-halo main workflow writes scientific CSV/JSON
 without automatically invoking the saved-result figure functions.
+Consumption-driven replenishment is enabled by default. Use
+`--no-consumption-replenishment` to run the initial disk-crossing cohort only.
+The [replenishment plan](docs/plans/active/imri_consumption_replenishment.md)
+records the finite-source and event-time assumptions.
 
 ### A merger-tree batch
 
@@ -151,6 +158,7 @@ results.
 | `<output_dir>/imri_averaged_results.csv` | one row per grid point, averaged over repeats                |
 | `<output_dir>/imri_repeat_results.csv`   | one row per Monte Carlo repeat, with its seed                |
 | `<output_dir>/imri_events.csv`           | one row per evaluated object, with its classification reason |
+| `<output_dir>/imri_replenishment_ledger.csv` | one row per in-episode ISCO consumption and resulting donor injection or source exhaustion |
 | `<output_dir>/simulation_metadata.json`  | resolved configuration and model identifiers                 |
 | `<output_dir>/intermediate/`             | per-repeat migration diagnostics                             |
 

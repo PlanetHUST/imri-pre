@@ -17,6 +17,7 @@ from .gw_frequency_radius import gw_frequency_hz
 from .redshift_evolve import RedshiftEvolution
 
 ISCO_RADIUS_RG = 6.0
+ISCO_CONSUMPTION_FREQUENCY_MARGIN = 1.01
 ORBIT_RELATIVE_TOLERANCE = 1.0e-9
 ORBIT_LOG_RADIUS_ABSOLUTE_TOLERANCE = 1.0e-11
 
@@ -699,4 +700,39 @@ def continue_circular_band_track(
         "isco" if time_myr + to_isco_myr <= cosmic_limit_myr else "cosmic_time_limit",
         final_time_myr,
         final_radius_cm,
+    )
+
+
+def continue_to_isco(
+    *,
+    entry: CircularOrbitOutcome,
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    initial_redshift: float,
+    duty_cycle_myr: float,
+    disk_inner_radius_cm: float,
+    gas_radius_cm: np.ndarray,
+    gas_drift_cm_s: np.ndarray,
+    redshift_model: RedshiftEvolution,
+) -> CircularBandTrack:
+    """Continue the same coupled orbit through the detector band to ISCO."""
+    total_mass_msun = primary_mass_msun + secondary_mass_msun
+    isco_radius_cm = (
+        ISCO_RADIUS_RG * const.G * total_mass_msun * const.msun / const.c**2
+    )
+    unreachable_observed_max_hz = (
+        ISCO_CONSUMPTION_FREQUENCY_MARGIN
+        * gw_frequency_hz(total_mass_msun, isco_radius_cm)
+    )
+    return continue_circular_band_track(
+        entry=entry,
+        primary_mass_msun=primary_mass_msun,
+        secondary_mass_msun=secondary_mass_msun,
+        initial_redshift=initial_redshift,
+        duty_cycle_myr=duty_cycle_myr,
+        disk_inner_radius_cm=disk_inner_radius_cm,
+        gas_radius_cm=gas_radius_cm,
+        gas_drift_cm_s=gas_drift_cm_s,
+        max_observed_frequency_hz=unreachable_observed_max_hz,
+        redshift_model=redshift_model,
     )

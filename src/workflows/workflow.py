@@ -20,6 +20,7 @@ from .outputs import (
     save_metadata,
     save_migration_diagnostics,
     save_repeat_results,
+    save_replenishment_ledger,
     save_results,
 )
 from .reporting import debug_print_result, print_header, print_result_summary
@@ -50,6 +51,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Grid size: {len(smbh_masses_msun)} x {len(nsc_masses_msun)} = {grid_size}")
     print(f"Repeats per point: {config.num_repeats}")
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
+    print(f"Consumption replenishment: {config.consumption_replenishment}")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(f"Disk migration scenario: {config.disk_model}")
     print(
@@ -149,6 +151,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
                 save_results(averaged_results, config.output_dir)
                 save_events(averaged_results, config.output_dir)
                 save_repeat_results(averaged_results, config.output_dir, config)
+                save_replenishment_ledger(averaged_results, config.output_dir)
 
     runtime_s = time.time() - start_time_s
     print_header("SIMULATION COMPLETE", 72, "#")
@@ -157,6 +160,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     frame = save_results(averaged_results, config.output_dir)
     save_events(averaged_results, config.output_dir)
     save_repeat_results(averaged_results, config.output_dir, config)
+    save_replenishment_ledger(averaged_results, config.output_dir)
     save_metadata(
         config.output_dir,
         build_metadata(

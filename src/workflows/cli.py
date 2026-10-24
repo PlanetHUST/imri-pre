@@ -246,6 +246,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="optional root seed for reproducible, paired Monte Carlo tasks",
     )
+    parser.add_argument(
+        "--no-consumption-replenishment",
+        action="store_true",
+        help="disable finite NSC replacement after an IMRI reaches ISCO",
+    )
     _add_tree_arguments(parser)
     return parser
 
@@ -427,6 +432,7 @@ def build_config_from_arguments(
         checkpoint_grid_interval=arguments.checkpoint_interval,
         print_debug_results=arguments.debug_results,
         base_seed=arguments.base_seed,
+        consumption_replenishment=not arguments.no_consumption_replenishment,
     )
 
 

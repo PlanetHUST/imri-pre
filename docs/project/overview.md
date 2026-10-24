@@ -11,6 +11,7 @@ conditional LISA detectability.
     host -> pAGN disk -> population/orbits -> actual node crossing
          -> damping -> signed migration -> gas/GW handoff
          -> physical band entry -> intrinsic count -> detector selection
+         -> ISCO consumption -> finite NSC donor -> vacated orbit -> damping
 
 A tree batch maps each selected row onto the same local kernel. It does not
 supply host-abundance weighting, ancestry evolution or an all-sky cosmic rate.
@@ -26,6 +27,8 @@ pool. Persistence happens through outputs.py and metadata.py.
 The live main CLI uses optional --base-seed (default None), one fixed migration
 contract and positional repeat/output/worker arguments. It saves data without
 automatically running the figure API. Earlier proposed defaults are archived.
+The single realization also processes replacement donors in ISCO-consumption
+time order. The finite source and each injection are recorded separately.
 
 ## Model boundaries
 

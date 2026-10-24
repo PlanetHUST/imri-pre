@@ -103,6 +103,16 @@ def build_metadata(
                 * config.num_repeats
             ),
             "duty_cycle_myr": config.duty_cycle_myr,
+            "consumption_replenishment": {
+                "enabled": config.consumption_replenishment,
+                "refill_trigger": "first_isco_after_physical_imri_entry",
+                "refill_horizon": "agn_duty_cycle",
+                "donor_pool": "initial_nsc_objects_not_selected_as_primary_disk_crossers",
+                "donor_policy": "unique_uniform_without_replacement",
+                "channel_orbit": "initial_primary_orbit",
+                "relaxation_time_role": "diagnostic_only",
+                "external_inflow": False,
+            },
             "metallicity": config.metallicity,
             "initial_stellar_density_gamma": config.initial_stellar_density_gamma,
             "nsc_radius_pc_at_reference_mass": config.nsc_radius_pc_at_reference_mass,

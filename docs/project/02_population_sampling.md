@@ -14,10 +14,11 @@ The initial population and node geometry supply the objects that damping actuall
 | [physical_process/nsc_orbital.py](../../src/physical_process/nsc_orbital.py) | Samples axes, eccentricity and historical angular distributions; computes node radii and annulus membership. |
 | [workflows/population.py](../../src/workflows/population.py) | Coordinates sampling and selects actual disk-crossing nodes. |
 | [workflows/workers.py](../../src/workflows/workers.py) | Serializes the selected population into deterministic damping tasks. |
+| [workflows/replenishment.py](../../src/workflows/replenishment.py) | Draws each unused non-crossing NSC donor only when an eligible channel reaches ISCO during the AGN episode. |
 
 ## Boundaries
 
-The preserved assumptions include the Pop II subsolar discard, first-order equal stellar/remnant masses and the historical angular sampler. Uniform inclination is not isotropic sampling. No new replenishment or remnant-mass model is implied by this guide.
+The preserved assumptions include the Pop II subsolar discard, first-order equal stellar/remnant masses and the historical angular sampler. Uniform inclination is not isotropic sampling. A replacement keeps its sampled mass and stellar lifetime but adopts the vacated primary orbit as a phase-space channel approximation. Each donor is drawn once; no new NSC population is generated during the episode.
 
 ## Contracts and evidence
 

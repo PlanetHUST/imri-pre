@@ -19,6 +19,7 @@ class PopulationSelection:
     initial: StellarPopulation
     disk_crossing: GeometricPopulation
     mean_relaxation_time_myr: float
+    selected_indices: np.ndarray
 
     @property
     def total_count(self) -> int:
@@ -112,4 +113,5 @@ def sample_disk_crossing_population(
         initial=initial,
         disk_crossing=disk_crossing,
         mean_relaxation_time_myr=mean_relaxation_time_myr,
+        selected_indices=selected_indices,
     )
