@@ -106,3 +106,16 @@ def test_embedding_on_the_last_allowed_step_is_successful() -> None:
     outcome = calculator.damping_simulation(1.0, initial, 0.0, "BH", max_iter=1)
     assert outcome.status is DampingStatus.EMBEDDED_BH
     assert 0.0 < outcome.final_state.inclination_rad <= 0.02
+
+
+def test_stellar_collapse_stop_clips_damping_step_exactly() -> None:
+    calculator = _calculator()
+    calculator.compute_ode_coefficients = lambda *_: (0.0,) * 6
+    calculator.damping_time_step_s = lambda *_: 2.0e6
+    initial = OrbitalState(1.0e12, 0.005, 0.2, 0.5)
+    outcome = calculator.damping_simulation(
+        1.0, initial, 1.0e6 / const.Myr, "Star", stop_time_s=1.0e6
+    )
+    assert outcome.status is DampingStatus.COLLAPSE_REACHED
+    assert outcome.final_state.time_s == 1.0e6
+    assert outcome.final_state.semi_major_axis_cm == initial.semi_major_axis_cm

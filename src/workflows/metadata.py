@@ -1,10 +1,14 @@
 """Simulation metadata assembly for the IMRI workflow."""
 
 import time
+import hashlib
+from importlib.metadata import version
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import physical_process.gw_frequency_radius as gw_helpers
+from physical_process.sampling import SOLAR_METALLICITY
 from physical_process.redshift_evolve import RedshiftEvolution
 from physical_process.migration import (
     CRIDA_DEEP_GAP_PARAMETER,
@@ -31,6 +35,52 @@ from lisa.snr import (
     SNR_QUADRATURE_METHOD,
     SNR_QUADRATURE_RELATIVE_TOLERANCE,
 )
+
+
+def _tree_sha256(directory: Path, suffixes: tuple[str, ...] | None = None) -> str:
+    """Fingerprint names and bytes, independent of the directory path."""
+    digest = hashlib.sha256()
+    for path in sorted(
+        item for item in directory.rglob("*")
+        if item.is_file() and (suffixes is None or item.suffix in suffixes)
+    ):
+        digest.update(str(path.relative_to(directory)).encode("utf-8"))
+        digest.update(b"\0")
+        with path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stellar_model_metadata(config: IMRIDynConfig) -> dict[str, Any]:
+    details: dict[str, Any] = {
+        "model": config.stellar_evolution_model,
+        "kick_model": config.natal_kick_model,
+        "precollapse_mass_model": "fixed_zams_mass",
+        "metallicity_absolute_z": config.metallicity * SOLAR_METALLICITY,
+    }
+    if config.stellar_evolution_model == "sevn":
+        from sevnpy.sevn import SEVNmanager
+
+        if config.sevn_hydrogen_tables is None or config.sevn_helium_tables is None:
+            raise ValueError("SEVN table paths are required for metadata")
+        defaults = SEVNmanager.get_sevnParamsDefault()
+        details.update(
+            sevnpy_version=version("sevnpy"),
+            hydrogen_tables=str(config.sevn_hydrogen_tables),
+            helium_tables=str(config.sevn_helium_tables),
+            hydrogen_tables_sha256=_tree_sha256(config.sevn_hydrogen_tables),
+            helium_tables_sha256=_tree_sha256(config.sevn_helium_tables),
+            sevn_supernova_parameters={
+                key: value for key, value in defaults.items() if key.startswith("sn_")
+            },
+        )
+    if config.natal_kick_model == "sevn":
+        kick_source = Path(__file__).resolve().parents[1] / "physical_process" / "natal_kick.py"
+        details["kick_orbit_interface"] = "physical_process.natal_kick.apply_orbital_kick"
+        details["kick_orbit_sha256"] = hashlib.sha256(kick_source.read_bytes()).hexdigest()
+        details["kick_direction"] = "object_seeded_isotropic_orbital_frame"
+    return details
 
 
 def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
@@ -114,6 +164,19 @@ def build_metadata(
                 "external_inflow": False,
             },
             "metallicity": config.metallicity,
+            "popiii_max_mass_msun": config.popiii_max_mass_msun,
+            "popiii_imf_slope": config.popiii_imf_slope,
+            "metallicity_absolute_z": config.metallicity * SOLAR_METALLICITY,
+            "stellar_evolution_model": config.stellar_evolution_model,
+            "natal_kick_model": config.natal_kick_model,
+            "sevn_hydrogen_tables": (
+                str(config.sevn_hydrogen_tables)
+                if config.sevn_hydrogen_tables is not None else None
+            ),
+            "sevn_helium_tables": (
+                str(config.sevn_helium_tables)
+                if config.sevn_helium_tables is not None else None
+            ),
             "initial_stellar_density_gamma": config.initial_stellar_density_gamma,
             "nsc_radius_pc_at_reference_mass": config.nsc_radius_pc_at_reference_mass,
             "nsc_radius_reference_mass_msun": config.nsc_radius_reference_mass_msun,
@@ -127,7 +190,10 @@ def build_metadata(
             "orbit_model": "circular_coupled_gas_gw_v1",
             "orbit_assumptions": {
                 "eccentricity_at_embedding": "projected_to_zero_after_e_le_0.01_damping",
-                "component_masses": "fixed",
+                "component_masses": (
+                    "fixed" if config.stellar_evolution_model == "fixed_mass"
+                    else "sevn_event_piecewise"
+                ),
                 "disk_background": "static_until_duty_cycle_end",
                 "gas_and_gw": "simultaneous_signed_radial_drift",
                 "band_entry": "first_observed_frequency_crossing",
@@ -181,6 +247,7 @@ def build_metadata(
                 else None
             ),
         },
+        "stellar_model": _stellar_model_metadata(config),
         "detector_model": {
             "sensitivity_model": LISA_SENSITIVITY_MODEL,
             "waveform_model": LISA_WAVEFORM_MODEL,

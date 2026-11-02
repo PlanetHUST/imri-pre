@@ -126,6 +126,7 @@ def evolve_circular_orbit(
     gas_drift_cm_s: np.ndarray,
     min_observed_frequency_hz: float,
     redshift_model: RedshiftEvolution,
+    stop_time_myr: float | None = None,
 ) -> CircularOrbitOutcome:
     """Evolve the circular orbit to first band entry, ISCO, or the z=0 limit.
 
@@ -155,6 +156,10 @@ def evolve_circular_orbit(
         raise ValueError("disk inner radius must be finite and positive")
     if not np.isfinite(min_observed_frequency_hz) or min_observed_frequency_hz <= 0:
         raise ValueError("minimum observed frequency must be positive")
+    if stop_time_myr is not None and (
+        not np.isfinite(stop_time_myr) or stop_time_myr < initial_time_myr
+    ):
+        raise ValueError("event stop time must be finite and no earlier than orbit start")
 
     total_mass_msun = primary_mass_msun + secondary_mass_msun
     beta_cm4_s = peters_beta_cm4_s(primary_mass_msun, secondary_mass_msun)
@@ -165,6 +170,10 @@ def evolve_circular_orbit(
     gas_outer_cm = float(radius_grid[-1])
     cosmic_limit_myr = redshift_model.remaining_time_to_zero_redshift_myr(
         initial_redshift
+    )
+    event_limit_myr = (
+        min(cosmic_limit_myr, stop_time_myr)
+        if stop_time_myr is not None else cosmic_limit_myr
     )
 
     def redshift_at(time_myr: float) -> float:
@@ -215,6 +224,11 @@ def evolve_circular_orbit(
             np.nan,
             np.nan,
         )
+    if stop_time_myr is not None and initial_time_myr >= stop_time_myr:
+        return outcome(
+            "stopped_at_event", initial_time_myr, initial_radius_cm,
+            np.nan, np.nan,
+        )
 
     if observed_frequency_hz(initial_radius_cm, initial_time_myr) >= (
         min_observed_frequency_hz
@@ -242,7 +256,7 @@ def evolve_circular_orbit(
         time_at_outer_myr = initial_time_myr + (
             initial_radius_cm**4 - gas_outer_cm**4
         ) / (4.0 * beta_cm4_s * const.Myr)
-        if time_at_outer_myr < min(duty_cycle_myr, cosmic_limit_myr):
+        if time_at_outer_myr < min(duty_cycle_myr, event_limit_myr):
             def outer_vacuum_radius_cm(time_myr: float) -> float:
                 fourth_power = initial_radius_cm**4 - 4.0 * beta_cm4_s * (
                     time_myr - initial_time_myr
@@ -285,6 +299,7 @@ def evolve_circular_orbit(
                 gas_drift_cm_s=gas_drift,
                 min_observed_frequency_hz=min_observed_frequency_hz,
                 redshift_model=redshift_model,
+                stop_time_myr=stop_time_myr,
             )
 
     gas_active = (
@@ -301,7 +316,7 @@ def evolve_circular_orbit(
         else "outside_gas_outer_edge"
     )
     if gas_active:
-        gas_deadline_myr = min(duty_cycle_myr, cosmic_limit_myr)
+        gas_deadline_myr = min(duty_cycle_myr, event_limit_myr)
         net_initial_cm_s = _coupled_radial_drift_cm_s(
             current_radius_cm, beta_cm4_s, radius_grid, gas_drift
         )
@@ -330,6 +345,11 @@ def evolve_circular_orbit(
                     "gas_active_at_entry",
                 )
             current_time_myr = gas_deadline_myr
+            if stop_time_myr is not None and current_time_myr >= stop_time_myr:
+                return outcome(
+                    "stopped_at_event", current_time_myr, current_radius_cm,
+                    np.nan, np.nan, disk_off_reason="event_during_gas",
+                )
             if current_time_myr >= cosmic_limit_myr:
                 return outcome(
                     "cosmic_time_limit",
@@ -343,7 +363,7 @@ def evolve_circular_orbit(
             gas_active = False
 
     if gas_active:
-        gas_end_time_myr = min(duty_cycle_myr, cosmic_limit_myr)
+        gas_end_time_myr = min(duty_cycle_myr, event_limit_myr)
         safe_log_min = np.log(0.5 * min(isco_radius_cm, gas_inner_cm))
         safe_log_max = np.log(2.0 * max(initial_radius_cm, gas_outer_cm))
 
@@ -434,6 +454,11 @@ def evolve_circular_orbit(
                 np.nan,
                 disk_off_reason="gas_active_at_cosmic_limit",
             )
+        if stop_time_myr is not None and current_time_myr >= stop_time_myr:
+            return outcome(
+                "stopped_at_event", current_time_myr, current_radius_cm,
+                np.nan, np.nan, disk_off_reason="event_during_gas",
+            )
         if not any(event_times.size for event_times in solution.t_events):
             disk_off_reason = "agn_duty_end"
 
@@ -444,7 +469,9 @@ def evolve_circular_orbit(
         (current_radius_cm**4 - isco_radius_cm**4)
         / (4.0 * beta_cm4_s * const.Myr),
     )
-    final_time_myr = min(cosmic_limit_myr, current_time_myr + time_to_isco_myr)
+    final_time_myr = min(
+        event_limit_myr, current_time_myr + time_to_isco_myr
+    )
 
     def vacuum_radius_cm(time_myr: float) -> float:
         fourth_power = max(
@@ -476,6 +503,12 @@ def evolve_circular_orbit(
             disk_off_radius_cm,
             False,
             disk_off_reason,
+        )
+    if stop_time_myr is not None and final_time_myr >= stop_time_myr:
+        return outcome(
+            "stopped_at_event", final_time_myr, final_radius_cm,
+            disk_off_time_myr, disk_off_radius_cm,
+            disk_off_reason=disk_off_reason,
         )
     final_status = (
         "isco_before_entry"

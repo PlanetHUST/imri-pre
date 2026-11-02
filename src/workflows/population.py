@@ -46,6 +46,8 @@ def sample_disk_crossing_population(
     mass_msun, lifetime_yr = stellar_sampling.sample_efficient(
         m_nsc_msun,
         Z=config.metallicity,
+        popiii_max_mass_msun=config.popiii_max_mass_msun,
+        popiii_imf_slope=config.popiii_imf_slope,
     )
     nsc_radius_cm = nsc_orbital.estimate_nsc_radius_cm(
         m_nsc_msun,

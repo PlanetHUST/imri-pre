@@ -14,6 +14,9 @@ from .config import (
     IMRI_EVENTS_FILENAME,
     IMRI_REPEAT_RESULTS_FILENAME,
     IMRI_REPLENISHMENT_LEDGER_FILENAME,
+    IMRI_SOURCE_TRANSITIONS_FILENAME,
+    IMRI_STELLAR_LEDGER_FILENAME,
+    IMRI_WORKFLOW_CHECKPOINTS_FILENAME,
     METADATA_FILENAME,
     IMRIDynConfig,
     migration_contract_name,
@@ -48,6 +51,7 @@ IMRI_RESULT_COLUMN_MAP = [
     ("replenishment_source_exhausted_count_mean", "n_source_exhausted"),
     ("replenishment_unavailable_count_mean", "n_replenishment_unavailable"),
     ("embedded_star_count_mean", "n_emb_star"),
+    ("stellar_unavailable_count_mean", "n_stellar_unavailable"),
     ("embedded_bh_count_mean", "n_emb_bh"),
     ("migration_formed_bh_count_mean", "n_mfbh"),
     ("bh_candidate_count_mean", "n_bh_candi"),
@@ -107,6 +111,20 @@ IMRI_EVENT_COLUMNS = [
     "consumption_time_myr",
     "consumption_status",
     "mass_msun",
+    "zams_mass_msun",
+    "presupernova_mass_msun",
+    "presupernova_phase",
+    "remnant_mass_msun",
+    "remnant_type",
+    "kick_speed_km_s",
+    "kick_applied",
+    "stellar_outcome",
+    "radius_at_collapse_cm",
+    "postkick_semi_major_axis_cm",
+    "postkick_eccentricity",
+    "postkick_inclination_rad",
+    "postkick_damping_status",
+    "postkick_gw_to_band_z0_myr",
     "mass_ratio_secondary_to_primary",
     "bh_origin",
     "band_entry_status",
@@ -215,6 +233,7 @@ IMRI_REPEAT_RESULT_COLUMNS = [
     "n_replenishment_unavailable",
     "f_geo",
     "n_emb_star",
+    "n_stellar_unavailable",
     "n_emb_bh",
     "n_mfbh",
     "n_outside_or_failed",
@@ -263,6 +282,39 @@ IMRI_REPLENISHMENT_LEDGER_COLUMNS = [
     "replacement_event_id",
     "replacement_consumption_time_myr",
     "status",
+]
+
+IMRI_STELLAR_LEDGER_COLUMNS = [
+    "m_smbh_msun", "m_nsc_msun", "repeat", "object_index", "source_id",
+    "task_kind", "injection_time_myr", "final_time_myr",
+    "final_semi_major_axis_cm", "final_eccentricity", "final_inclination_rad",
+    "zams_mass_msun", "presupernova_mass_msun", "presupernova_phase",
+    "collapse_time_myr",
+    "remnant_mass_msun", "remnant_type", "sevn_seed", "kick_speed_km_s",
+    "kick_applied", "stellar_outcome", "damping_status", "radius_at_collapse_cm",
+    "postkick_semi_major_axis_cm", "postkick_eccentricity",
+    "postkick_inclination_rad", "postkick_damping_status",
+    "postkick_gw_to_band_z0_myr", "error",
+]
+
+IMRI_SOURCE_TRANSITION_COLUMNS = [
+    "m_smbh_msun", "m_nsc_msun", "repeat", "object_index", "source_id",
+    "task_kind", "origin_primary_idx", "copy_number", "stage",
+    "injection_time_myr", "time_myr", "collapse_time_myr", "mass_msun",
+    "status", "reason", "event_id", "band_entry_time_myr",
+    "consumption_time_myr",
+]
+
+IMRI_WORKFLOW_CHECKPOINT_COLUMNS = [
+    "m_smbh_msun", "m_nsc_msun", "repeat", "task_seed", "disk_model",
+    "stellar_evolution_model", "natal_kick_model", "redshift",
+    "duty_cycle_myr", "stage",
+    "n_sampled", "n_disk_cross", "n_primary_damped", "n_sources_processed",
+    "n_stellar_rows", "n_event_rows", "n_imri", "n_det",
+    "n_stellar_unavailable", "n_entry_inside_isco", "n_profile_error",
+    "n_replenishment_unavailable", "n_detector_unavailable", "n_isco_consumed",
+    "n_replenished", "n_source_remaining", "rate_imri_per_myr",
+    "rate_det_per_myr",
 ]
 
 EVENT_HIDDEN_COLUMNS = {
@@ -878,6 +930,8 @@ def _rate_evaluation_status(result: IMRIDynSingleResult) -> str:
         return "incomplete_profile_error"
     if result.replenishment_unavailable_count:
         return "incomplete_replenishment_consumption_unavailable"
+    if result.stellar_unavailable_count:
+        return "incomplete_stellar_evolution"
     physical_entry_unavailable = any(
         _boolean_state(event["is_imri_candidate"]) is True
         and not np.isfinite(float(event["detection_time_myr"]))
@@ -933,6 +987,7 @@ def _repeat_output_record(
         "n_replenishment_unavailable": result.replenishment_unavailable_count,
         "f_geo": result.f_geo,
         "n_emb_star": result.embedded_star_count,
+        "n_stellar_unavailable": result.stellar_unavailable_count,
         "n_emb_bh": result.embedded_bh_count,
         "n_mfbh": result.migration_formed_bh_count,
         "n_outside_or_failed": result.outside_or_failed_count,
@@ -957,6 +1012,7 @@ def _repeat_output_record(
         "n_profile_error": result.profile_error_count,
         "n_unavailable": (
             result.band_entry_inside_isco_count + result.profile_error_count
+            + result.stellar_unavailable_count
         ),
         "n_mig_eval": result.migration_evaluated_count,
         "n_mig_finite": result.finite_migration_count,
@@ -1012,6 +1068,82 @@ def save_replenishment_ledger(
             ):
                 raise ValueError("replacement ledger count does not match injections")
     path = output_dir / IMRI_REPLENISHMENT_LEDGER_FILENAME
+    frame.to_csv(path, index=False, float_format="%.9e")
+    print(f"saved: {path}")
+    return frame
+
+
+def save_stellar_ledger(
+    averaged_results: Sequence[IMRIDynAveragedResult], output_dir: Path
+) -> pd.DataFrame:
+    """Persist every evaluated SEVN source, including physical exclusions."""
+    rows = [
+        row
+        for averaged_result in averaged_results
+        for result in averaged_result.results
+        for row in result.stellar_ledger
+    ]
+    frame = pd.DataFrame.from_records(rows, columns=IMRI_STELLAR_LEDGER_COLUMNS)
+    path = output_dir / IMRI_STELLAR_LEDGER_FILENAME
+    frame.to_csv(path, index=False, float_format="%.9e")
+    print(f"saved: {path}")
+    return frame
+
+
+def save_source_transitions(
+    averaged_results: Sequence[IMRIDynAveragedResult], output_dir: Path
+) -> pd.DataFrame:
+    """Persist the source action trace in execution order."""
+    rows = [
+        row
+        for averaged_result in averaged_results
+        for result in averaged_result.results
+        for row in result.source_transitions
+    ]
+    for averaged_result in averaged_results:
+        for result in averaged_result.results:
+            stages = [row["stage"] for row in result.source_transitions]
+            if stages.count("damping") != result.sources_processed_count:
+                raise ValueError("source damping transitions do not balance")
+            if stages.count("entry_detection") != result.sources_processed_count:
+                raise ValueError("source classification transitions do not balance")
+    frame = pd.DataFrame.from_records(rows, columns=IMRI_SOURCE_TRANSITION_COLUMNS)
+    path = output_dir / IMRI_SOURCE_TRANSITIONS_FILENAME
+    frame.to_csv(path, index=False, float_format="%.9e")
+    print(f"saved: {path}")
+    return frame
+
+
+def save_workflow_checkpoints(
+    averaged_results: Sequence[IMRIDynAveragedResult], output_dir: Path
+) -> pd.DataFrame:
+    """Persist cumulative counts at each single-halo workflow boundary."""
+    rows = [
+        row
+        for averaged_result in averaged_results
+        for result in averaged_result.results
+        for row in result.workflow_checkpoints
+    ]
+    for averaged_result in averaged_results:
+        for result in averaged_result.results:
+            stages = [row["stage"] for row in result.workflow_checkpoints]
+            if stages != [
+                "population_selected", "primary_damping_complete",
+                "primary_sources_complete", "consumption_cycle_complete",
+                "rates_finalized",
+            ]:
+                raise ValueError("single-halo workflow checkpoints are incomplete")
+            final = result.workflow_checkpoints[-1]
+            if (
+                final["n_sources_processed"]
+                != result.disk_crossing_objects + result.replenishment_injection_count
+                or final["n_event_rows"] != len(result.imri_events)
+                or final["n_imri"] != result.imri_count
+                or final["n_det"] != result.detectable_imri_count
+            ):
+                raise ValueError("final checkpoint does not match the episode result")
+    frame = pd.DataFrame.from_records(rows, columns=IMRI_WORKFLOW_CHECKPOINT_COLUMNS)
+    path = output_dir / IMRI_WORKFLOW_CHECKPOINTS_FILENAME
     frame.to_csv(path, index=False, float_format="%.9e")
     print(f"saved: {path}")
     return frame

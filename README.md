@@ -9,7 +9,7 @@ The project answers two questions:
 
 It deliberately stops at host-level results now. **No cosmic rate is computed.** It is left for future updates
 
-Start with the [documentation map](docs/README.md) for current contracts and the part-by-part source guide. The former root text exports are preserved in [the reference archive](docs/archive/README.md); their durable decisions and later corrections are combined in [the decision history](docs/reference/history.md).
+Start with the [single-halo workflow](docs/main_workflow.md) for the action and condition path from sampling to final rate, or the [documentation map](docs/README.md) for current contracts and the part-by-part source guide. The former root text exports are preserved in [the reference archive](docs/archive/README.md); their durable decisions and later corrections are combined in [the decision history](docs/reference/history.md).
 
 ---
 
@@ -23,17 +23,22 @@ sample an NSC population  →  select disk-crossing orbits  →  damp them into 
    →  classify IMRI candidates  →  evaluate LISA SNR and detectability
    →  at ISCO consumption, refill the vacated orbit from the finite NSC pool
    →  repeat damping and classification until no channel or donor remains
+   →  finalize rates and write per-stage checkpoints
 ```
 
 It runs the configured number of Monte Carlo repeats internally and reports
 their average. One merger-tree *job* is exactly one such run.
+The control loop is in `src/workflows/single_work.py`; the physical actions
+and detector calculations stay in their respective modules. Its additive
+`imri_workflow_checkpoints.csv` and `imri_source_transitions.csv` outputs make
+the stage counts and each source's action path inspectable.
 
 ---
 
 ## The physical pipeline
 
 ```
-host  →  AGN disk  →  compact-object population  →  disk crossing  →  damping
+host  →  AGN disk  →  stellar population  →  disk crossing  →  damping
       →  migration (torque → gap → traps → radial evolution)
       →  gas/GW handoff  →  IMRI event classification  →  LISA SNR → detectability
                                               └→ ISCO consumption → replenishment
@@ -101,6 +106,37 @@ Consumption-driven replenishment is enabled by default. Use
 `--no-consumption-replenishment` to run the initial disk-crossing cohort only.
 The [replenishment plan](docs/plans/active/imri_consumption_replenishment.md)
 records the finite-source and event-time assumptions.
+
+### SEVN remnant masses and natal kicks
+
+The opt-in stellar mode keeps the same sampled NSC, disk, and finite donor
+supply. It gets collapse age, remnant type/mass, and kick speed from the
+installed `sevnpy` backend. The kick-to-orbit operation is implemented locally in
+`physical_process.natal_kick`. In this workspace, the `sevnpy_env` environment
+contains SEVN:
+
+```bash
+export PYTHONPATH="$PWD/src"
+SEVN_PY=/home/planet/miniconda3/envs/sevnpy_env/bin/python
+SEVN_TABLES=/home/planet/Phy/pre-codes/sevn/tables
+"$SEVN_PY" scripts/main.py 20 output/sevn_example 4 \
+    --smbh-masses 1e5 --nsc-masses 2e5 --redshift 15 --base-seed 12345 \
+    --stellar-evolution-model sevn --natal-kick-model sevn \
+    --sevn-hydrogen-tables "$SEVN_TABLES/SEVN_parsec_ov05_AGB_popIII" \
+    --sevn-helium-tables "$SEVN_TABLES/SEVNtracks_parsec_pureHe36"
+```
+
+Use `--natal-kick-model none` for the paired remnant-mass control. IMRI's
+`--metallicity` is in solar units; SEVN receives the absolute mass fraction.
+The run writes `imri_stellar_ledger.csv` with one row per evaluated source,
+including sources that cannot become BHs. The metadata records SEVN options,
+versions, and table hashes. Pre-collapse drag still uses fixed ZAMS mass; the
+mass change occurs at collapse. If a bound eccentric post-kick orbit could
+reach the LISA band but cannot be evaluated by the circular detector model,
+its status makes the rate incomplete. Sources outside the selected SEVN track
+coverage also make the rate incomplete; there is no silent mass or metallicity
+clamp. See the
+[integration plan](docs/plans/active/sevn_remnant_kick_integration.md).
 
 ### A merger-tree batch
 
@@ -227,3 +263,72 @@ importable directly.
 This cleanup changes documentation and reference locations only. Existing
 scientific outputs under `output/` and `figs/` remain evidence for the source
 and inputs that produced them, rather than current numerical baselines.
+
+### Pop III IMF sensitivity study
+
+`--popiii-max-mass-msun` and `--popiii-imf-slope` control the upper mass and
+power-law exponent `dN/dm ∝ m^-alpha` for the Pop III branch. Their defaults
+remain 197 Msun and 1.77. These options do not alter the Pop II sampler. SEVN
+track coverage remains authoritative and sources outside it are unavailable.
+
+Run the reproducible endpoint map and checkpointed single-halo study with:
+
+```bash
+PYTHONPATH=src /home/planet/miniconda3/envs/sevnpy_env/bin/python \
+  scripts/run_imf_sensitivity.py --stage all --repeats 20 --cpus 2
+```
+
+Each realization has its own `checkpoint.json`, log, initial population, and
+workflow outputs. Re-running the command resumes completed checkpoints. The
+study uses a fixed NSC mass and paired base seeds; changing the IMF changes the
+population size and RNG history, so equal source IDs across scenarios do not
+identify the same object. `repeat_summary.csv` and `scenario_summary.csv`
+are refreshed as repeats complete. To evolve all sampled sources above the
+diagnostic mass cut, including those that did not cross the disk, run
+`PYTHONPATH=src python scripts/census_high_mass_sevn.py output/imf_sensitivity_20261029`.
+The optional all-source endpoint census can be run with
+`PYTHONPATH=src python scripts/census_initial_sevn.py output/imf_sensitivity_20261029 --follow`.
+The mass threshold 240.5 Msun is a diagnostic
+initial-mass cut for the specified SEVN table and metallicity, not a universal
+black-hole mass-gap boundary. The stellar ledger includes evaluated disk
+crossers and donors, not the full population of stellar endpoints.
+
+After the realization and census checkpoints complete, refresh the derived
+artifacts with:
+
+```bash
+PYTHONPATH=src python scripts/enrich_sevn_endpoint_map.py output/imf_sensitivity_20261029
+PYTHONPATH=src python scripts/run_imf_sensitivity.py --stage summarize
+PYTHONPATH=src python scripts/report_imf_sensitivity.py output/imf_sensitivity_20261029
+PYTHONPATH=src python scripts/summarize_imf_masses.py output/imf_sensitivity_20261029
+MPLBACKEND=Agg python scripts/plot_imf_endpoints.py output/imf_sensitivity_20261029
+MPLBACKEND=Agg python scripts/plot_imf_study.py output/imf_sensitivity_20261029
+PYTHONPATH=src python scripts/validate_imf_study.py output/imf_sensitivity_20261029
+```
+
+Use the same SEVN environment as the simulation. Full-NSC census endpoints are
+eventual stellar outcomes; they do not imply that every remnant formed during
+the modeled AGN episode.
+
+To extend the IMF study to the archived redshift, duty-cycle, and migration
+cases, first complete `output/imf_sensitivity_20261029`. The torque
+`z15_duty10` results are reused from that study. Run the other cases with:
+
+```bash
+for case in z10_duty10 z15_duty100; do
+  PYTHONPATH=src python scripts/run_imf_redshift_lifetime.py --model torque --case "$case"
+done
+for case in z10_duty10 z15_duty10 z15_duty100; do
+  PYTHONPATH=src python scripts/run_imf_redshift_lifetime.py --model semi --case "$case"
+done
+PYTHONPATH=src python scripts/report_imf_redshift_lifetime.py
+python scripts/summarize_archived_imri.py output/imf_redshift_lifetime_20261029
+python scripts/write_pan_comparison_report.py output/imf_redshift_lifetime_20261029
+PYTHONPATH=src:scripts python scripts/validate_imf_redshift_lifetime.py output/imf_redshift_lifetime_20261029 --require-complete
+MPLBACKEND=Agg python scripts/plot_imf_redshift_lifetime.py output/imf_redshift_lifetime_20261029
+```
+
+Run those commands in the SEVN environment. Each completed realization writes
+its own checkpoint and `run.log`; the analysis scripts read only saved results.
+The previous fixed-mass archive uses a different repeat-seed schedule from this
+IMF study, so its aggregate comparison is not a matched-source experiment.

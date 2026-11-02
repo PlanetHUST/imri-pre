@@ -1,6 +1,6 @@
 # Execution, ownership and verification contract
 
-Reviewed against the current files on 2026-10-22. This guide describes present
+Reviewed against the current files on 2026-10-28. This guide describes present
 behavior; archived plans record requested or earlier behavior.
 
 ## Execution path
@@ -9,7 +9,8 @@ behavior; archived plans record requested or earlier behavior.
       single-halo: workflows.workflow.run_simulation
         -> IMRISingleWorkflow.run_single_simulation
         -> cached pAGN disk -> population -> damping workers
-        -> IMRIEventEvaluator -> CSV/JSON persistence
+        -> per-source action chain -> chronological ISCO donor loop
+        -> one rate finalization -> CSV/JSON persistence
       --tree: workflows.tree_batch.run_tree_batch
         -> reader -> host mapping -> run_single_halo -> same kernel
 
@@ -17,6 +18,8 @@ Each grid point runs num_repeats and averages its own realizations. A tree job
 is a full local run for one host, not a single sampled object. The outer job
 pool and inner damping pool are distinct; batch mode defaults the inner pool
 to one when it was not explicitly set.
+The [main workflow](main_workflow.md) gives the guards, clocks, and transition
+records for one episode.
 
 ## Scientific ownership
 
@@ -90,8 +93,17 @@ The main kernel saves:
 | imri_averaged_results.csv | Per-grid-point averages and rate validity |
 | imri_repeat_results.csv | Per-repeat seeds, counts, status partitions and rates |
 | imri_events.csv | Per-object intrinsic and detector outcomes |
+| imri_stellar_ledger.csv | Opt-in SEVN source endpoints, kick outcomes, and status for every selected or replacement object |
+| imri_replenishment_ledger.csv | Chronological ISCO consumptions and finite donor injections |
+| imri_source_transitions.csv | Damping, optional stellar handoff, and entry/detection actions by source |
+| imri_workflow_checkpoints.csv | Five cumulative stage snapshots per repeat, including controls and unavailable counts; rates appear only at finalization |
 | simulation_metadata.json | Resolved parameters, migration contract and runtime |
 | intermediate/migration_*.json | Per-repeat migration diagnostics |
+
+In the stellar ledger, `postkick_gw_to_band_z0_myr` is the Peters time to the
+four-times-pericenter-frequency screening boundary at `z=0`. It is populated
+for bound, non-embedded kicked BHs and is not an eccentric waveform SNR or a
+precise observed band-entry time.
 
 Tree output adds config/, hosts/, jobs/, simulations/, diagnostics/, optional
 batch figures/ and summary.json. The current single-halo main workflow saves
@@ -116,6 +128,7 @@ plots and a fixed default seed are not implemented by this CLI.
 | python scripts/analyse_population_torque.py --help | Saved-population torque regime analysis |
 | python scripts/report_event_summary.py --help | Saved event summary options |
 | python scripts/compare_baseline.py --help | Scientific artifact comparison |
+| python scripts/check_single_halo_workflow.py output/dyn_results | Saved checkpoint, source, donor and rate conservation |
 
 Set MPLCONFIGDIR=/tmp/matplotlib in restricted environments. The working
 interpreter used for recent checks is

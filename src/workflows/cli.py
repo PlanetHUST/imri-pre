@@ -129,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="comma-separated NSC mass values in Msun",
     )
     parser.add_argument("--metallicity", type=float, default=DEFAULT_METALLICITY)
+    parser.add_argument("--popiii-max-mass-msun", type=float, default=197.0,
+                        help="upper initial stellar mass for Pop III sampling [Msun]")
+    parser.add_argument("--popiii-imf-slope", type=float, default=1.77,
+                        help="positive alpha in dN/dm proportional to m^-alpha")
 
     parser.add_argument(
         "--initial-stellar-density-gamma",
@@ -182,6 +186,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=IMRI_SNR_THRESHOLD,
         help="physical sky-averaged LISA SNR detection threshold",
     )
+    parser.add_argument(
+        "--stellar-evolution-model", choices=("fixed_mass", "sevn"),
+        default="fixed_mass",
+        help="stellar lifetime and remnant-mass source",
+    )
+    parser.add_argument(
+        "--natal-kick-model", choices=("none", "sevn"), default="none",
+        help="effective natal kick from the same SEVN stellar evolution",
+    )
+    parser.add_argument("--sevn-hydrogen-tables", type=Path)
+    parser.add_argument("--sevn-helium-tables", type=Path)
     parser.add_argument(
         "--lisa-mission-duration-years",
         type=float,
@@ -412,6 +427,8 @@ def build_config_from_arguments(
         duty_cycle_myr=arguments.duty_cycle_myr,
         output_dir=arguments.output_dir,
         metallicity=arguments.metallicity,
+        popiii_max_mass_msun=arguments.popiii_max_mass_msun,
+        popiii_imf_slope=arguments.popiii_imf_slope,
         initial_stellar_density_gamma=arguments.initial_stellar_density_gamma,
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
         disk_model=disk_model,
@@ -433,6 +450,10 @@ def build_config_from_arguments(
         print_debug_results=arguments.debug_results,
         base_seed=arguments.base_seed,
         consumption_replenishment=not arguments.no_consumption_replenishment,
+        stellar_evolution_model=arguments.stellar_evolution_model,
+        natal_kick_model=arguments.natal_kick_model,
+        sevn_hydrogen_tables=arguments.sevn_hydrogen_tables,
+        sevn_helium_tables=arguments.sevn_helium_tables,
     )
 
 

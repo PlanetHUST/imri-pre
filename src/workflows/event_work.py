@@ -10,7 +10,7 @@ from physical_process import constants as const
 from physical_process import migration as disk_migration
 from physical_process import gw_frequency_radius as gw_helpers
 from physical_process.agn import AGNProperties
-from physical_process.damp import DampingStatus
+from physical_process.damp import DampingCalculator, DampingStatus, OrbitalState
 from physical_process.orbital_evolution import (
     continue_circular_band_track,
     continue_to_isco,
@@ -48,6 +48,7 @@ from .models import (
 )
 from physical_process.redshift_evolve import RedshiftEvolution
 from .runtime import vprint
+from .stellar_evolution import apply_sevn_kick
 
 BAND_ENTRY_IN_MIGRATION_DOMAIN = "entry_in_migration_domain"
 BAND_ENTRY_HANDOFF = "entry_below_migration_domain_but_above_isco"
@@ -134,6 +135,181 @@ class IMRIEventEvaluator:
         self.config: IMRIDynConfig = engine.config
         self.duty_cycle_myr = engine.duty_cycle_myr
 
+    def _gas_drift_for_mass(
+        self,
+        result: IMRIDynSingleResult,
+        agn_properties: AGNProperties,
+        disk_data: DiskProfiles,
+        mass_msun: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Use the selected IMRI migration prescription for one fixed mass."""
+        if self.config.disk_model == TORQUE_WITH_TRAP:
+            torque_profile = self.engine.get_torque_profile(
+                disk_data, agn_properties.smbh_mass_msun, mass_msun
+            )
+            radius_cm = np.asarray(torque_profile.radius_cm, dtype=float)
+            gas_torque_cgs = self._migration_torque_cgs(torque_profile)
+            primary_mass_g = result.m_smbh_msun * const.msun
+            secondary_mass_g = mass_msun * const.msun
+            total_mass_g = primary_mass_g + secondary_mass_g
+            reduced_mass_g = primary_mass_g * secondary_mass_g / total_mass_g
+            angular_momentum_derivative_g_cm_s = (
+                0.5 * reduced_mass_g * np.sqrt(const.G * total_mass_g / radius_cm)
+            )
+            return radius_cm, gas_torque_cgs / angular_momentum_derivative_g_cm_s
+        if self.config.disk_model == SEMI_WITHOUT_TRAP:
+            radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
+            local_time_s = semi_analytic_local_time_s(
+                radius_cm,
+                np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
+                np.asarray(disk_data["aspect_ratio"], dtype=float),
+                mass_msun * const.msun,
+                agn_properties.smbh_mass_msun,
+                float(disk_data["torque_alpha"]),
+                self.config.gap_opening_condition,
+                self.config.consider_type_ii_migration,
+            )
+            return radius_cm, -radius_cm / local_time_s
+        raise RuntimeError(f"unsupported disk migration model: {self.config.disk_model}")
+
+    def resolve_embedded_stellar_event(
+        self,
+        result: IMRIDynSingleResult,
+        agn_properties: AGNProperties,
+        disk_data: DiskProfiles,
+        damping_result: DampingResult,
+        calculator: DampingCalculator,
+    ) -> DampingResult:
+        """Advance an embedded star to SEVN collapse before the BH handoff."""
+        if (
+            self.config.stellar_evolution_model != "sevn"
+            or damping_result["status"] is not DampingStatus.EMBEDDED_STAR
+        ):
+            return damping_result
+        collapse_myr = damping_result["formation_time_myr"]
+        if collapse_myr <= damping_result["final_time_myr"]:
+            raise AssertionError("embedded star must precede its SEVN collapse")
+        radius_cm, gas_drift_cm_s = self._gas_drift_for_mass(
+            result, agn_properties, disk_data, damping_result["mass_msun"]
+        )
+        redshift_model = RedshiftEvolution(
+            self.config.detector_hubble_constant_km_s_mpc,
+            self.config.detector_omega_m,
+        )
+        pre = evolve_circular_orbit(
+            primary_mass_msun=result.m_smbh_msun,
+            secondary_mass_msun=damping_result["mass_msun"],
+            initial_radius_cm=damping_result["final_semi_major_axis_cm"],
+            initial_time_myr=damping_result["final_time_myr"],
+            initial_redshift=self.config.redshift,
+            duty_cycle_myr=self.config.duty_cycle_myr,
+            disk_inner_radius_cm=float(disk_data["inner_radius_cm"]),
+            gas_radius_cm=radius_cm,
+            gas_drift_cm_s=gas_drift_cm_s,
+            min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
+            redshift_model=redshift_model,
+            stop_time_myr=collapse_myr,
+        )
+        if pre.status != "stopped_at_event":
+            return damping_result
+        changed = damping_result.copy()
+        changed["radius_at_collapse_cm"] = pre.final_radius_cm
+        if damping_result.get("remnant_type") != 6:
+            changed["status"] = DampingStatus.NO_BH_REMNANT
+            changed["stellar_outcome"] = "non_bh_after_migration"
+            return changed
+        state = OrbitalState(
+            semi_major_axis_cm=pre.final_radius_cm,
+            eccentricity=0.0,
+            inclination_rad=0.0,
+            cos_omega=1.0,
+            time_s=collapse_myr * const.Myr,
+        )
+        if self.config.natal_kick_model == "sevn":
+            kicked = apply_sevn_kick(
+                state,
+                kick_speed_km_s=float(damping_result["kick_speed_km_s"]),
+                smbh_mass_msun=result.m_smbh_msun,
+                seed=int(damping_result["sevn_seed"]),
+            )
+            changed["kick_applied"] = float(damping_result["kick_speed_km_s"]) > 0
+        else:
+            kicked = state
+        if kicked is None:
+            changed["status"] = DampingStatus.KICK_UNBOUND
+            changed["stellar_outcome"] = "unbound_after_migration_kick"
+            return changed
+        changed["postkick_eccentricity"] = kicked.eccentricity
+        changed["postkick_inclination_rad"] = kicked.inclination_rad
+        changed["postkick_semi_major_axis_cm"] = kicked.semi_major_axis_cm
+        changed["mass_msun"] = float(damping_result["remnant_mass_msun"])
+        changed["mass_g"] = changed["mass_msun"] * const.msun
+        if collapse_myr >= self.config.duty_cycle_myr:
+            if kicked.eccentricity > 0.01:
+                changed["status"] = DampingStatus.STELLAR_UNAVAILABLE
+                changed["stellar_outcome"] = "eccentric_vacuum_after_kick"
+                return changed
+            # The AGN is off; the existing circular GW continuation starts
+            # from this remnant orbit if the kick leaves it nearly circular.
+            eligible = True
+        else:
+            eligible = calculator.embedding_criteria(kicked).eligible
+        if not eligible:
+            post = calculator.damping_simulation(
+                changed["mass_g"], kicked, collapse_myr, "BH"
+            )
+            kicked = post.final_state
+            changed["postkick_damping_status"] = post.status.value
+            if post.status is not DampingStatus.EMBEDDED_BH:
+                changed.update(
+                    final_time_s=kicked.time_s,
+                    final_time_myr=kicked.time_s / const.Myr,
+                    final_semi_major_axis_cm=kicked.semi_major_axis_cm,
+                    final_eccentricity=kicked.eccentricity,
+                    final_inclination_rad=kicked.inclination_rad,
+                    final_cos_omega=kicked.cos_omega,
+                )
+                if post.status in (
+                    DampingStatus.DAMPING_INCOMPLETE,
+                    DampingStatus.OUTSIDE_DISK,
+                ):
+                    # Screen a non-embedded remnant with Peters evolution to
+                    # a generous pericenter-frequency proxy at z=0. A
+                    # plausible entry remains unavailable without an
+                    # eccentric detector model.
+                    gw_to_band_myr = gw_helpers.optimistic_eccentric_band_time_myr(
+                        result.m_smbh_msun,
+                        changed["mass_msun"],
+                        kicked.semi_major_axis_cm,
+                        kicked.eccentricity,
+                        self.config.lisa_min_gw_frequency_hz,
+                    )
+                    changed["postkick_gw_to_band_z0_myr"] = gw_to_band_myr
+                    cosmic_remaining_myr = (
+                        redshift_model.remaining_time_to_zero_redshift_myr(
+                            self.config.redshift
+                        ) - kicked.time_s / const.Myr
+                    )
+                    if gw_to_band_myr > cosmic_remaining_myr:
+                        changed["status"] = post.status
+                        changed["stellar_outcome"] = "postkick_no_band_before_z0"
+                        return changed
+                changed["status"] = DampingStatus.STELLAR_UNAVAILABLE
+                changed["stellar_outcome"] = "postkick_orbit_not_embedded"
+                return changed
+        changed.update(
+            status=DampingStatus.EMBEDDED_BH,
+            final_time_s=kicked.time_s,
+            final_time_myr=kicked.time_s / const.Myr,
+            final_semi_major_axis_cm=kicked.semi_major_axis_cm,
+            final_eccentricity=kicked.eccentricity,
+            final_inclination_rad=kicked.inclination_rad,
+            final_cos_omega=kicked.cos_omega,
+            damping_time_myr=(kicked.time_s - changed["state_time_myr"] * const.Myr) / const.Myr,
+            stellar_outcome="bh_formed_during_migration",
+        )
+        return changed
+
     def classify_imri_candidates(
         self,
         result: IMRIDynSingleResult,
@@ -152,6 +328,8 @@ class IMRIEventEvaluator:
                 result.embedded_bh_count += 1
             else:
                 result.outside_or_failed_count += 1
+                if damping_result["status"] is DampingStatus.STELLAR_UNAVAILABLE:
+                    result.stellar_unavailable_count += 1
                 continue
 
             result.band_entry_evaluated_count += 1
@@ -194,6 +372,8 @@ class IMRIEventEvaluator:
                 continue
 
             result.imri_events.append(event)
+            if damping_result.get("stellar_outcome") == "bh_formed_during_migration":
+                event["bh_origin"] = BH_ORIGIN_MIGRATION_FORMED
             classified_events.append(event)
             if event["consumption_status"] == "numerical_failure":
                 result.replenishment_unavailable_count += 1
@@ -269,10 +449,15 @@ class IMRIEventEvaluator:
             elif event["is_imri_candidate"] is False:
                 result.no_imri_count += 1
 
+        return classified_events
+
+    def finalize_rates(self, result: IMRIDynSingleResult) -> None:
+        """Apply the existing rate validity and duty denominator once per episode."""
         if (
             result.band_entry_inside_isco_count > 0
             or result.profile_error_count > 0
             or result.replenishment_unavailable_count > 0
+            or result.stellar_unavailable_count > 0
         ):
             result.imri_rate_per_myr = np.nan
             result.imri_mass_rate_msun_per_myr = np.nan
@@ -286,6 +471,7 @@ class IMRIEventEvaluator:
             result.band_entry_inside_isco_count > 0
             or result.profile_error_count > 0
             or result.replenishment_unavailable_count > 0
+            or result.stellar_unavailable_count > 0
             or result.detector_unavailable_imri_count > 0
         )
         if detector_rate_unavailable:
@@ -298,7 +484,6 @@ class IMRIEventEvaluator:
             result.detectable_imri_mass_rate_msun_per_myr = (
                 result.detectable_imri_mass_msun / self.duty_cycle_myr
             )
-        return classified_events
 
     def _imri_event_record(
         self,
@@ -350,27 +535,9 @@ class IMRIEventEvaluator:
                 mission_duration_years=self.config.lisa_mission_duration_years,
             )
         else:
-            torque_profile: TorqueProfile | None = None
-            if self.config.disk_model == TORQUE_WITH_TRAP:
-                torque_profile = self.engine.get_torque_profile(
-                    disk_data,
-                    agn_properties.smbh_mass_msun,
-                    migrator_mass_msun,
-                )
-                migration_radius_cm = np.asarray(
-                    torque_profile.radius_cm,
-                    dtype=float,
-                )
-            elif self.config.disk_model == SEMI_WITHOUT_TRAP:
-                migration_radius_cm = np.asarray(
-                    disk_data["radius_cm"],
-                    dtype=float,
-                )
-            else:
-                raise RuntimeError(
-                    "unsupported disk migration model: "
-                    f"{self.config.disk_model}"
-                )
+            migration_radius_cm, gas_drift_cm_s = self._gas_drift_for_mass(
+                result, agn_properties, disk_data, migrator_mass_msun
+            )
             if boundary.status == BAND_ENTRY_INSIDE_ISCO:
                 # Legacy geometric category: the initial-z formal boundary
                 # lies below the gas domain, but the moving band is soluble.
@@ -388,35 +555,6 @@ class IMRIEventEvaluator:
             # selected handoff radius or gas-only travel time drives physics.
             migration_evaluated = True
             migration_status = "coupled_evaluated"
-
-            if self.config.disk_model == TORQUE_WITH_TRAP:
-                if torque_profile is None:
-                    raise RuntimeError("torque migration profile was not built")
-                gas_torque_cgs = self._migration_torque_cgs(torque_profile)
-                primary_mass_g = result.m_smbh_msun * const.msun
-                secondary_mass_g = damping_result["mass_g"]
-                total_mass_g = primary_mass_g + secondary_mass_g
-                reduced_mass_g = primary_mass_g * secondary_mass_g / total_mass_g
-                angular_momentum_derivative_g_cm_s = (
-                    0.5
-                    * reduced_mass_g
-                    * np.sqrt(const.G * total_mass_g / migration_radius_cm)
-                )
-                gas_drift_cm_s = gas_torque_cgs / (
-                    angular_momentum_derivative_g_cm_s
-                )
-            else:
-                local_time_s = semi_analytic_local_time_s(
-                    migration_radius_cm,
-                    np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
-                    np.asarray(disk_data["aspect_ratio"], dtype=float),
-                    damping_result["mass_g"],
-                    agn_properties.smbh_mass_msun,
-                    float(disk_data["torque_alpha"]),
-                    self.config.gap_opening_condition,
-                    self.config.consider_type_ii_migration,
-                )
-                gas_drift_cm_s = -migration_radius_cm / local_time_s
 
             orbit_decision = evolve_circular_orbit(
                 primary_mass_msun=result.m_smbh_msun,
@@ -604,6 +742,26 @@ class IMRIEventEvaluator:
             "consumption_time_myr": consumption_time_myr,
             "consumption_status": consumption_status,
             "mass_msun": migrator_mass_msun,
+            "zams_mass_msun": damping_result.get("zams_mass_msun", migrator_mass_msun),
+            "presupernova_mass_msun": damping_result.get("presupernova_mass_msun", np.nan),
+            "presupernova_phase": damping_result.get("presupernova_phase"),
+            "remnant_mass_msun": damping_result.get("remnant_mass_msun", np.nan),
+            "remnant_type": damping_result.get("remnant_type"),
+            "kick_speed_km_s": damping_result.get("kick_speed_km_s", np.nan),
+            "kick_applied": damping_result.get("kick_applied", False),
+            "stellar_outcome": damping_result.get("stellar_outcome", "fixed_mass"),
+            "radius_at_collapse_cm": damping_result.get("radius_at_collapse_cm", np.nan),
+            "postkick_semi_major_axis_cm": damping_result.get(
+                "postkick_semi_major_axis_cm", np.nan
+            ),
+            "postkick_eccentricity": damping_result.get("postkick_eccentricity", np.nan),
+            "postkick_inclination_rad": damping_result.get("postkick_inclination_rad", np.nan),
+            "postkick_damping_status": damping_result.get(
+                "postkick_damping_status", "not_applicable"
+            ),
+            "postkick_gw_to_band_z0_myr": damping_result.get(
+                "postkick_gw_to_band_z0_myr", np.nan
+            ),
             "mass_ratio_secondary_to_primary": (
                 migrator_mass_msun / detect_decision.final_smbh_mass_msun
             ),

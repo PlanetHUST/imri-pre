@@ -23,6 +23,9 @@ IMRI_AVERAGED_RESULTS_FILENAME = "imri_averaged_results.csv"
 IMRI_EVENTS_FILENAME = "imri_events.csv"
 IMRI_REPEAT_RESULTS_FILENAME = "imri_repeat_results.csv"
 IMRI_REPLENISHMENT_LEDGER_FILENAME = "imri_replenishment_ledger.csv"
+IMRI_STELLAR_LEDGER_FILENAME = "imri_stellar_ledger.csv"
+IMRI_SOURCE_TRANSITIONS_FILENAME = "imri_source_transitions.csv"
+IMRI_WORKFLOW_CHECKPOINTS_FILENAME = "imri_workflow_checkpoints.csv"
 METADATA_FILENAME = "simulation_metadata.json"
 IMRI_LISA_MIN_GW_FREQUENCY_HZ = 1.0e-3
 IMRI_LISA_MAX_GW_FREQUENCY_HZ = 1.0e-1
@@ -114,6 +117,12 @@ class IMRIDynConfig:
         print_debug_results: bool,
         base_seed: int | None = None,
         consumption_replenishment: bool = True,
+        stellar_evolution_model: str = "fixed_mass",
+        natal_kick_model: str = "none",
+        sevn_hydrogen_tables: str | Path | None = None,
+        sevn_helium_tables: str | Path | None = None,
+        popiii_max_mass_msun: float = 197.0,
+        popiii_imf_slope: float = 1.77,
         # Internal NSC model parameters
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
@@ -140,6 +149,20 @@ class IMRIDynConfig:
                 raise ValueError("base seed must be nonnegative")
         if not isinstance(consumption_replenishment, bool):
             raise TypeError("consumption_replenishment must be a bool")
+        if stellar_evolution_model not in ("fixed_mass", "sevn"):
+            raise ValueError("stellar evolution model must be fixed_mass or sevn")
+        if natal_kick_model not in ("none", "sevn"):
+            raise ValueError("natal kick model must be none or sevn")
+        if natal_kick_model == "sevn" and stellar_evolution_model != "sevn":
+            raise ValueError("SEVN kicks require SEVN stellar evolution")
+        if stellar_evolution_model == "sevn" and (
+            sevn_hydrogen_tables is None or sevn_helium_tables is None
+        ):
+            raise ValueError("SEVN requires both hydrogen and helium table paths")
+        if not np.isfinite(popiii_max_mass_msun) or popiii_max_mass_msun <= 13.6:
+            raise ValueError("Pop III maximum mass must be finite and exceed 13.6 Msun")
+        if not np.isfinite(popiii_imf_slope):
+            raise ValueError("Pop III IMF slope must be finite")
         if disk_model not in DISK_MODELS:
             raise ValueError(f"disk model must be one of {DISK_MODELS}")
         if gap_opening_condition not in GAP_OPENING_CONDITIONS:
@@ -193,6 +216,8 @@ class IMRIDynConfig:
         self.duty_cycle_myr = duty_cycle_myr
         self.output_dir = Path(output_dir)
 
+        self.popiii_max_mass_msun = float(popiii_max_mass_msun)
+        self.popiii_imf_slope = float(popiii_imf_slope)
         self.metallicity = metallicity
         self.initial_stellar_density_gamma = initial_stellar_density_gamma
         self.nsc_radius_pc_at_reference_mass = nsc_radius_pc_at_reference_mass
@@ -226,6 +251,16 @@ class IMRIDynConfig:
         self.print_debug_results = print_debug_results
         self.base_seed = int(base_seed) if base_seed is not None else None
         self.consumption_replenishment = consumption_replenishment
+        self.stellar_evolution_model = stellar_evolution_model
+        self.natal_kick_model = natal_kick_model
+        self.sevn_hydrogen_tables = (
+            Path(sevn_hydrogen_tables).expanduser().resolve()
+            if sevn_hydrogen_tables is not None else None
+        )
+        self.sevn_helium_tables = (
+            Path(sevn_helium_tables).expanduser().resolve()
+            if sevn_helium_tables is not None else None
+        )
 
     def get_param_grid(self) -> tuple[FloatArray, FloatArray]:
         """Return the explicitly selected SMBH and NSC masses [Msun]."""

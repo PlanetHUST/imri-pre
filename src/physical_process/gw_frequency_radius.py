@@ -236,6 +236,82 @@ def peters_time_to_lisa_band_myr(
     return float(max(0.0, start_time_myr - entry_time_myr))
 
 
+def optimistic_eccentric_band_time_myr(
+    primary_mass_msun: float,
+    secondary_mass_msun: float,
+    semi_major_axis_cm: float,
+    eccentricity: float,
+    min_observed_frequency_hz: float,
+    harmonic_factor: float = 4.0,
+) -> float:
+    """Peters time to a generous eccentric frequency proxy at redshift zero.
+
+    The proxy is ``harmonic_factor`` times twice the orbital frequency at
+    pericenter. Peters evolution changes both ``a`` and ``e``; the invariant
+    determines their path and the merger-time difference gives elapsed time.
+    This is a screening convention, not an eccentric waveform or detector SNR.
+    """
+    if not 0.0 <= eccentricity < 1.0:
+        raise ValueError("eccentricity must satisfy 0 <= e < 1")
+    if not np.isfinite(harmonic_factor) or harmonic_factor < 1.0:
+        raise ValueError("harmonic factor must be finite and at least one")
+    if not np.isfinite(min_observed_frequency_hz) or min_observed_frequency_hz <= 0.0:
+        raise ValueError("minimum observed frequency must be finite and positive")
+
+    total_mass_msun = primary_mass_msun + secondary_mass_msun
+
+    def proxy_frequency_hz(axis_cm: float, e: float) -> float:
+        boost = np.sqrt(1.0 + e) / (1.0 - e) ** 1.5
+        return harmonic_factor * gw_frequency_hz(total_mass_msun, axis_cm) * boost
+
+    if proxy_frequency_hz(semi_major_axis_cm, eccentricity) >= min_observed_frequency_hz:
+        return 0.0
+    if eccentricity < PETERS_ECCENTRICITY_SMALL:
+        threshold_axis_cm = gw_radius_for_frequency_cm(
+            total_mass_msun, min_observed_frequency_hz / harmonic_factor
+        )
+        return float(
+            max(
+                0.0,
+                peters_merger_time_myr(
+                    primary_mass_msun, secondary_mass_msun, semi_major_axis_cm, 0.0
+                )
+                - peters_merger_time_myr(
+                    primary_mass_msun, secondary_mass_msun, threshold_axis_cm, 0.0
+                ),
+            )
+        )
+
+    def axis_at_e(e: float) -> float:
+        ratio = (e / eccentricity) ** (12.0 / 19.0)
+        ratio *= (1.0 - eccentricity**2) / (1.0 - e**2)
+        ratio *= (
+            (1.0 + 121.0 / 304.0 * e**2)
+            / (1.0 + 121.0 / 304.0 * eccentricity**2)
+        ) ** (870.0 / 2299.0)
+        return semi_major_axis_cm * ratio
+
+    lower_e, upper_e = 0.0, eccentricity
+    for _ in range(70):
+        middle_e = (lower_e + upper_e) / 2.0
+        if proxy_frequency_hz(axis_at_e(middle_e), middle_e) >= min_observed_frequency_hz:
+            lower_e = middle_e
+        else:
+            upper_e = middle_e
+    crossing_e = (lower_e + upper_e) / 2.0
+    return float(
+        max(
+            0.0,
+            peters_merger_time_myr(
+                primary_mass_msun, secondary_mass_msun, semi_major_axis_cm, eccentricity
+            )
+            - peters_merger_time_myr(
+                primary_mass_msun, secondary_mass_msun, axis_at_e(crossing_e), crossing_e
+            ),
+        )
+    )
+
+
 def peters_radius_after_time_cm(
     primary_mass_msun: float,
     secondary_mass_msun: float,

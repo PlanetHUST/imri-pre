@@ -21,6 +21,9 @@ from .outputs import (
     save_migration_diagnostics,
     save_repeat_results,
     save_replenishment_ledger,
+    save_source_transitions,
+    save_stellar_ledger,
+    save_workflow_checkpoints,
     save_results,
 )
 from .reporting import debug_print_result, print_header, print_result_summary
@@ -43,6 +46,18 @@ def derive_task_seed(
 
 def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     """Run the configured IMRI mass grid and return averaged results."""
+    if config.stellar_evolution_model == "sevn":
+        if (
+            config.sevn_hydrogen_tables is None
+            or config.sevn_helium_tables is None
+            or not config.sevn_hydrogen_tables.is_dir()
+            or not config.sevn_helium_tables.is_dir()
+        ):
+            raise FileNotFoundError("configured SEVN H/He table directories are unavailable")
+        try:
+            import sevnpy.sevn  # noqa: F401
+        except ImportError as error:
+            raise RuntimeError("SEVN mode requires sevnpy") from error
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     print_header("IMRI DYN SIMULATION", 72, "#")
@@ -53,6 +68,10 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Consumption replenishment: {config.consumption_replenishment}")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
+    print(
+        f"Stellar evolution: {config.stellar_evolution_model}; "
+        f"natal kick: {config.natal_kick_model}"
+    )
     print(f"Disk migration scenario: {config.disk_model}")
     print(
         "Disk migration contract: "
@@ -152,6 +171,10 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
                 save_events(averaged_results, config.output_dir)
                 save_repeat_results(averaged_results, config.output_dir, config)
                 save_replenishment_ledger(averaged_results, config.output_dir)
+                save_source_transitions(averaged_results, config.output_dir)
+                save_workflow_checkpoints(averaged_results, config.output_dir)
+                if config.stellar_evolution_model == "sevn":
+                    save_stellar_ledger(averaged_results, config.output_dir)
 
     runtime_s = time.time() - start_time_s
     print_header("SIMULATION COMPLETE", 72, "#")
@@ -161,6 +184,10 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     save_events(averaged_results, config.output_dir)
     save_repeat_results(averaged_results, config.output_dir, config)
     save_replenishment_ledger(averaged_results, config.output_dir)
+    save_source_transitions(averaged_results, config.output_dir)
+    save_workflow_checkpoints(averaged_results, config.output_dir)
+    if config.stellar_evolution_model == "sevn":
+        save_stellar_ledger(averaged_results, config.output_dir)
     save_metadata(
         config.output_dir,
         build_metadata(

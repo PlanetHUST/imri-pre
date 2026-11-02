@@ -1,15 +1,16 @@
 # Documentation map
 
-Reviewed against the working source on 2026-10-18. Start with the root
+Reviewed against the working source on 2026-10-28. Start with the root
 [README](../README.md) for commands and this page for document ownership.
 
 ## Current guides
 
 | Question | Read | Source owner |
 | --- | --- | --- |
-| What does one host simulation calculate? | [Physical model](physics_model.md) | [workflow.py](../src/workflows/workflow.py), [single_work.py](../src/workflows/single_work.py) |
+| What does one host simulation do, action by action? | [Main single-halo workflow](main_workflow.md) | [single_work.py](../src/workflows/single_work.py) |
+| Which physical equations and assumptions are used? | [Physical model](physics_model.md) | [physical_process/](../src/physical_process/), [lisa/](../src/lisa/) |
 | How are damping, gaps and traps defined? | [Physical model](physics_model.md), [migration contract](migration_model_alignment.md) | [damp.py](../src/physical_process/damp.py), [migration/](../src/physical_process/migration/) |
-| When is a damped orbit replenished? | [Consumption replenishment plan](plans/active/imri_consumption_replenishment.md), [physical model](physics_model.md) | [replenishment.py](../src/workflows/replenishment.py), [event_work.py](../src/workflows/event_work.py) |
+| When is a channel replenished? | [Main single-halo workflow](main_workflow.md), [consumption replenishment plan](plans/active/imri_consumption_replenishment.md) | [single_work.py](../src/workflows/single_work.py), [replenishment.py](../src/workflows/replenishment.py) |
 | What are the CLI, units, outputs and checks? | [Engineering contract](engineering_contract.md) | [cli.py](../src/workflows/cli.py), [outputs.py](../src/workflows/outputs.py) |
 | How are tree hosts mapped and seeded? | [Merger-tree interface](merger_tree_interface.md) | [host_mapping.py](../src/workflows/host_mapping.py), [tree_batch.py](../src/workflows/tree_batch.py) |
 | Where is each stage implemented? | [Part-by-part source map](project/README.md) | Current source |

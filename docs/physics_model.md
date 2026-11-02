@@ -2,10 +2,12 @@
 
 This document states **which module is authoritative** for each piece of
 physics, what each one assumes, and where the model's known ambiguities are.
-Reviewed against the working source on 2026-10-22. It describes current
+Reviewed against the working source on 2026-10-28. It describes current
 implementation choices and explicitly identified limits. Historical session
 decisions are reconciled in [reference/history.md](reference/history.md);
 original exports are preserved in [archive/](archive/README.md).
+For the executable action order, state guards, and rate dependency, start with
+the [main single-halo workflow](main_workflow.md).
 
 ---
 
@@ -17,12 +19,13 @@ host (z, M_smbh, M_nsc, Z)
    ├─► AGN disk structure ............ disk_quantity.pagn_disk_adapter  (pAGN Sirko/Thompson)
    │        └─ opacity ............... disk_quantity.opacity            (OPAL + Alexander-Ferguson)
    │
-   ├─► compact-object population ..... physical_process.sampling        (Pop II / Pop III IMF)
+   ├─► stellar population ............ physical_process.sampling        (Pop II / Pop III IMF)
    │        └─ initial orbits ........ physical_process.nsc_orbital
    │
    ├─► disk crossing ................. physical_process.nsc_orbital.disk_crossing_mask
    │
    ├─► damping / embedding ........... physical_process.damp
+   │        └─ optional SEVN endpoint, remnant and kick .. workflows.stellar_evolution
    │
    ├─► migration ..................... physical_process.migration
    │        ├─ torque components ..... .torque      gravitational / thermal / gap-drift
@@ -35,7 +38,7 @@ host (z, M_smbh, M_nsc, Z)
    │
    ├─► event classification .......... workflows.event_rate.classify_coupled_event
    │                                   workflows.event_work (per-object orchestration)
-   ├─► ISCO consumption / NSC supply . workflows.replenishment
+   ├─► ISCO consumption / NSC supply . workflows.single_work loop + replenishment pool
    │
    └─► LISA .......................... lisa.snr          sensitivity, waveform, SNR
             └─ detectability ......... lisa.detectability band entry + threshold decision
@@ -160,6 +163,10 @@ torque law.
 * Metallicity below `10⁻⁴ Z⊙` selects the Pop III top-heavy IMF; above it, a
   Salpeter Pop II IMF with stars below 1 M⊙ discarded before the mass budget is
   accumulated (a preserved historical assumption).
+* The Pop III initial-mass power law uses default slope 1.77 and upper limit
+  197 Msun; the CLI can change either for controlled sensitivity studies.
+  Sampling stops after reaching the specified NSC stellar-mass budget, with
+  an overshoot of at most the mass of the final sampled star.
 * Sampling uses the **global NumPy RNG**, seeded once per repeat by the
   workflow. This is why parallel determinism requires one seed per job.
 
@@ -241,12 +248,39 @@ cases, not capture-rate accuracy or population convergence.
   actual physical domain and migrator masses; it is not guaranteed by the
   current jump repair or by a historical checkpoint.
 
+### Natal kick and orbit
+
+The local `physical_process.natal_kick` transform preserves the original
+`adv_damp` calculation and its slightly different CGS values for G and solar
+mass, so saved kick results remain reproducible. SEVN supplies the kick speed;
+a source-seeded isotropic direction and uniform mean anomaly supply the
+instantaneous kick vector and time-weighted orbital position. At collapse,
+position is unchanged and the kick velocity is added to the orbital velocity.
+Specific energy, angular momentum, and the eccentricity vector give the new
+semi-major axis, eccentricity, inclination, and cosine of periapsis argument.
+Nonnegative energy is unbound. The implementation also returns no orbit for a
+degenerate zero-angular-momentum state.
+
+The state stores only `cos_omega`, so the transform chooses the nonnegative
+`arccos(cos_omega)` branch and sets the ascending-node longitude to zero; it
+does not retain a complete orbital orientation or a continuously tracked
+orbital phase. It treats SMBH gravity as fixed and ignores the small change in
+the secondary mass in that potential. The donor-at-injection branch does not
+reapply a kick that predates injection.
+
 ### Coupled gas and GW orbit
 * After the embedding rule accepts `e <= 0.01`, the orbit is explicitly
   projected to `e=0`. This is a controlled approximation: the circular
   Peters law preserves zero eccentricity, while the gas prescription assumes
   an adiabatically circular response. The configuration rejects nonzero GW
-  eccentricity; stellar/remnant masses are fixed pending SEVN integration.
+  eccentricity. The default stellar mode retains fixed mass. The opt-in SEVN
+  mode changes from fixed ZAMS drag mass to SEVN remnant mass at collapse and
+  applies an optional natal kick through `physical_process.natal_kick`; it segments damping or
+  migration at that event. A potentially entering eccentric post-kick orbit
+  remains unavailable to the circular detector model. For a bound remnant
+  outside the disk, a Peters `a,e` trajectory is screened against four times
+  twice the orbital frequency at pericenter at `z=0`. Crossing later than the
+  remaining cosmic time means no entry under this stated screening convention.
 * For circular `L=mu sqrt(GMr)`, the signed gas torque gives
   `dr/dt|gas=Gamma_gas/(dL/dr)` and GW gives
   `dr/dt|GW=-beta/r^3`, with both applied on the same orbit. The frequency
@@ -357,6 +391,7 @@ redshift, and the GW continuation stops at the age of `z=0`. The old independent
 `hubble_constant_per_myr` input was removed.
 
 The coupled workflow rejects finite `cosmic_merge_time_myr`; its default is
-infinity and component masses stay fixed. The old one-event merger remains
+infinity. The SMBH mass stays fixed, while the opt-in SEVN scenario changes
+the secondary mass once at stellar collapse. The old one-event merger remains
 only in the standalone legacy detector function. `max_gw_time_myr` is a
 recorded compatibility parameter, not an additional physical cutoff.

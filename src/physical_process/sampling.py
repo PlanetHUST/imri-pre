@@ -32,8 +32,12 @@ def sample_salpeter(
         raise ValueError("number of samples must be nonnegative")
     if not 0.0 < m_min < m_max:
         raise ValueError("mass bounds must satisfy 0 < m_min < m_max")
+    if not np.isfinite(alpha):
+        raise ValueError("IMF slope must be finite")
     exponent = 1.0 - alpha
     uniform_samples = np.random.rand(n)
+    if exponent == 0.0:
+        return m_min * np.exp(uniform_samples * np.log(m_max / m_min))
     return (
         uniform_samples * (m_max**exponent - m_min**exponent) + m_min**exponent
     ) ** (1.0 / exponent)
@@ -136,7 +140,10 @@ def TII(m: FloatArray) -> FloatArray:
     return population_ii_lifetime_yr(np.asarray(m, dtype=float))
 
 
-def sample_efficient(mtot: float, Z: float) -> tuple[FloatArray, FloatArray]:
+def sample_efficient(
+    mtot: float, Z: float, *, popiii_max_mass_msun: float = 197.0,
+    popiii_imf_slope: float = 1.77,
+) -> tuple[FloatArray, FloatArray]:
     """Return stellar masses [Msun] and lifetimes [yr]."""
 
     Z = Z * SOLAR_METALLICITY
@@ -147,7 +154,9 @@ def sample_efficient(mtot: float, Z: float) -> tuple[FloatArray, FloatArray]:
         raise ValueError("metallicity must be nonnegative")
 
     if Z < POPULATION_III_THRESHOLD_SOLAR * SOLAR_METALLICITY:
-        masses_msun = sample_popiii_efficient(mtot)
+        masses_msun = sample_popiii_efficient(
+            mtot, m_max=popiii_max_mass_msun, alpha=popiii_imf_slope
+        )
         lifetime_yr = population_iii_lifetime_yr(masses_msun)
     else:
         masses_msun = sample_popii_efficient(mtot)

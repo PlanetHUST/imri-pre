@@ -24,6 +24,7 @@ class DampingTask(TypedDict):
     source_id: NotRequired[int]
     origin_primary_idx: NotRequired[int]
     copy_number: NotRequired[int]
+    task_seed: NotRequired[int | None]
 
 
 class DampingResult(TypedDict):
@@ -49,6 +50,77 @@ class DampingResult(TypedDict):
     origin_primary_idx: NotRequired[int]
     copy_number: NotRequired[int]
     error: NotRequired[str]
+    zams_mass_msun: NotRequired[float]
+    presupernova_mass_msun: NotRequired[float]
+    presupernova_phase: NotRequired[int]
+    remnant_mass_msun: NotRequired[float]
+    remnant_type: NotRequired[int]
+    sevn_seed: NotRequired[int]
+    kick_speed_km_s: NotRequired[float]
+    kick_applied: NotRequired[bool]
+    stellar_outcome: NotRequired[str]
+    radius_at_collapse_cm: NotRequired[float]
+    postkick_semi_major_axis_cm: NotRequired[float]
+    postkick_eccentricity: NotRequired[float]
+    postkick_inclination_rad: NotRequired[float]
+    postkick_damping_status: NotRequired[str]
+    postkick_gw_to_band_z0_myr: NotRequired[float]
+
+
+class SourceTransition(TypedDict):
+    """One completed source action at an absolute episode time."""
+
+    m_smbh_msun: float
+    m_nsc_msun: float
+    repeat: int
+    object_index: int
+    source_id: int
+    task_kind: str
+    origin_primary_idx: int
+    copy_number: int
+    stage: str
+    injection_time_myr: float
+    time_myr: float
+    collapse_time_myr: float
+    mass_msun: float
+    status: str
+    reason: str
+    event_id: str | None
+    band_entry_time_myr: float | None
+    consumption_time_myr: float | None
+
+
+class WorkflowCheckpoint(TypedDict):
+    """Cumulative stage counts for one repeat, before CSV serialization."""
+
+    m_smbh_msun: float
+    m_nsc_msun: float
+    repeat: int
+    task_seed: int | None
+    disk_model: str
+    stellar_evolution_model: str
+    natal_kick_model: str
+    redshift: float
+    duty_cycle_myr: float
+    stage: str
+    n_sampled: int
+    n_disk_cross: int
+    n_primary_damped: int
+    n_sources_processed: int
+    n_stellar_rows: int
+    n_event_rows: int
+    n_imri: int
+    n_det: int
+    n_stellar_unavailable: int
+    n_entry_inside_isco: int
+    n_profile_error: int
+    n_replenishment_unavailable: int
+    n_detector_unavailable: int
+    n_isco_consumed: int
+    n_replenished: int
+    n_source_remaining: int
+    rate_imri_per_myr: float | None
+    rate_det_per_myr: float | None
 
 
 class DiskProfiles(TypedDict):
@@ -100,6 +172,20 @@ class IMRIEventRecord(TypedDict):
     consumption_time_myr: float
     consumption_status: str
     mass_msun: float
+    zams_mass_msun: float
+    presupernova_mass_msun: float
+    presupernova_phase: int | None
+    remnant_mass_msun: float
+    remnant_type: int | None
+    kick_speed_km_s: float
+    kick_applied: bool
+    stellar_outcome: str
+    radius_at_collapse_cm: float
+    postkick_semi_major_axis_cm: float
+    postkick_eccentricity: float
+    postkick_inclination_rad: float
+    postkick_damping_status: str
+    postkick_gw_to_band_z0_myr: float
     mass_ratio_secondary_to_primary: float
     bh_origin: str
     band_entry_status: str
@@ -221,6 +307,7 @@ class IMRIDynSingleResult:
         self.embedded_bh_count = 0
         self.migration_formed_bh_count = 0
         self.outside_or_failed_count = 0
+        self.stellar_unavailable_count = 0
         self.bh_candidate_count = 0
         self.no_imri_count = 0
         self.imri_count = 0
@@ -265,6 +352,11 @@ class IMRIDynSingleResult:
         self.replenishment_source_exhausted_count = 0
         self.replenishment_unavailable_count = 0
         self.replenishment_ledger: list[dict[str, Any]] = []
+        self.stellar_ledger: list[dict[str, Any]] = []
+        self.source_transitions: list[SourceTransition] = []
+        self.workflow_checkpoints: list[WorkflowCheckpoint] = []
+        self.sources_processed_count = 0
+        self.primary_damped_count = 0
         self.imri_events: list[IMRIEventRecord] = []
         self.migration_errors: list[MigrationErrorRecord] = []
 
@@ -282,6 +374,7 @@ class IMRIDynSingleResult:
             "embedded_bh_count": self.embedded_bh_count,
             "migration_formed_bh_count": self.migration_formed_bh_count,
             "outside_or_failed_count": self.outside_or_failed_count,
+            "stellar_unavailable_count": self.stellar_unavailable_count,
             "bh_candidate_count": self.bh_candidate_count,
             "no_imri_count": self.no_imri_count,
             "imri_count": self.imri_count,
@@ -367,10 +460,12 @@ class IMRIDynAveragedResult:
         replenishment_unavailable_count = float(
             np.sum(values("replenishment_unavailable_count"))
         )
+        stellar_unavailable_count = float(np.sum(values("stellar_unavailable_count")))
         rate_evaluation_complete = (
             inside_isco_count == 0.0
             and profile_error_count == 0.0
             and replenishment_unavailable_count == 0.0
+            and stellar_unavailable_count == 0.0
         )
         detector_unavailable_count = float(
             np.sum(values("detector_unavailable_imri_count"))
@@ -386,6 +481,8 @@ class IMRIDynAveragedResult:
             rate_evaluation_status = "incomplete_profile_error"
         elif replenishment_unavailable_count > 0.0:
             rate_evaluation_status = "incomplete_replenishment_consumption_unavailable"
+        elif stellar_unavailable_count > 0.0:
+            rate_evaluation_status = "incomplete_stellar_evolution"
         else:
             rate_evaluation_status = "complete"
 
@@ -428,6 +525,7 @@ class IMRIDynAveragedResult:
                 np.mean(values("disk_crossing_objects"))
             ),
             "embedded_star_count_mean": float(np.mean(values("embedded_star_count"))),
+            "stellar_unavailable_count_mean": float(np.mean(values("stellar_unavailable_count"))),
             "embedded_bh_count_mean": float(np.mean(values("embedded_bh_count"))),
             "migration_formed_bh_count_mean": float(
                 np.mean(values("migration_formed_bh_count"))

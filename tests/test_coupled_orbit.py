@@ -64,6 +64,39 @@ def test_vacuum_limit_obeys_peters_radius_and_moving_band() -> None:
     assert np.isclose(observed_frequency_hz, MIN_FREQUENCY_HZ, rtol=1.0e-8)
 
 
+def test_collapse_stop_and_same_mass_restart_recover_direct_orbit() -> None:
+    """An inserted event boundary must not itself change the orbit."""
+    radius_grid = np.linspace(0.5 * ENTRY_RADIUS_CM, 1.2 * INITIAL_RADIUS_CM, 200)
+    drift = np.full(radius_grid.size, -1.0e3)
+    common = dict(
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        initial_redshift=INITIAL_REDSHIFT,
+        duty_cycle_myr=1.0e-4,
+        disk_inner_radius_cm=radius_grid[0],
+        gas_radius_cm=radius_grid,
+        gas_drift_cm_s=drift,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        redshift_model=CLOCK,
+    )
+    direct = evolve_circular_orbit(
+        **common, initial_radius_cm=INITIAL_RADIUS_CM, initial_time_myr=0.0
+    )
+    stopped = evolve_circular_orbit(
+        **common, initial_radius_cm=INITIAL_RADIUS_CM, initial_time_myr=0.0,
+        stop_time_myr=1.0e-6,
+    )
+    assert stopped.status == "stopped_at_event"
+    assert stopped.final_time_myr == 1.0e-6
+    resumed = evolve_circular_orbit(
+        **common, initial_radius_cm=stopped.final_radius_cm,
+        initial_time_myr=stopped.final_time_myr,
+    )
+    assert direct.status == resumed.status == "band_entry"
+    assert np.isclose(resumed.entry_time_myr, direct.entry_time_myr, rtol=2.0e-6)
+    assert np.isclose(resumed.entry_radius_cm, direct.entry_radius_cm, rtol=2.0e-6)
+
+
 def test_aiding_and_opposing_gas_change_the_same_orbit() -> None:
     vacuum = _orbit(0.0)
     aiding = _orbit(-1.0e3)

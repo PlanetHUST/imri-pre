@@ -46,6 +46,10 @@ class DampingStatus(str, Enum):
     OUTSIDE_DISK = "outside_disk"
     CALCULATION_ERROR = "calculation_error"
     TEST = "test"
+    COLLAPSE_REACHED = "collapse_reached"
+    NO_BH_REMNANT = "no_bh_remnant"
+    KICK_UNBOUND = "kick_unbound"
+    STELLAR_UNAVAILABLE = "stellar_unavailable"
 
 
 class TimescaleData(TypedDict):
@@ -839,6 +843,7 @@ class DampingCalculator:
         obj_type: str,
         max_iter: int = 50000,
         history: list[OrbitalState] | None = None,
+        stop_time_s: float | None = None,
     ) -> DampingOutcome:
         """Integrate disk-crossing damping and return the complete final state.
 
@@ -854,6 +859,10 @@ class DampingCalculator:
             raise ValueError("formation time must be nonnegative")
         if not (obj_type.startswith("Star") or obj_type.startswith("BH")):
             raise ValueError(f"Unknown object type: {obj_type}")
+        if stop_time_s is not None and (
+            not np.isfinite(stop_time_s) or stop_time_s < initial_state.time_s
+        ):
+            raise ValueError("stop time must be finite and no earlier than the initial state")
 
         state = initial_state
         formation_time_s = formation_time_myr * const.Myr
@@ -866,6 +875,10 @@ class DampingCalculator:
             history.append(state)
 
         while not self.inclination_is_damped(state) and iteration < max_iter:
+            if stop_time_s is not None and state.time_s >= stop_time_s:
+                return self._outcome(
+                    DampingStatus.COLLAPSE_REACHED, state, initial_state
+                )
             if state.time_s >= duty_cycle_s:
                 return self._outcome(
                     DampingStatus.DAMPING_INCOMPLETE,
@@ -909,6 +922,8 @@ class DampingCalculator:
                 timescales,
                 time_step_fraction,
             )
+            if stop_time_s is not None:
+                time_step_s = min(time_step_s, stop_time_s - state.time_s)
 
             if retry_coefficients is None:
                 retry_coefficients = self.compute_ode_coefficients(
@@ -1019,6 +1034,9 @@ class DampingCalculator:
                 else DampingStatus.CALCULATION_ERROR
             )
             return self._outcome(status, state, initial_state)
+
+        if stop_time_s is not None and state.time_s >= stop_time_s:
+            return self._outcome(DampingStatus.COLLAPSE_REACHED, state, initial_state)
 
         return self._determine_final_state(
             state,
