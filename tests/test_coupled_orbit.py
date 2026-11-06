@@ -1,5 +1,7 @@
 """Analytical limits and physical events of the combined circular orbit."""
 
+from unittest.mock import patch
+
 import numpy as np
 
 from physical_process import constants as const
@@ -13,7 +15,7 @@ from physical_process.orbital_evolution import (
 from physical_process.redshift_evolve import RedshiftEvolution
 from physical_process.damp import DampingStatus
 from workflows.event_rate import classify_coupled_event
-from lisa.detectability import classify_coupled_entry
+from lisa.detectability import classify_coupled_entry, classify_detectability
 from lisa.snr import evaluate_lisa_coupled_track_snr, evaluate_lisa_inspiral_snr
 from workflows.cli import build_config_from_arguments, build_parser
 
@@ -45,6 +47,129 @@ def _orbit(gas_speed_cm_s: float, duty_cycle_myr: float = 1.0e-4):
         min_observed_frequency_hz=MIN_FREQUENCY_HZ,
         redshift_model=CLOCK,
     )
+
+
+def test_candidate_eligibility_preserves_valid_imri_snr() -> None:
+    orbit = _orbit(0.0, duty_cycle_myr=1.0e-8)
+    decision = classify_coupled_entry(
+        orbit=orbit,
+        bh_candidate=True,
+        is_imri_candidate=True,
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        max_observed_frequency_hz=0.1,
+        snr_threshold=20.0,
+        mission_duration_years=4.0,
+        detector_hubble_constant_km_s_mpc=67.4,
+        detector_omega_m=0.315,
+    )
+
+    assert decision.detect_rate_class == "imri data"
+    assert decision.is_lisa_detectable is True
+    assert decision.snr_status == "evaluated"
+    assert decision.detect_rate_reason == "lisa_snr_above_threshold"
+    assert np.isclose(decision.lisa_snr, 58.07069349420182, rtol=2.0e-10)
+
+
+def test_candidate_eligibility_excludes_false_before_snr_in_both_paths() -> None:
+    orbit = _orbit(0.0, duty_cycle_myr=1.0e-8)
+    coupled_kwargs = dict(
+        orbit=orbit,
+        bh_candidate=True,
+        is_imri_candidate=False,
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        max_observed_frequency_hz=0.1,
+        snr_threshold=20.0,
+        mission_duration_years=4.0,
+        detector_hubble_constant_km_s_mpc=67.4,
+        detector_omega_m=0.315,
+    )
+    legacy_kwargs = dict(
+        is_imri_candidate=False,
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        r_gas_fin_cm=orbit.entry_radius_cm,
+        gas_final_time_myr=0.0,
+        initial_redshift=INITIAL_REDSHIFT,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        max_observed_frequency_hz=0.1,
+        eccentricity=0.0,
+        cosmic_merge_time_myr=np.inf,
+        cosmic_merge_smbh_mass_factor=2.0,
+        cosmic_merge_radius_factor=2.0,
+        snr_threshold=20.0,
+        mission_duration_years=4.0,
+        detector_hubble_constant_km_s_mpc=67.4,
+        detector_omega_m=0.315,
+    )
+    with patch(
+        "lisa.detectability.evaluate_lisa_inspiral_snr",
+        side_effect=AssertionError("excluded candidate reached SNR evaluation"),
+    ) as snr_evaluator:
+        coupled = classify_coupled_entry(**coupled_kwargs)
+        legacy = classify_detectability(**legacy_kwargs)
+
+    snr_evaluator.assert_not_called()
+    for decision in (coupled, legacy):
+        assert decision.detect_rate_class == "not evaluated"
+        assert decision.is_lisa_detectable is None
+        assert decision.snr_status == "not_evaluated"
+        assert decision.detect_rate_reason == "not_imri_candidate"
+        assert np.isnan(decision.lisa_snr)
+        assert np.isinf(decision.detection_time_myr)
+
+
+def test_candidate_eligibility_preserves_unavailable_status_in_both_paths() -> None:
+    orbit = _orbit(0.0, duty_cycle_myr=1.0e-8)
+    coupled_kwargs = dict(
+        orbit=orbit,
+        bh_candidate=True,
+        is_imri_candidate=None,
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        max_observed_frequency_hz=0.1,
+        snr_threshold=20.0,
+        mission_duration_years=4.0,
+        detector_hubble_constant_km_s_mpc=67.4,
+        detector_omega_m=0.315,
+    )
+    legacy_kwargs = dict(
+        is_imri_candidate=None,
+        primary_mass_msun=PRIMARY_MASS_MSUN,
+        secondary_mass_msun=SECONDARY_MASS_MSUN,
+        r_gas_fin_cm=orbit.entry_radius_cm,
+        gas_final_time_myr=0.0,
+        initial_redshift=INITIAL_REDSHIFT,
+        min_observed_frequency_hz=MIN_FREQUENCY_HZ,
+        max_observed_frequency_hz=0.1,
+        eccentricity=0.0,
+        cosmic_merge_time_myr=np.inf,
+        cosmic_merge_smbh_mass_factor=2.0,
+        cosmic_merge_radius_factor=2.0,
+        snr_threshold=20.0,
+        mission_duration_years=4.0,
+        detector_hubble_constant_km_s_mpc=67.4,
+        detector_omega_m=0.315,
+    )
+    with patch(
+        "lisa.detectability.evaluate_lisa_inspiral_snr",
+        side_effect=AssertionError("unavailable candidate reached SNR evaluation"),
+    ) as snr_evaluator:
+        coupled = classify_coupled_entry(**coupled_kwargs)
+        legacy = classify_detectability(**legacy_kwargs)
+
+    snr_evaluator.assert_not_called()
+    for decision in (coupled, legacy):
+        assert decision.detect_rate_class == "not evaluated"
+        assert decision.is_lisa_detectable is None
+        assert decision.snr_status == "not_evaluated"
+        assert decision.detect_rate_reason == "band_entry_inside_isco"
+        assert np.isnan(decision.lisa_snr)
+        assert np.isnan(decision.detection_time_myr)
 
 
 def test_vacuum_limit_obeys_peters_radius_and_moving_band() -> None:

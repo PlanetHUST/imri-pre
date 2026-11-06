@@ -91,6 +91,11 @@ prescription; `tests/test_architecture.py` enforces this.
 
 ## Running it
 
+The comparison-only [damping benchmark](docs/damping_benchmark.md) measures weighted
+first-embedding flux against Xue et al. (2026), with matched inputs, censoring,
+calibration limits and checkpoint replay. It runs independently of downstream
+event-rate and detector calculations.
+
 ### One halo
 
 ```bash
