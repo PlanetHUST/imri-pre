@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import physical_process.gw_frequency_radius as gw_helpers
+from physical_process.population_models import population_description
 
 from .config import (
     IMRIDynConfig,
@@ -67,6 +68,8 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Repeats per point: {config.num_repeats}")
     print(f"Duty cycle: {config.duty_cycle_myr:.3e} Myr")
     print(f"Consumption replenishment: {config.consumption_replenishment}")
+    print(f"Population model: {config.population_model}")
+    print(f"Population normalization: {population_description(config.population_model)['normalization']}")
     print(f"Metallicity: {config.metallicity:.3e} Zsun")
     print(
         f"Stellar evolution: {config.stellar_evolution_model}; "

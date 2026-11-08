@@ -5,6 +5,8 @@ import multiprocessing
 from multiprocessing import Pool
 from typing import Sequence
 
+import numpy as np
+
 import physical_process.constants as const
 from physical_process import gw_frequency_radius as gw_helpers
 from physical_process.agn import AGNProperties
@@ -14,7 +16,6 @@ from physical_process.redshift_evolve import RedshiftEvolution
 from .models import DampingResult, DampingTask, FloatArray, GeometricPopulation
 from .runtime import vprint
 from .config import IMRIDynConfig
-from .stellar_evolution import apply_sevn_kick, evolve_stellar_endpoint
 
 _WORKER_CALCULATOR: DampingCalculator | None = None
 _WORKER_CONFIG: IMRIDynConfig | None = None
@@ -114,10 +115,19 @@ def damp_task_with_calculator(
         time_s=task["state_time_s"],
     )
     stellar_extra: dict[str, float | int | bool | str] = {}
+    if config is not None and getattr(config, "population_model", "legacy_popiii") != "legacy_popiii":
+        existing_bh = task["formation_time_myr"] == 0.0
+        stellar_extra = {
+            "zams_mass_msun": np.nan if existing_bh else task["mass_g"] / const.msun,
+            "remnant_mass_msun": task["mass_g"] / const.msun if existing_bh else np.nan,
+            "stellar_outcome": "preexisting_bh" if existing_bh else "representative_long_lived_star",
+        }
     final_mass_g = task["mass_g"]
     formation_time_myr = task["formation_time_myr"]
     try:
         if config is not None and config.stellar_evolution_model == "sevn":
+            from optional_models.sevn import apply_sevn_kick, evolve_stellar_endpoint
+
             if config.sevn_hydrogen_tables is None or config.sevn_helium_tables is None:
                 raise RuntimeError("SEVN table paths are not configured")
             endpoint = evolve_stellar_endpoint(

@@ -13,7 +13,6 @@ from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from .config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     DISK_INNER_RADIUS_RG,
-    PAGN_ALPHA,
     IMRIDynConfig,
 )
 from .models import DiskProfiles
@@ -41,13 +40,16 @@ class IMRIDynEngine:
         """Return cached disk profiles for an SMBH mass [Msun]."""
 
         if m_smbh_msun not in self.disk_cache:
-            accretion_rate_g_s = DISK_ACCRETION_RATE_G_S_PER_MSUN * m_smbh_msun
+            accretion_rate_g_s = self.config.disk_accretion_rate_g_s
+            if accretion_rate_g_s is None:
+                accretion_rate_g_s = DISK_ACCRETION_RATE_G_S_PER_MSUN * m_smbh_msun
 
-            pagn_alpha = PAGN_ALPHA
+            pagn_alpha = self.config.disk_alpha
             pagn_disk = build_pagn_disk_profile(
                 m_smbh_msun,
                 pagn_alpha,
                 accretion_rate_g_s=accretion_rate_g_s,
+                outer_radius_cm=self.config.disk_outer_radius_cm,
             )
 
             # Add disk cache

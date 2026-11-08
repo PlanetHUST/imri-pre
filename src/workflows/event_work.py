@@ -16,9 +16,9 @@ from physical_process.orbital_evolution import (
     continue_to_isco,
     evolve_circular_orbit,
 )
-from physical_process.migration.semi_analytic import semi_analytic_local_time_s
+from physical_process.migration.type_i import type_i_drift_cm_s
 
-from .config import IMRIDynConfig, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
+from .config import IMRIDynConfig, SEMI_TYPE_I, SEMI_WITHOUT_TRAP, TORQUE_WITH_TRAP
 from lisa.detectability import (
     classify_coupled_entry,
     unsupported_band_entry_decision,
@@ -48,7 +48,6 @@ from .models import (
 )
 from physical_process.redshift_evolve import RedshiftEvolution
 from .runtime import vprint
-from .stellar_evolution import apply_sevn_kick
 
 BAND_ENTRY_IN_MIGRATION_DOMAIN = "entry_in_migration_domain"
 BAND_ENTRY_HANDOFF = "entry_below_migration_domain_but_above_isco"
@@ -157,7 +156,18 @@ class IMRIEventEvaluator:
                 0.5 * reduced_mass_g * np.sqrt(const.G * total_mass_g / radius_cm)
             )
             return radius_cm, gas_torque_cgs / angular_momentum_derivative_g_cm_s
+        if self.config.disk_model == SEMI_TYPE_I:
+            radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
+            return radius_cm, type_i_drift_cm_s(
+                radius_cm,
+                np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
+                np.asarray(disk_data["aspect_ratio"], dtype=float),
+                mass_msun * const.msun,
+                agn_properties.smbh_mass_msun,
+            )
         if self.config.disk_model == SEMI_WITHOUT_TRAP:
+            from optional_models.semi_analytic import semi_analytic_local_time_s
+
             radius_cm = np.asarray(disk_data["radius_cm"], dtype=float)
             local_time_s = semi_analytic_local_time_s(
                 radius_cm,
@@ -186,6 +196,8 @@ class IMRIEventEvaluator:
             or damping_result["status"] is not DampingStatus.EMBEDDED_STAR
         ):
             return damping_result
+        from optional_models.sevn import apply_sevn_kick
+
         collapse_myr = damping_result["formation_time_myr"]
         if collapse_myr <= damping_result["final_time_myr"]:
             raise AssertionError("embedded star must precede its SEVN collapse")
@@ -948,14 +960,15 @@ class IMRIEventEvaluator:
     ) -> disk_migration.MigrationOutcome:
         """Return the integrated semi-analytic outcome for one radial path.
 
-        This path is selected only by the comparison-only ``semi_without_trap``
-        configuration; the production CLI never constructs it.
+        Type-I is the default; Type-II remains an optional comparison.
         """
         if "torque_alpha" not in disk_data:
             raise MigrationProfileError(
                 "cached pAGN disk has no migration alpha"
             )
-        return disk_migration.semi_analytic_migration_outcome(
+        from optional_models.semi_analytic import semi_analytic_migration_outcome
+
+        return semi_analytic_migration_outcome(
             np.asarray(disk_data["radius_cm"], dtype=float),
             np.asarray(disk_data["surface_density_g_cm2"], dtype=float),
             np.asarray(disk_data["aspect_ratio"], dtype=float),
@@ -965,7 +978,8 @@ class IMRIEventEvaluator:
             agn_properties.smbh_mass_msun,
             float(disk_data["torque_alpha"]),
             self.config.gap_opening_condition,
-            self.config.consider_type_ii_migration,
+            self.config.disk_model == SEMI_WITHOUT_TRAP
+            and self.config.consider_type_ii_migration,
         )
 
     def _migration_torque_cgs(

@@ -1,6 +1,6 @@
 """Check persisted source transitions and stage checkpoints for one run.
 
-Usage: python scripts/check_single_halo_workflow.py output/dyn_results
+Usage: python scripts/check_single_halo_workflow.py outputs/single_host
 This reads saved artifacts only; it never reruns the physical simulation.
 """
 

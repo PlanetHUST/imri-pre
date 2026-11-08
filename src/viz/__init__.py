@@ -13,8 +13,6 @@ Modules
 ``disk_plots``
     Disk structure, pAGN-vs-in-repo solver comparison, and torque-component
     figures.
-``batch_plots``
-    Merger-tree batch interface figures (selected-host domain, job status).
 ``opacity_plots``
     Opacity-table interpolation verification figure.
 
@@ -22,4 +20,4 @@ All modules select the non-interactive ``Agg`` backend, so importing them is
 safe inside worker processes and headless environments.
 """
 
-__all__ = ["batch_plots", "disk_plots", "opacity_plots", "rate_plots"]
+__all__ = ["disk_plots", "opacity_plots", "rate_plots"]

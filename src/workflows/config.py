@@ -7,7 +7,7 @@ import numpy as np
 import numpy.typing as npt
 
 from lisa.snr import DEFAULT_SNR_WINDOW_PLACEMENT, SNR_WINDOW_PLACEMENTS
-from physical_process.migration.semi_analytic import GAP_OPENING_CONDITIONS
+from physical_process.population_models import POPULATION_MODELS, LEGACY_POPIII, PAN_NSC, PAN_PAPER, XUE_BH
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -40,14 +40,17 @@ IMRI_DETECTOR_OMEGA_M = 0.315
 IMRI_COSMIC_MERGE_TIME_MYR = np.inf
 IMRI_COSMIC_MERGE_SMBH_MASS_FACTOR = 2.0
 IMRI_COSMIC_MERGE_RADIUS_FACTOR = 2.0
+SEMI_TYPE_I = "semi_type_i"
 TORQUE_WITH_TRAP = "torque_with_trap"
 SEMI_WITHOUT_TRAP = "semi_without_trap"
-DISK_MODELS = (TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
-DEFAULT_DISK_MODEL = TORQUE_WITH_TRAP
+DISK_MODELS = (SEMI_TYPE_I, TORQUE_WITH_TRAP, SEMI_WITHOUT_TRAP)
+DEFAULT_DISK_MODEL = SEMI_TYPE_I
+GAP_OPENING_CONDITIONS = ("kii", "crida")  # optional Type-I/II comparison
 DEFAULT_GAP_OPENING_CONDITION = "kii"
 MIGRATION_CONTRACT = "jm17_grishin2024_continuous_kanagawa"
 SEMI_ANALYTIC_MIGRATION_CONTRACT = "integrated_local_semi_analytic_type_i_ii"
 MIGRATION_CONTRACTS = {
+    SEMI_TYPE_I: "integrated_local_semi_analytic_type_i",
     TORQUE_WITH_TRAP: MIGRATION_CONTRACT,
     SEMI_WITHOUT_TRAP: SEMI_ANALYTIC_MIGRATION_CONTRACT,
 }
@@ -56,9 +59,8 @@ MIGRATION_CONTRACTS = {
 def migration_contract_name(disk_model: str) -> str:
     """Return the contract label for a migration scenario.
 
-    The production CLI constructs only ``torque_with_trap``.
-    ``semi_without_trap`` is a comparison-only scenario assembled
-    programmatically; it is never selected by the production command line.
+    The production CLI constructs only Type-I semi-analytic migration.
+    Torque/trap and Type-I/II scenarios are optional programmatic comparisons.
     """
     try:
         return MIGRATION_CONTRACTS[disk_model]
@@ -73,7 +75,8 @@ class IMRIDynConfig:
 
     Mass inputs are in solar masses, times are in Myr, and radii ending in
     ``_pc``, ``_cm``, or ``_rg`` are measured in parsecs, centimeters, or
-    gravitational radii.
+    gravitational radii. Both CLI and programmatic defaults use the original
+    analytic IMF sampler. Published population presets require explicit selection.
     """
 
     def __init__(
@@ -91,9 +94,7 @@ class IMRIDynConfig:
         initial_stellar_density_gamma: float,
         # Disk-crossing and migration controls
         use_disk_inner_radius: bool,
-        # Comparison-only migration scenario selector. The production CLI passes
-        # only DEFAULT_DISK_MODEL; the semi-analytic branch is assembled by an
-        # explicit comparison script and is never a production CLI option.
+        # The CLI uses Type-I; alternative scenarios are programmatic only.
         disk_model: str = DEFAULT_DISK_MODEL,
         gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
         consider_type_ii_migration: bool = True,
@@ -121,8 +122,14 @@ class IMRIDynConfig:
         natal_kick_model: str = "none",
         sevn_hydrogen_tables: str | Path | None = None,
         sevn_helium_tables: str | Path | None = None,
+        population_model: str = LEGACY_POPIII,
+        popiii_min_mass_msun: float = 13.6,
         popiii_max_mass_msun: float = 197.0,
         popiii_imf_slope: float = 1.77,
+        # Independent disk inputs; None preserves the historical Mdot(M) / Q=1 edge.
+        disk_alpha: float = PAGN_ALPHA,
+        disk_accretion_rate_g_s: float | None = None,
+        disk_outer_radius_cm: float | None = None,
         # Internal NSC model parameters
         nsc_radius_pc_at_reference_mass: float = 3.31,
         nsc_radius_mass_slope: float = 0.321,
@@ -159,8 +166,20 @@ class IMRIDynConfig:
             sevn_hydrogen_tables is None or sevn_helium_tables is None
         ):
             raise ValueError("SEVN requires both hydrogen and helium table paths")
-        if not np.isfinite(popiii_max_mass_msun) or popiii_max_mass_msun <= 13.6:
-            raise ValueError("Pop III maximum mass must be finite and exceed 13.6 Msun")
+        if population_model not in POPULATION_MODELS:
+            raise ValueError(f"population model must be one of {POPULATION_MODELS}")
+        if population_model in (PAN_PAPER, XUE_BH) and len(set(nsc_masses_msun)) > 1:
+            raise ValueError("This paper-normalized population has no independent NSC-mass grid")
+        if population_model != LEGACY_POPIII and stellar_evolution_model != "fixed_mass":
+            raise ValueError("pre-existing published populations currently require fixed_mass, not SEVN ZAMS evolution")
+        if population_model in (PAN_NSC, PAN_PAPER) and initial_stellar_density_gamma < 1:
+            raise ValueError("Pan Kepler-tracer inversion requires gamma >= 1")
+        if population_model == XUE_BH and not np.isclose(initial_stellar_density_gamma, 2):
+            raise ValueError("Xue dN/dr proportional to r^0 corresponds to spatial gamma=2")
+        if not np.isfinite(popiii_min_mass_msun) or popiii_min_mass_msun <= 0:
+            raise ValueError("Pop III minimum mass must be finite and positive")
+        if not np.isfinite(popiii_max_mass_msun) or popiii_max_mass_msun <= popiii_min_mass_msun:
+            raise ValueError("Pop III maximum mass must be finite and exceed minimum mass")
         if not np.isfinite(popiii_imf_slope):
             raise ValueError("Pop III IMF slope must be finite")
         if disk_model not in DISK_MODELS:
@@ -210,12 +229,30 @@ class IMRIDynConfig:
             or cosmic_merge_radius_factor <= 0.0
         ):
             raise ValueError("cosmic merger radius factor must be positive")
+        for name, value in (
+            ("disk_alpha", disk_alpha),
+            ("disk_accretion_rate_g_s", disk_accretion_rate_g_s),
+            ("disk_outer_radius_cm", disk_outer_radius_cm),
+            ("nsc_radius_pc_at_reference_mass", nsc_radius_pc_at_reference_mass),
+            ("nsc_radius_reference_mass_msun", nsc_radius_reference_mass_msun),
+        ):
+            if value is not None and (not np.isfinite(value) or value <= 0):
+                raise ValueError(f"{name} must be finite and positive")
+        if not np.isfinite(metallicity) or metallicity < 0:
+            raise ValueError("metallicity must be finite and nonnegative")
+        if not np.isfinite(nsc_radius_mass_slope):
+            raise ValueError("NSC radius mass slope must be finite")
+        self.disk_alpha = float(disk_alpha)
+        self.disk_accretion_rate_g_s = disk_accretion_rate_g_s
+        self.disk_outer_radius_cm = disk_outer_radius_cm
         self.smbh_masses_msun = np.asarray(smbh_masses_msun, dtype=float)
         self.nsc_masses_msun = np.asarray(nsc_masses_msun, dtype=float)
         self.num_repeats = num_repeats
         self.duty_cycle_myr = duty_cycle_myr
         self.output_dir = Path(output_dir)
 
+        self.population_model = population_model
+        self.popiii_min_mass_msun = float(popiii_min_mass_msun)
         self.popiii_max_mass_msun = float(popiii_max_mass_msun)
         self.popiii_imf_slope = float(popiii_imf_slope)
         self.metallicity = metallicity
@@ -225,8 +262,7 @@ class IMRIDynConfig:
         self.nsc_radius_reference_mass_msun = nsc_radius_reference_mass_msun
 
         self.use_disk_inner_radius = use_disk_inner_radius
-        # The default is the fixed production torque contract. The semi-analytic
-        # value is a comparison-only label and is not exposed by the CLI.
+        # Type-I semi-analytic is the default; other models are opt-in.
         self.disk_model = disk_model
         self.gap_opening_condition = gap_opening_condition
         self.consider_type_ii_migration = consider_type_ii_migration
