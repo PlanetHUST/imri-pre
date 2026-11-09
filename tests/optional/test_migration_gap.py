@@ -110,7 +110,7 @@ def test_gap_depth_rejects_invalid_parameter() -> None:
             raise AssertionError(f"invalid Kanagawa parameter was accepted: {values}")
 
 
-def test_workflow_cli_exposes_no_torque_model_selector() -> None:
+def test_workflow_cli_exposes_only_approved_torque_comparison_controls() -> None:
     from workflows.cli import build_parser
 
     parser = build_parser()
@@ -119,8 +119,9 @@ def test_workflow_cli_exposes_no_torque_model_selector() -> None:
         for action in parser._actions
         for option in action.option_strings
     }
+    assert "--migration-model" in option_strings
+    assert "--torque-no-gap-transport" in option_strings
     for removed_option in (
-        "--migration-model",
         "--gap-open-condition",
         "--gap-threshold",
         "--no-type-ii-migration",

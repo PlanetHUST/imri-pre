@@ -1,6 +1,6 @@
 """Command line for the default single-host IMRI simulation.
 
-Alternative migration prescriptions are programmatic comparisons, not CLI modes.
+Analytical Type-I is default; signed torque comparison modes are explicit CLI options.
 The default CLI uses the original analytic IMF and formation-time prescription.
 Published component presets are opt-in only.
 """
@@ -13,7 +13,7 @@ from typing import Sequence
 from lisa.snr import SNR_WINDOW_PLACEMENTS
 from physical_process.population_models import POPULATION_MODELS, LEGACY_POPIII, PAN_NSC, PAN_PAPER, XUE_BH
 from .config import (
-    IMRIDynConfig, DEFAULT_DISK_MODEL, SECONDS_PER_MINUTE,
+    IMRIDynConfig, DEFAULT_DISK_MODEL, TORQUE_WITH_TRAP, SECONDS_PER_MINUTE,
     IMRI_GW_ECCENTRICITY, IMRI_LISA_MAX_GW_FREQUENCY_HZ,
     IMRI_LISA_MIN_GW_FREQUENCY_HZ, IMRI_MAX_GW_TIME_MYR,
     IMRI_DETECTOR_HUBBLE_CONSTANT_KM_S_MPC, IMRI_DETECTOR_OMEGA_M,
@@ -53,6 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--duty-cycle-myr", type=float, default=DEFAULT_DUTY_CYCLE_MYR)
     parser.add_argument("--smbh-masses", type=_parse_mass_vector, default=DEFAULT_SMBH_MASSES_MSUN)
     parser.add_argument("--nsc-masses", type=_parse_mass_vector, default=DEFAULT_NSC_MASSES_MSUN)
+    parser.add_argument("--migration-model", choices=(DEFAULT_DISK_MODEL, TORQUE_WITH_TRAP), default=DEFAULT_DISK_MODEL)
+    parser.add_argument("--torque-no-gap-transport", action="store_true",
+                        help="Torque comparison: use ungapped Type-I + validity-masked thermal only")
     parser.add_argument("--disk-alpha", type=float, default=0.1)
     parser.add_argument("--disk-accretion-rate-g-s", type=float, default=None)
     parser.add_argument("--disk-outer-radius-cm", type=float, default=None)
@@ -116,7 +119,8 @@ def build_config_from_arguments(arguments: argparse.Namespace) -> IMRIDynConfig:
             1.5 if model in (PAN_NSC, PAN_PAPER) else
             2.0 if model == XUE_BH else DEFAULT_INITIAL_STELLAR_DENSITY_GAMMA),
         use_disk_inner_radius=not arguments.ignore_disk_inner_radius,
-        disk_model=DEFAULT_DISK_MODEL,
+        disk_model=arguments.migration_model,
+        torque_gap_transport=not arguments.torque_no_gap_transport,
         lisa_min_gw_frequency_hz=arguments.lisa_min_gw_frequency_hz,
         lisa_max_gw_frequency_hz=arguments.lisa_max_gw_frequency_hz,
         max_gw_time_myr=arguments.max_gw_time_myr,

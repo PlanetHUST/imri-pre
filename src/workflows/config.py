@@ -56,12 +56,14 @@ MIGRATION_CONTRACTS = {
 }
 
 
-def migration_contract_name(disk_model: str) -> str:
+def migration_contract_name(disk_model: str, *, torque_gap_transport: bool = True) -> str:
     """Return the contract label for a migration scenario.
 
-    The production CLI constructs only Type-I semi-analytic migration.
-    Torque/trap and Type-I/II scenarios are optional programmatic comparisons.
+    Type-I remains the default; the CLI also exposes the controlled torque
+    comparison. The separate semi-analytic Type-I/II model is programmatic.
     """
+    if disk_model == TORQUE_WITH_TRAP and not torque_gap_transport:
+        return "jm17_grishin2024_ungapped_type_i_thermal"
     try:
         return MIGRATION_CONTRACTS[disk_model]
     except KeyError as error:
@@ -94,10 +96,11 @@ class IMRIDynConfig:
         initial_stellar_density_gamma: float,
         # Disk-crossing and migration controls
         use_disk_inner_radius: bool,
-        # The CLI uses Type-I; alternative scenarios are programmatic only.
+        # Type-I is default; torque comparisons have explicit CLI controls.
         disk_model: str = DEFAULT_DISK_MODEL,
         gap_opening_condition: str = DEFAULT_GAP_OPENING_CONDITION,
         consider_type_ii_migration: bool = True,
+        torque_gap_transport: bool = True,
         # Simplified IMRI controls
         lisa_min_gw_frequency_hz: float,
         lisa_max_gw_frequency_hz: float,
@@ -189,6 +192,8 @@ class IMRIDynConfig:
                 "gap-opening condition must be one of "
                 f"{GAP_OPENING_CONDITIONS}"
             )
+        if not isinstance(torque_gap_transport, bool):
+            raise TypeError("torque_gap_transport must be a bool")
         if not isinstance(consider_type_ii_migration, bool):
             raise TypeError("consider_type_ii_migration must be a bool")
         if not 0.0 < lisa_min_gw_frequency_hz < lisa_max_gw_frequency_hz:
@@ -266,6 +271,7 @@ class IMRIDynConfig:
         self.disk_model = disk_model
         self.gap_opening_condition = gap_opening_condition
         self.consider_type_ii_migration = consider_type_ii_migration
+        self.torque_gap_transport = torque_gap_transport
         self.lisa_min_gw_frequency_hz = lisa_min_gw_frequency_hz
         self.lisa_max_gw_frequency_hz = lisa_max_gw_frequency_hz
         self.max_gw_time_myr = max_gw_time_myr

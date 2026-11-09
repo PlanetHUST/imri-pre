@@ -256,14 +256,19 @@ def compatible_run(path, config):
     if not metadata.exists():
         return False
     parameters = json.loads(metadata.read_text())["parameters"]
-    fields = ("smbh_masses_msun", "nsc_masses_msun", "num_repeats", "base_seed", "redshift", "duty_cycle_myr", "disk_model", "population_model", "metallicity", "popiii_min_mass_msun", "popiii_max_mass_msun", "popiii_imf_slope", "initial_stellar_density_gamma", "nsc_radius_pc_at_reference_mass", "nsc_radius_mass_slope", "nsc_radius_reference_mass_msun", "disk_alpha", "disk_accretion_rate_g_s", "disk_outer_radius_cm", "stellar_evolution_model", "natal_kick_model", "use_disk_inner_radius", "lisa_min_gw_frequency_hz", "lisa_max_gw_frequency_hz", "snr_threshold")
+    fields = ("smbh_masses_msun", "nsc_masses_msun", "num_repeats", "base_seed", "redshift", "duty_cycle_myr", "disk_model", "torque_gap_transport", "population_model", "metallicity", "popiii_min_mass_msun", "popiii_max_mass_msun", "popiii_imf_slope", "initial_stellar_density_gamma", "nsc_radius_pc_at_reference_mass", "nsc_radius_mass_slope", "nsc_radius_reference_mass_msun", "disk_alpha", "disk_accretion_rate_g_s", "disk_outer_radius_cm", "stellar_evolution_model", "natal_kick_model", "use_disk_inner_radius", "lisa_min_gw_frequency_hz", "lisa_max_gw_frequency_hz", "snr_threshold")
     for field in fields:
         value = getattr(config, field)
         if isinstance(value, np.ndarray):
             value = value.tolist()
-        saved_value = parameters.get(field, 13.6 if field == "popiii_min_mass_msun" else LEGACY_POPIII if field == "population_model" else None)
+        saved_value = parameters.get(field, 13.6 if field == "popiii_min_mass_msun" else LEGACY_POPIII if field == "population_model" else True if field == "torque_gap_transport" else None)
         if saved_value != value:
             return False
+    expected_integrator = "Radau" if config.disk_model == "torque_with_trap" else "DOP853"
+    if parameters.get("coupled_orbit_integrator", "DOP853") != expected_integrator:
+        return False
+    if config.disk_model == "torque_with_trap" and parameters.get("migration_contract", {}).get("thermal_optical_depth_gap_correction", True) != config.torque_gap_transport:
+        return False
     if config.population_model != LEGACY_POPIII and parameters.get("population_prescription") != population_description(config.population_model):
         return False
     if parameters.get("consumption_replenishment", {}).get("enabled") != config.consumption_replenishment:

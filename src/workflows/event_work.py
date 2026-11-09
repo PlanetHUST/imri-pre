@@ -134,6 +134,11 @@ class IMRIEventEvaluator:
         self.config: IMRIDynConfig = engine.config
         self.duty_cycle_myr = engine.duty_cycle_myr
 
+    @property
+    def orbit_solver_method(self) -> str:
+        """Implicit integration for stiff signed-torque traps; same ODE/events."""
+        return "Radau" if self.config.disk_model == TORQUE_WITH_TRAP else "DOP853"
+
     def _gas_drift_for_mass(
         self,
         result: IMRIDynSingleResult,
@@ -221,6 +226,7 @@ class IMRIEventEvaluator:
             min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
             redshift_model=redshift_model,
             stop_time_myr=collapse_myr,
+            solver_method=self.orbit_solver_method,
         )
         if pre.status != "stopped_at_event":
             return damping_result
@@ -580,6 +586,7 @@ class IMRIEventEvaluator:
                 gas_drift_cm_s=gas_drift_cm_s,
                 min_observed_frequency_hz=self.config.lisa_min_gw_frequency_hz,
                 redshift_model=redshift_model,
+                solver_method=self.orbit_solver_method,
             )
             event_decision = classify_coupled_event(
                 object_status=damping_result["status"],
@@ -601,6 +608,7 @@ class IMRIEventEvaluator:
                     gas_drift_cm_s=gas_drift_cm_s,
                     max_observed_frequency_hz=self.config.lisa_max_gw_frequency_hz,
                     redshift_model=redshift_model,
+                    solver_method=self.orbit_solver_method,
                 )
                 if event_decision.is_imri_candidate is True
                 and orbit_decision.gas_active_at_entry
@@ -695,6 +703,7 @@ class IMRIEventEvaluator:
                     gas_radius_cm=migration_radius_cm,
                     gas_drift_cm_s=gas_drift_cm_s,
                     redshift_model=redshift_model,
+                    solver_method=self.orbit_solver_method,
                 )
             except ArithmeticError:
                 consumption_status = "numerical_failure"

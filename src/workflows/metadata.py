@@ -22,6 +22,7 @@ from .config import (
     MIGRATION_CONTRACT,
     SEMI_TYPE_I,
     SEMI_WITHOUT_TRAP,
+    TORQUE_WITH_TRAP,
     migration_contract_name,
 )
 from lisa.snr import (
@@ -113,12 +114,15 @@ def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
         }
 
     return {
-        "name": MIGRATION_CONTRACT,
+        "name": (MIGRATION_CONTRACT if config.torque_gap_transport else "jm17_grishin2024_ungapped_type_i_thermal"),
+        "torque_composition": ("f_gap*Gamma_I+Gamma_th+(1-f_gap)*Gamma_viscous" if config.torque_gap_transport else "Gamma_I+Gamma_th"),
+        "signed_torque_retained": True,
         "gravitational_torque": "jimenez_masset_2017_linear",
         "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
         "thermal_validity_policy": "exclude_outside_linear_regime",
         "thermal_extrapolation_enabled": False,
-        "gap_depth": "kanagawa_1_over_1_plus_0p04K",
+        "thermal_optical_depth_gap_correction": config.torque_gap_transport,
+        "gap_depth": ("kanagawa_1_over_1_plus_0p04K" if config.torque_gap_transport else "diagnostic_only_not_applied"),
         "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
         "kanagawa_calibrated_max_parameter": (
             KANAGAWA_CALIBRATED_MAX_PARAMETER
@@ -126,7 +130,7 @@ def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
         "deep_gap_diagnostic": "crida_parameter_le_1",
         "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
         "gap_transport": (
-            "continuous_inertia_limited_viscous_drift_min_1_B"
+            "continuous_inertia_limited_viscous_drift_min_1_B" if config.torque_gap_transport else "disabled"
         ),
         "disk_dominance_parameter": "B=Sigma*r^2/migrator_mass",
         "wkb_jump_policy": "interpolate_log_slopes_across_flagged_cells",
@@ -207,8 +211,10 @@ def build_metadata(
             "disk_migration_scenario": config.disk_model,
             "gap_opening_condition": config.gap_opening_condition,
             "consider_type_ii_migration": config.consider_type_ii_migration,
+            "torque_gap_transport": config.torque_gap_transport,
             "migration_contract": _migration_contract_metadata(config),
             "orbit_model": "circular_coupled_gas_gw_v1",
+            "coupled_orbit_integrator": "Radau" if config.disk_model == TORQUE_WITH_TRAP else "DOP853",
             "orbit_assumptions": {
                 "eccentricity_at_embedding": "projected_to_zero_after_e_le_0.01_damping",
                 "component_masses": (

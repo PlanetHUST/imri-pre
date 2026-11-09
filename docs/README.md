@@ -5,6 +5,7 @@
 - [Physical model](physics_model.md): assumptions and source-module ownership.
 - [Parameter dependence](parameter_dependence.md): ten-input audit and controlled ±50% experiment.
 - [High-redshift rates](high_redshift_rates.md): three-panel damping, IMRI and detectable rate comparison for z=8–15 and uncertain massive NSCs.
+- [Physical-scenario rates](physical_scenario_comparison.md): approved analytical/torque migration and refill comparison; hydro damping pending.
 - [Detector audit](detectability_audit.md): event-level investigation and independent tests of the zero detection rates.
 - [Population-budget audit](population_budget_audit.md): geometry, damping handoff, stellar lifetimes and the low capture/candidate counts.
 - [IMF mass-range experiment](imf_mass_range.md): archived 1–400 Msun benchmark and upper-only control.

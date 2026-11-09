@@ -78,7 +78,7 @@ def run_simulation(config: IMRIDynConfig) -> pd.DataFrame:
     print(f"Disk migration scenario: {config.disk_model}")
     print(
         "Disk migration contract: "
-        f"{migration_contract_name(config.disk_model)}"
+        f"{migration_contract_name(config.disk_model, torque_gap_transport=config.torque_gap_transport)}"
     )
     print(f"Redshift: {config.redshift:.3e}")
     print(
