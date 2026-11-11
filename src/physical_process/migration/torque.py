@@ -59,10 +59,10 @@ class MigrationParameters:
     #: hold.  The Grishin-2024/Masset-2017 thermal torque is linear theory: it
     #: assumes the perturber's Hill sphere sits inside the disk thickness
     #: (``R_H < H``), among other conditions collected in
-    #: ``thermal_torque_regime_valid``.  In this project that condition fails in
-    #: *every* cell of *every* migration path -- ``R_H/H ~ 2-11``, because AGN
-    #: disks are thin and the mass ratios are not small enough.  Extrapolating
-    #: a linear result that far produced the dominant term in the torque
+    #: ``thermal_torque_regime_valid``. Thin-disk portions of previous paths
+    #: violated this strongly (``R_H/H ~ 2-11``); applicability must nevertheless
+    #: be evaluated per cell, not assumed invalid across every host/profile.
+    #: Extrapolating a linear result that far produced the dominant term in the torque
     #: balance, and with it the traps that set the IMRI yield.
     #:
     #: Default ``False``: outside its validity the thermal torque is dropped
@@ -72,6 +72,8 @@ class MigrationParameters:
     #: structure the theory cannot support.  Set ``True`` to reproduce the
     #: extrapolating behaviour.
     extrapolate_thermal_torque: bool = False
+    # False is the controlled, ungapped Type-I + validity-masked thermal case.
+    include_gap_transport: bool = True
 
 
 @dataclass(frozen=True)
@@ -405,6 +407,8 @@ def compose_migration_torque_si(
     thermal_torque_si,
     gap_depth_fraction,
     secondary_dominated_torque_si,
+    *,
+    include_gap_transport: bool = True,
 ):
     """Return the production torque, continuous across gap opening.
 
@@ -439,6 +443,10 @@ def compose_migration_torque_si(
         raise ValueError("torque components and gap depth must have matching shapes")
     if np.any(~np.isfinite(gap_depth) | (gap_depth < 0.0) | (gap_depth > 1.0)):
         raise ValueError("gap depth fraction must be finite and lie in [0, 1]")
+    if not isinstance(include_gap_transport, bool):
+        raise TypeError("include_gap_transport must be a bool")
+    if not include_gap_transport:
+        return gravitational + thermal
     return gap_depth * gravitational + thermal + (
         1.0 - gap_depth
     ) * secondary_dominated
@@ -510,8 +518,10 @@ def compute_thermal_torque_terms(
     )
     hot_minus_cold = luminosity_ratio * hot_saturation - cold_saturation
 
+    # An ungapped comparison must also use the unperturbed optical depth.
+    # Hill/linear-theory validity checks below are retained in both modes.
     effective_optical_depth = np.asarray(disk.tauV, dtype=float) * (
-        gap.gap_depth_fraction
+        gap.gap_depth_fraction if params.include_gap_transport else 1.0
     )
     optical_depth_suppression = 1.0 - np.exp(
         -np.sqrt(params.alpha) * effective_optical_depth
@@ -702,6 +712,7 @@ def compute_torque_profile(
         gamma_th_si,
         gap.gap_depth_fraction,
         gamma_secondary_dominated_si,
+        include_gap_transport=params.include_gap_transport,
     )
 
     radius_cm = radius_m * METER_TO_CM

@@ -2,6 +2,8 @@
 # Python
 # ============================================================
 __pycache__/
+.pytest_cache/
+*.egg-info/
 *.py[cod]
 *$py.class
 
@@ -13,18 +15,20 @@ env/
 # ============================================================
 # Generated scientific outputs
 # ============================================================
+# Local simulation results, never source-controlled
+outputs/
+# Old generated locations (not used by the main workflow)
 output/
+figs/
 input/
 
 # Legacy generated-output locations
 imri_redshift_scan_results/
 imri_dyn_results/
-figs/
 # Maintained documentation and archived reference transcripts are source.
 # The standalone HTML export remains a generated local artifact.
 docs/*.html
 
-lisa_ref/
 # ============================================================
 # Temporary files
 # ============================================================

@@ -192,8 +192,12 @@ def _disk_profiles_frame(run: RunResults) -> pd.DataFrame:
     for mass in masses:
         profile = build_pagn_disk_profile(
             float(mass),
-            PAGN_ALPHA,
-            accretion_rate_g_s=DISK_ACCRETION_RATE_G_S_PER_MSUN * float(mass),
+            run.metadata["parameters"].get("disk_alpha", PAGN_ALPHA),
+            accretion_rate_g_s=(
+                run.metadata["parameters"].get("disk_accretion_rate_g_s")
+                or DISK_ACCRETION_RATE_G_S_PER_MSUN * float(mass)
+            ),
+            outer_radius_cm=run.metadata["parameters"].get("disk_outer_radius_cm"),
         )
         radius_rg = np.asarray(profile.radius_cm, dtype=float) / float(
             profile.gravitational_radius_cm

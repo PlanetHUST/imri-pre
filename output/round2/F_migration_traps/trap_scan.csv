@@ -1,6 +1,0 @@
-smbh_mass_msun,sign_changes,stable_traps,anti_traps,boundary_roots,unresolved_roots,outermost_stable_rg,strict_stable_traps,outward_torque_cells,thermal_valid_fraction,reproducible
-1000.0,0,0,0,0,0,,0,0,0.043,True
-10000.0,2,0,0,0,2,,0,1,0.129,True
-100000.0,0,0,0,0,0,,0,0,0.246,True
-1000000.0,0,0,0,0,0,,0,0,0.53,True
-10000000.0,0,0,0,0,0,,0,0,0.87,True

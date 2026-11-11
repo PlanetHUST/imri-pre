@@ -247,11 +247,23 @@ def build_pagn_disk_profile(
     thompson_rout_rg: float = 1.0e7,
     thompson_outer_accretion_rate_msun_per_yr: Optional[float] = None,
     suppress_pagn_output: bool = True,
+    outer_radius_cm: Optional[float] = None,
 ) -> PagnDiskProfile:
-    """Build a pAGN disk and return CGS arrays for the existing pipeline."""
+    """Build a pAGN disk and return CGS arrays for the existing pipeline.
+
+    ``outer_radius_cm`` independently fixes the Sirko boundary instead of Q=1.
+    Extending past Q=1 is a phenomenological sensitivity test, not a guarantee
+    that the extended disk is stable.
+    """
+    if outer_radius_cm is not None and (
+        not np.isfinite(outer_radius_cm) or outer_radius_cm <= 0
+    ):
+        raise ValueError("outer_radius_cm must be finite and positive")
     Sirko, Thompson, ct = _require_pagn()
 
     model_key = model.lower()
+    if outer_radius_cm is not None and model_key != "sirko":
+        raise ValueError("explicit outer_radius_cm is supported only for Sirko")
     smbh_mass_kg = float(smbh_mass_msun) * ct.MSun
 
     with contextlib.ExitStack() as output_context:
@@ -266,7 +278,13 @@ def build_pagn_disk_profile(
             else:
                 kwargs["le"] = float(eddington_ratio)
             disk = Sirko.SirkoAGN(**kwargs)
-            _solve_sirko_disk_with_q_outer_radius(disk, int(n_resolution), ct)
+            if outer_radius_cm is None:
+                _solve_sirko_disk_with_q_outer_radius(disk, int(n_resolution), ct)
+            else:
+                if outer_radius_cm / METER_TO_CM <= 6.0 * float(disk.Rs):
+                    raise ValueError("outer disk radius must exceed inner disk radius")
+                disk.Rmax = outer_radius_cm / METER_TO_CM
+                disk.solve_disk(N=int(n_resolution))
         elif model_key == "thompson":
             thompson_outer_radius_m = float(thompson_rout_rg) * (
                 ct.G * smbh_mass_kg / ct.c**2
@@ -313,11 +331,12 @@ def build_pagn_disk_profile(
         "Rout",
         "R_out",
     )
-    outer_radius_cm = _toomre_q_outer_radius_cm(
-        radius_cm,
-        toomre_q,
-        fallback_cm=fallback_outer_radius_cm,
-    )
+    if outer_radius_cm is None:
+        outer_radius_cm = _toomre_q_outer_radius_cm(
+            radius_cm,
+            toomre_q,
+            fallback_cm=fallback_outer_radius_cm,
+        )
     _set_disk_outer_radius_cm(disk, outer_radius_cm)
 
     return PagnDiskProfile(

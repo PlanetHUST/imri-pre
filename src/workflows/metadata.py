@@ -9,6 +9,7 @@ from typing import Any
 
 import physical_process.gw_frequency_radius as gw_helpers
 from physical_process.sampling import SOLAR_METALLICITY
+from physical_process.population_models import population_description, population_budget
 from physical_process.redshift_evolve import RedshiftEvolution
 from physical_process.migration import (
     CRIDA_DEEP_GAP_PARAMETER,
@@ -19,8 +20,9 @@ from physical_process.migration import (
 from .config import (
     IMRIDynConfig,
     MIGRATION_CONTRACT,
-    PAGN_ALPHA,
+    SEMI_TYPE_I,
     SEMI_WITHOUT_TRAP,
+    TORQUE_WITH_TRAP,
     migration_contract_name,
 )
 from lisa.snr import (
@@ -56,7 +58,10 @@ def _stellar_model_metadata(config: IMRIDynConfig) -> dict[str, Any]:
     details: dict[str, Any] = {
         "model": config.stellar_evolution_model,
         "kick_model": config.natal_kick_model,
-        "precollapse_mass_model": "fixed_zams_mass",
+        "precollapse_mass_model": ("fixed_zams_mass" if config.population_model == "legacy_popiii"
+                                   else "fixed_representative_star_or_preexisting_bh_mass"),
+        "bh_formation_clock": ("analytic_lifetime_or_sevn" if config.population_model == "legacy_popiii"
+                               else "zero_for_existing_bh_infinity_for_representative_star"),
         "metallicity_absolute_z": config.metallicity * SOLAR_METALLICITY,
     }
     if config.stellar_evolution_model == "sevn":
@@ -85,10 +90,13 @@ def _stellar_model_metadata(config: IMRIDynConfig) -> dict[str, Any]:
 
 def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
     """Describe the active migration scenario and its equations."""
-    if config.disk_model == SEMI_WITHOUT_TRAP:
+    if config.disk_model in (SEMI_TYPE_I, SEMI_WITHOUT_TRAP):
+        type_ii = (config.disk_model == SEMI_WITHOUT_TRAP
+                   and config.consider_type_ii_migration)
         return {
-            "name": migration_contract_name(SEMI_WITHOUT_TRAP),
-            "scenario": "comparison_only_not_production",
+            "name": migration_contract_name(config.disk_model),
+            "scenario": ("default_single_host" if config.disk_model == SEMI_TYPE_I
+                         else "optional_comparison"),
             "type_i_timescale": (
                 "t_I(R)=M_smbh^2*h^2/(2*m*Sigma*R^2*Omega)"
             ),
@@ -96,22 +104,25 @@ def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
             "integration": "t_mig=integral t_local(R) dlnR",
             "gap_opening_condition": config.gap_opening_condition,
             "type_ii_kanagawa_threshold": 11.0,
-            "consider_type_ii_migration": config.consider_type_ii_migration,
-            "alpha": PAGN_ALPHA,
+            "consider_type_ii_migration": type_ii,
+            "alpha": config.disk_alpha,
             "direction": "inward_only",
             "traps": "not_represented",
-            "classical_type_ii_branch": config.consider_type_ii_migration,
+            "classical_type_ii_branch": type_ii,
             "disk_profile": "pagn_sirko_thompson",
             "omega_source": "project_keplerian_from_smbh_mass",
         }
 
     return {
-        "name": MIGRATION_CONTRACT,
+        "name": (MIGRATION_CONTRACT if config.torque_gap_transport else "jm17_grishin2024_ungapped_type_i_thermal"),
+        "torque_composition": ("f_gap*Gamma_I+Gamma_th+(1-f_gap)*Gamma_viscous" if config.torque_gap_transport else "Gamma_I+Gamma_th"),
+        "signed_torque_retained": True,
         "gravitational_torque": "jimenez_masset_2017_linear",
         "thermal_torque": "grishin_gilbaum_stone_2024_saturated",
         "thermal_validity_policy": "exclude_outside_linear_regime",
         "thermal_extrapolation_enabled": False,
-        "gap_depth": "kanagawa_1_over_1_plus_0p04K",
+        "thermal_optical_depth_gap_correction": config.torque_gap_transport,
+        "gap_depth": ("kanagawa_1_over_1_plus_0p04K" if config.torque_gap_transport else "diagnostic_only_not_applied"),
         "gap_depth_coefficient": KANAGAWA_GAP_DEPTH_COEFFICIENT,
         "kanagawa_calibrated_max_parameter": (
             KANAGAWA_CALIBRATED_MAX_PARAMETER
@@ -119,7 +130,7 @@ def _migration_contract_metadata(config: IMRIDynConfig) -> dict[str, Any]:
         "deep_gap_diagnostic": "crida_parameter_le_1",
         "crida_deep_gap_parameter": CRIDA_DEEP_GAP_PARAMETER,
         "gap_transport": (
-            "continuous_inertia_limited_viscous_drift_min_1_B"
+            "continuous_inertia_limited_viscous_drift_min_1_B" if config.torque_gap_transport else "disabled"
         ),
         "disk_dominance_parameter": "B=Sigma*r^2/migrator_mass",
         "wkb_jump_policy": "interpolate_log_slopes_across_flagged_cells",
@@ -163,7 +174,14 @@ def build_metadata(
                 "relaxation_time_role": "diagnostic_only",
                 "external_inflow": False,
             },
+            "population_model": config.population_model,
+            "legacy_imf_and_lifetime_inputs_used": config.population_model == "legacy_popiii",
+            "legacy_relaxation_diagnostic_used": config.population_model == "legacy_popiii",
+            "population_prescription": population_description(config.population_model),
+            "population_grid_budgets": [population_budget(config.population_model, float(m), float(n))
+                for m in config.smbh_masses_msun for n in config.nsc_masses_msun],
             "metallicity": config.metallicity,
+            "popiii_min_mass_msun": config.popiii_min_mass_msun,
             "popiii_max_mass_msun": config.popiii_max_mass_msun,
             "popiii_imf_slope": config.popiii_imf_slope,
             "metallicity_absolute_z": config.metallicity * SOLAR_METALLICITY,
@@ -181,13 +199,22 @@ def build_metadata(
             "nsc_radius_pc_at_reference_mass": config.nsc_radius_pc_at_reference_mass,
             "nsc_radius_reference_mass_msun": config.nsc_radius_reference_mass_msun,
             "nsc_radius_mass_slope": config.nsc_radius_mass_slope,
+            "disk_alpha": config.disk_alpha,
+            "disk_accretion_rate_g_s": config.disk_accretion_rate_g_s,
+            "disk_outer_radius_cm": config.disk_outer_radius_cm,
+            "disk_outer_boundary_policy": (
+                "first_Q_equals_1" if config.disk_outer_radius_cm is None
+                else "explicit_radius_may_include_self_gravitating_disk"
+            ),
             "use_disk_inner_radius": config.use_disk_inner_radius,
             "disk_model": config.disk_model,
             "disk_migration_scenario": config.disk_model,
             "gap_opening_condition": config.gap_opening_condition,
             "consider_type_ii_migration": config.consider_type_ii_migration,
+            "torque_gap_transport": config.torque_gap_transport,
             "migration_contract": _migration_contract_metadata(config),
             "orbit_model": "circular_coupled_gas_gw_v1",
+            "coupled_orbit_integrator": "Radau" if config.disk_model == TORQUE_WITH_TRAP else "DOP853",
             "orbit_assumptions": {
                 "eccentricity_at_embedding": "projected_to_zero_after_e_le_0.01_damping",
                 "component_masses": (

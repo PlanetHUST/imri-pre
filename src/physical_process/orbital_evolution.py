@@ -127,6 +127,7 @@ def evolve_circular_orbit(
     min_observed_frequency_hz: float,
     redshift_model: RedshiftEvolution,
     stop_time_myr: float | None = None,
+    solver_method: str = "DOP853",
 ) -> CircularOrbitOutcome:
     """Evolve the circular orbit to first band entry, ISCO, or the z=0 limit.
 
@@ -134,6 +135,8 @@ def evolve_circular_orbit(
     profile. The two contributions add while the object is inside the disk
     and the AGN is active; after gas ceases, the Peters radius is analytic.
     """
+    if solver_method not in ("DOP853", "Radau"):
+        raise ValueError("orbit solver_method must be DOP853 or Radau")
     radius_grid = np.asarray(gas_radius_cm, dtype=float)
     gas_drift = np.asarray(gas_drift_cm_s, dtype=float)
     if (
@@ -300,6 +303,7 @@ def evolve_circular_orbit(
                 min_observed_frequency_hz=min_observed_frequency_hz,
                 redshift_model=redshift_model,
                 stop_time_myr=stop_time_myr,
+                solver_method=solver_method,
             )
 
     gas_active = (
@@ -410,7 +414,7 @@ def evolve_circular_orbit(
             (current_time_myr, gas_end_time_myr),
             [np.log(current_radius_cm)],
             events=events,
-            method="DOP853",
+            method=solver_method,
             rtol=ORBIT_RELATIVE_TOLERANCE,
             atol=ORBIT_LOG_RADIUS_ABSOLUTE_TOLERANCE,
             max_step=max((gas_end_time_myr - current_time_myr) / 128.0, 1.0e-12),
@@ -537,6 +541,7 @@ def continue_circular_band_track(
     gas_drift_cm_s: np.ndarray,
     max_observed_frequency_hz: float,
     redshift_model: RedshiftEvolution,
+    solver_method: str = "DOP853",
 ) -> CircularBandTrack:
     """Continue the entry orbit to detector maximum, ISCO, or cosmic horizon.
 
@@ -544,6 +549,8 @@ def continue_circular_band_track(
     comparison. The returned dense gas solution and exact vacuum branch let
     the detector integrate a mission window without inventing a new radius.
     """
+    if solver_method not in ("DOP853", "Radau"):
+        raise ValueError("orbit solver_method must be DOP853 or Radau")
     if entry.status not in {"band_entry", "already_inside_band"}:
         raise ValueError("band continuation requires a finite physical entry")
     if not np.isfinite(max_observed_frequency_hz) or max_observed_frequency_hz <= 0:
@@ -688,7 +695,7 @@ def continue_circular_band_track(
             [np.log(radius_cm)],
             events=[maximum_event, isco_event, inner_event, outer_event],
             dense_output=True,
-            method="DOP853",
+            method=solver_method,
             rtol=ORBIT_RELATIVE_TOLERANCE,
             atol=ORBIT_LOG_RADIUS_ABSOLUTE_TOLERANCE,
             max_step=max((gas_deadline_myr - time_myr) / 128.0, 1.0e-12),
@@ -747,6 +754,7 @@ def continue_to_isco(
     gas_radius_cm: np.ndarray,
     gas_drift_cm_s: np.ndarray,
     redshift_model: RedshiftEvolution,
+    solver_method: str = "DOP853",
 ) -> CircularBandTrack:
     """Continue the same coupled orbit through the detector band to ISCO."""
     total_mass_msun = primary_mass_msun + secondary_mass_msun
@@ -768,4 +776,5 @@ def continue_to_isco(
         gas_drift_cm_s=gas_drift_cm_s,
         max_observed_frequency_hz=unreachable_observed_max_hz,
         redshift_model=redshift_model,
+        solver_method=solver_method,
     )

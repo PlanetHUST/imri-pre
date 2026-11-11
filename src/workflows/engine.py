@@ -13,7 +13,6 @@ from disk_quantity.pagn_disk_adapter import build_pagn_disk_profile
 from .config import (
     DISK_ACCRETION_RATE_G_S_PER_MSUN,
     DISK_INNER_RADIUS_RG,
-    PAGN_ALPHA,
     IMRIDynConfig,
 )
 from .models import DiskProfiles
@@ -35,19 +34,22 @@ class IMRIDynEngine:
         self.config = config
         self.duty_cycle_myr = config.duty_cycle_myr
         self.disk_cache: dict[float, DiskProfiles] = {}
-        self.torque_profile_cache: dict[tuple[float, float, float], TorqueProfile] = {}
+        self.torque_profile_cache: dict[tuple[float, float, float, bool], TorqueProfile] = {}
 
     def get_disk_profiles(self, m_smbh_msun: float) -> DiskProfiles:
         """Return cached disk profiles for an SMBH mass [Msun]."""
 
         if m_smbh_msun not in self.disk_cache:
-            accretion_rate_g_s = DISK_ACCRETION_RATE_G_S_PER_MSUN * m_smbh_msun
+            accretion_rate_g_s = self.config.disk_accretion_rate_g_s
+            if accretion_rate_g_s is None:
+                accretion_rate_g_s = DISK_ACCRETION_RATE_G_S_PER_MSUN * m_smbh_msun
 
-            pagn_alpha = PAGN_ALPHA
+            pagn_alpha = self.config.disk_alpha
             pagn_disk = build_pagn_disk_profile(
                 m_smbh_msun,
                 pagn_alpha,
                 accretion_rate_g_s=accretion_rate_g_s,
+                outer_radius_cm=self.config.disk_outer_radius_cm,
             )
 
             # Add disk cache
@@ -91,9 +93,13 @@ class IMRIDynEngine:
             float(smbh_mass_msun),
             float(migrator_mass_msun),
             torque_alpha,
+            self.config.torque_gap_transport,
         )
         if cache_key not in self.torque_profile_cache:
-            params = MigrationParameters(alpha=torque_alpha)
+            params = MigrationParameters(
+                alpha=torque_alpha, include_gap_transport=self.config.torque_gap_transport,
+                extrapolate_thermal_torque=False,
+            )
             try:
                 self.torque_profile_cache[cache_key] = compute_torque_profile(
                     disk_data["torque_disk"],

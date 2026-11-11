@@ -7,6 +7,10 @@ import numpy as np
 import physical_process.constants as const
 import physical_process.nsc_orbital as nsc_orbital
 import physical_process.sampling as stellar_sampling
+from physical_process.population_models import (
+    LEGACY_POPIII, PAN_NSC, PAN_PAPER, XUE_BH,
+    published_masses, pan_orbits, xue_orbits,
+)
 
 from .config import IMRIDynConfig, ORBITAL_SAMPLING_MIN_RADIUS_RG, YEARS_PER_MYR
 from .models import DiskProfiles, GeometricPopulation, StellarPopulation
@@ -43,33 +47,34 @@ def sample_disk_crossing_population(
     config: IMRIDynConfig,
 ) -> PopulationSelection:
     """Sample one NSC population and select orbits crossing the AGN disk."""
-    mass_msun, lifetime_yr = stellar_sampling.sample_efficient(
-        m_nsc_msun,
-        Z=config.metallicity,
-        popiii_max_mass_msun=config.popiii_max_mass_msun,
-        popiii_imf_slope=config.popiii_imf_slope,
-    )
-    nsc_radius_cm = nsc_orbital.estimate_nsc_radius_cm(
-        m_nsc_msun,
-        config.nsc_radius_pc_at_reference_mass,
-        config.nsc_radius_reference_mass_msun,
-        config.nsc_radius_mass_slope,
-    )
-    semi_major_axis_cm, eccentricity, inclination_rad, cos_omega = (
-        nsc_orbital.initial_star(
-            star_count=len(mass_msun),
-            smbh_mass_msun=m_smbh_msun,
-            minimum_radius_cm=(
-                ORBITAL_SAMPLING_MIN_RADIUS_RG
-                * const.G
-                * m_smbh_msun
-                * const.msun
-                / const.c**2
-            ),
-            max_radius_cm=nsc_radius_cm,
+    minimum_a_cm = ORBITAL_SAMPLING_MIN_RADIUS_RG * const.G * m_smbh_msun * const.msun / const.c**2
+    model = config.population_model
+    if model == LEGACY_POPIII:
+        mass_msun, lifetime_yr = stellar_sampling.sample_efficient(
+            m_nsc_msun, Z=config.metallicity,
+            popiii_min_mass_msun=config.popiii_min_mass_msun,
+            popiii_max_mass_msun=config.popiii_max_mass_msun,
+            popiii_imf_slope=config.popiii_imf_slope,
+        )
+        nsc_radius_cm = nsc_orbital.estimate_nsc_radius_cm(
+            m_nsc_msun, config.nsc_radius_pc_at_reference_mass,
+            config.nsc_radius_reference_mass_msun, config.nsc_radius_mass_slope,
+        )
+        semi_major_axis_cm, eccentricity, inclination_rad, cos_omega = nsc_orbital.initial_star(
+            star_count=len(mass_msun), smbh_mass_msun=m_smbh_msun,
+            minimum_radius_cm=minimum_a_cm, max_radius_cm=nsc_radius_cm,
             gamma=config.initial_stellar_density_gamma,
         )
-    )
+    else:
+        mass_msun, lifetime_yr = published_masses(model, m_smbh_msun, m_nsc_msun)
+        if model in (PAN_NSC, PAN_PAPER):
+            semi_major_axis_cm, eccentricity, inclination_rad, cos_omega, nsc_radius_cm = pan_orbits(
+                len(mass_msun), m_smbh_msun, minimum_a_cm, config.initial_stellar_density_gamma)
+        elif model == XUE_BH:
+            semi_major_axis_cm, eccentricity, inclination_rad, cos_omega, nsc_radius_cm = xue_orbits(
+                len(mass_msun), m_smbh_msun)
+        else:
+            raise ValueError(f"Unsupported population model: {model}")
     initial: StellarPopulation = {
         "mass_msun": np.asarray(mass_msun, dtype=float),
         "formation_time_myr": np.asarray(lifetime_yr / YEARS_PER_MYR, dtype=float),
@@ -96,7 +101,10 @@ def sample_disk_crossing_population(
         "inclination_rad": initial["inclination_rad"][selected_indices],
         "cos_omega": initial["cos_omega"][selected_indices],
     }
-    if selected_indices.size == 0:
+    if selected_indices.size == 0 or model != LEGACY_POPIII:
+        # The historical relaxation diagnostic uses a separate gamma=1.3
+        # density and is not a published-preset relaxation/FP model. Do not
+        # silently present that unrelated density as the new population.
         mean_relaxation_time_myr = np.nan
     else:
         relaxation_time_myr = (

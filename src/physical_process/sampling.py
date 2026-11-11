@@ -141,7 +141,8 @@ def TII(m: FloatArray) -> FloatArray:
 
 
 def sample_efficient(
-    mtot: float, Z: float, *, popiii_max_mass_msun: float = 197.0,
+    mtot: float, Z: float, *, popiii_min_mass_msun: float = 13.6,
+    popiii_max_mass_msun: float = 197.0,
     popiii_imf_slope: float = 1.77,
 ) -> tuple[FloatArray, FloatArray]:
     """Return stellar masses [Msun] and lifetimes [yr]."""
@@ -155,7 +156,8 @@ def sample_efficient(
 
     if Z < POPULATION_III_THRESHOLD_SOLAR * SOLAR_METALLICITY:
         masses_msun = sample_popiii_efficient(
-            mtot, m_max=popiii_max_mass_msun, alpha=popiii_imf_slope
+            mtot, m_min=popiii_min_mass_msun, m_max=popiii_max_mass_msun,
+            alpha=popiii_imf_slope
         )
         lifetime_yr = population_iii_lifetime_yr(masses_msun)
     else:

@@ -156,10 +156,13 @@ class IMRISingleWorkflow:
         )
 
         result.mean_relaxation_time_myr_geo = population.mean_relaxation_time_myr
-        vprint(
-            "Relaxation times initialized, mean_trel_myr_geo = "
-            f"{result.mean_relaxation_time_myr_geo:.3e} Myr"
-        )
+        if np.isfinite(result.mean_relaxation_time_myr_geo):
+            vprint(
+                "Legacy relaxation diagnostic, mean_trel_myr_geo = "
+                f"{result.mean_relaxation_time_myr_geo:.3e} Myr"
+            )
+        else:
+            vprint("Relaxation diagnostic unavailable for this population; it is not used in rates.")
 
         # Damp the selected orbits, then classify their IMRI outcomes.
         damping_tasks = build_damping_tasks(

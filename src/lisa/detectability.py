@@ -90,6 +90,12 @@ def classify_coupled_entry(
             current_radius_cm=orbit.final_radius_cm,
             mission_duration_years=mission_duration_years,
         )
+    if not is_imri_candidate:
+        return _not_imri_candidate_decision(
+            primary_mass_msun=primary_mass_msun,
+            current_radius_cm=orbit.final_radius_cm,
+            mission_duration_years=mission_duration_years,
+        )
     if not bh_candidate:
         return DetectRateDecision(
             detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
@@ -243,6 +249,32 @@ def classify_coupled_entry(
         snr_observation_case=snr_result.observation_case,
         snr_window_placement=snr_result.window_placement,
         snr_observation_redshift=snr_result.redshift,
+    )
+
+
+def _not_imri_candidate_decision(
+    *,
+    primary_mass_msun: float,
+    current_radius_cm: float,
+    mission_duration_years: float,
+) -> DetectRateDecision:
+    """Return an unevaluated detector result for an explicitly excluded source."""
+
+    return DetectRateDecision(
+        detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
+        is_lisa_detectable=None,
+        snr_proxy=np.nan,
+        source_frequency_hz=np.nan,
+        observed_frequency_hz=np.nan,
+        detection_time_myr=np.inf,
+        detection_redshift=np.nan,
+        final_smbh_mass_msun=primary_mass_msun,
+        final_radius_cm=current_radius_cm,
+        final_entry_radius_cm=np.nan,
+        gw_time_after_gas_myr=np.inf,
+        cosmic_merge_applied=False,
+        detect_rate_reason="not_imri_candidate",
+        mission_duration_years=mission_duration_years,
     )
 
 
@@ -479,7 +511,7 @@ def unsupported_band_entry_decision(
 
 def classify_detectability(
     *,
-    is_imri_candidate: bool,
+    is_imri_candidate: bool | None,
     primary_mass_msun: float,
     secondary_mass_msun: float,
     r_gas_fin_cm: float,
@@ -498,21 +530,16 @@ def classify_detectability(
     snr_window_placement: str = DEFAULT_SNR_WINDOW_PLACEMENT,
 ) -> DetectRateDecision:
     """Classify one IMRI candidate after gas delivery and cosmic evolution."""
+    if is_imri_candidate is None:
+        return unsupported_band_entry_decision(
+            primary_mass_msun=primary_mass_msun,
+            current_radius_cm=r_gas_fin_cm,
+            mission_duration_years=mission_duration_years,
+        )
     if not is_imri_candidate:
-        return DetectRateDecision(
-            detect_rate_class=DETECTION_CLASS_NOT_EVALUATED,
-            is_lisa_detectable=None,
-            snr_proxy=np.nan,
-            source_frequency_hz=np.nan,
-            observed_frequency_hz=np.nan,
-            detection_time_myr=np.inf,
-            detection_redshift=np.nan,
-            final_smbh_mass_msun=primary_mass_msun,
-            final_radius_cm=r_gas_fin_cm,
-            final_entry_radius_cm=np.nan,
-            gw_time_after_gas_myr=np.inf,
-            cosmic_merge_applied=False,
-            detect_rate_reason="not_imri_candidate",
+        return _not_imri_candidate_decision(
+            primary_mass_msun=primary_mass_msun,
+            current_radius_cm=r_gas_fin_cm,
             mission_duration_years=mission_duration_years,
         )
 
