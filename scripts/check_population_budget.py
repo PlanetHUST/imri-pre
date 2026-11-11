@@ -171,8 +171,8 @@ def critical_secondary_masses():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input-dir", type=Path, default=Path("outputs/high_redshift_rates"))
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/population_budget_audit"))
+    parser.add_argument("--input-dir", type=Path, default=Path("outputs/core/high_redshift_rates"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/supporting/population_budget_audit"))
     parser.add_argument("--workers", type=int, default=6)
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)

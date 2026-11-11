@@ -121,7 +121,7 @@ def plot_results(frame, output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/parameter_dependence"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/supporting/parameter_dependence"))
     parser.add_argument("--smbh-mass", type=float, default=1e5, help="Reference member of default SMBH grid")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--workers", type=int, default=1)

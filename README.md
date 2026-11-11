@@ -17,6 +17,12 @@ python scripts/check.py --run-dir outputs/pan2021_small_run
 
 The three positional arguments are Monte Carlo repeats, output directory and damping worker count. An explicit seed makes sampling reproducible; keep the same inputs and dependency versions when comparing results. A zero IMRI count can be a valid scientific result. For a more detailed guide, see [quickstart](docs/quickstart.md).
 
+## Scientific interpretation
+
+Start with the [LaTeX manuscript](../articles/imri_pre/main.tex): a possible high-redshift IMRI channel, its model dependence, and the distinction between high-z delivery and delayed detectability.
+
+Read [physical mechanisms](docs/physical_mechanisms.md) for LaTeX equations, the formation-to-detection physics and completed project work. The [results synthesis](docs/simulation_results_synthesis.md) analyzes the saved simulations, their uncertainty budget and what remains necessary for a realistic detectable high-redshift source.
+
 ## Where to look
 
 | Path | Purpose |
@@ -27,7 +33,7 @@ The three positional arguments are Monte Carlo repeats, output directory and dam
 | `src/optional_models/` | Opt-in SEVN, damping benchmarks and Type-I/II comparison |
 | `src/viz/` | Optional figures; not required for the main run |
 | `scripts/check.py`, `tests/core/`, `tests/optional/` | One-command checks, default-path and optional-model assertions |
-| `outputs/` | Generated runs; use separate directories for each population |
+| `outputs/` | [Organized results](outputs/README.md): core high-z studies, supporting validation, exploratory archives; `single_host/` is runtime scratch |
 
 See [published populations](docs/published_populations.md) for mass normalization, radial-law definitions and limitations. Explicit `--population-model legacy_popiii` retains the old analytic IMF; custom Pop III IMF controls or SEVN auto-select that legacy path unless a population is explicitly chosen. Pan paper normalization and the Xue BH-only control do not have an independent NSC-mass axis.
 
@@ -39,6 +45,6 @@ Run the focused checks with:
 python scripts/check.py
 ```
 
-The wrapper invokes the retained tests; `PYTHONPATH=src python -m pytest -q` also works if pytest is installed. See [workflow](docs/main_workflow.md) and [model](docs/physics_model.md) for the action path and assumptions.
+The wrapper invokes the retained tests; `PYTHONPATH=src python -m pytest -q` also works if pytest is installed. See the [run/workflow guide](docs/quickstart.md) and [physical mechanisms](docs/physical_mechanisms.md) for the action path and assumptions. The [documentation index](docs/README.md) lists the four consolidated guides.
 
 Tree batch is no longer supported. The moved `input/galaxy_1e12.csv` is preserved locally but is not used by the single-host command. Optional SEVN and alternative migration prescriptions remain available programmatically; the default uses no SEVN backend. LISA SNR is implemented in `src/lisa/snr.py`; the unused external GitHub clone formerly at `lisa_ref/` has been removed.

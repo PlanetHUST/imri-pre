@@ -45,9 +45,9 @@ def diagnostics(frame):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline", type=Path, default=Path("outputs/high_redshift_rates"))
-    parser.add_argument("--broad", type=Path, default=Path("outputs/imf_1_400_rates"))
-    parser.add_argument("--upper-control", type=Path, default=Path("outputs/imf_13p6_400_reference"))
+    parser.add_argument("--baseline", type=Path, default=Path("outputs/core/high_redshift_rates"))
+    parser.add_argument("--broad", type=Path, default=Path("outputs/archive/imf/imf_1_400_rates"))
+    parser.add_argument("--upper-control", type=Path, default=Path("outputs/archive/imf/imf_13p6_400_reference"))
     args = parser.parse_args(argv)
     old = pd.read_csv(args.baseline / "host_rates.csv")
     broad = pd.read_csv(args.broad / "host_rates.csv")

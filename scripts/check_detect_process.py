@@ -169,8 +169,8 @@ def plot_snr(summary, output):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input-dir", type=Path, default=Path("outputs/high_redshift_rates"))
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/detectability_audit"))
+    parser.add_argument("--input-dir", type=Path, default=Path("outputs/core/high_redshift_rates"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/supporting/detectability_audit"))
     args = parser.parse_args(argv)
     output = args.output_dir
     output.mkdir(parents=True, exist_ok=True)

@@ -282,7 +282,7 @@ def main(argv=None):
     parser.add_argument("--population-model", choices=POPULATION_MODELS, default=None)
     parser.add_argument("--popiii-min-mass-msun", type=float, default=13.6)
     parser.add_argument("--popiii-max-mass-msun", type=float, default=197.0)
-    parser.add_argument("--reuse-dir", type=Path, default=Path("outputs/parameter_dependence"))
+    parser.add_argument("--reuse-dir", type=Path, default=Path("outputs/supporting/parameter_dependence"))
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--seed", type=int, default=20261107)
@@ -297,9 +297,9 @@ def main(argv=None):
     if model in (PAN_PAPER, XUE_BH) and not (args.reference_only or args.plot_only):
         parser.error("This paper normalization has no independent M_NSC; use --reference-only, not a fictitious NSC-mass panel")
     output = args.output_dir or Path(
-        f"outputs/{model}_rates" if model != LEGACY_POPIII else
-        "outputs/high_redshift_rates" if not custom_imf else
-        f"outputs/imf_{args.popiii_min_mass_msun:g}_{args.popiii_max_mass_msun:g}_rates"
+        f"outputs/archive/populations/{model}_rates" if model != LEGACY_POPIII else
+        "outputs/core/high_redshift_rates" if not custom_imf else
+        f"outputs/archive/imf/imf_{args.popiii_min_mass_msun:g}_{args.popiii_max_mass_msun:g}_rates"
     )
     output.mkdir(parents=True, exist_ok=True)
     if not args.plot_only:

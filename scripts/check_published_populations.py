@@ -50,7 +50,7 @@ def check_radial_cdf(count=120000):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/published_population_check"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/archive/populations/published_population_check"))
     args = parser.parse_args(argv)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     base = build_config_from_arguments(build_parser().parse_args(["--smbh-masses", "1e5", "--nsc-masses", "3e6"]))
@@ -110,9 +110,8 @@ def main(argv=None):
         "Sources checked locally: Pan & Yang, PRD 103, 103018 (2021), arXiv:2101.09146v6, Eq. (3), Eq. (19), Sec. II.C.3; Xue et al., arXiv:2605.29305v1 (2026), Sec. II.A and Table I.",
     ])
     pilot_rows = []
-    for model, folder in ((PAN_NSC, "pan2021_reference_pilot"), (PAN_PAPER, "pan2021_paper_reference_pilot"), (XUE_BH, "xue2026_reference_pilot")):
-        validated = Path("outputs/published_population_validation") / model / "host_rates.csv"
-        result_path = validated if validated.exists() else Path("outputs") / folder / "host_rates.csv"
+    for model in (PAN_NSC, PAN_PAPER, XUE_BH):
+        result_path = Path("outputs/archive/populations/published_population_validation") / model / "host_rates.csv"
         if result_path.exists():
             pilot = pd.read_csv(result_path).iloc[0]
             stock = frame[frame.model == model].iloc[0]

@@ -31,7 +31,8 @@ CASES = (
 )
 
 
-def config_from_benchmark(run_dir, output_dir, workers):
+def config_from_saved_run(run_dir, output_dir, workers):
+    """Restore a saved host's controls without changing its physical parameters."""
     parameters = json.loads((run_dir / "simulation_metadata.json").read_text())["parameters"]
     base = build_config_from_arguments(build_parser().parse_args(["--population-model", "legacy_popiii"]))
     kwargs = {}
@@ -43,7 +44,11 @@ def config_from_benchmark(run_dir, output_dir, workers):
             value = np.inf
         kwargs[name] = value
     kwargs.update(output_dir=output_dir, damping_cpu_count=workers)
-    config = IMRIDynConfig(**kwargs)
+    return IMRIDynConfig(**kwargs)
+
+
+def config_from_benchmark(run_dir, output_dir, workers):
+    config = config_from_saved_run(run_dir, output_dir, workers)
     if (config.population_model != "legacy_popiii" or config.popiii_min_mass_msun != 13.6
             or config.popiii_max_mass_msun != 197 or config.popiii_imf_slope != 1.77):
         raise ValueError("Approved benchmark is the original 13.6–197 Msun IMF, slope 1.77")
@@ -175,8 +180,8 @@ def write_notes(frame, output, manifest):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--benchmark-run", type=Path, default=Path("outputs/high_redshift_rates/simulations/point_005"))
-    parser.add_argument("--output-dir", type=Path, default=Path("outputs/physical_scenario_rates"))
+    parser.add_argument("--benchmark-run", type=Path, default=Path("outputs/core/high_redshift_rates/simulations/point_005"))
+    parser.add_argument("--output-dir", type=Path, default=Path("outputs/core/physical_scenario_rates"))
     parser.add_argument("--workers", type=int, default=6)
     parser.add_argument("--plot-only", action="store_true")
     args = parser.parse_args(argv)

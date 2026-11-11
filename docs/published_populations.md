@@ -15,11 +15,15 @@ Pan uses two representative components, not a continuous 1–400 Msun stellar IM
 
 For `pan2021_nsc`, before integer rounding:
 
-```text
-N_star = M_NSC / (1 Msun + 1e-3 * 10 Msun)
-N_BH   = 1e-3 N_star
-mean object mass = (1 + 10 * 1e-3)/(1 + 1e-3) Msun ≈ 1.009 Msun
-```
+$$
+N_\star=\frac{M_{\rm NSC}}{M_\odot+\delta\,10M_\odot},\qquad
+N_{\rm BH}=\delta N_\star,\qquad \delta=10^{-3},
+$$
+
+$$
+\langle m\rangle=\frac{1+10\delta}{1+\delta}M_\odot
+\simeq1.009M_\odot.
+$$
 
 At M_bullet=1e5 and M_NSC=3e6 Msun, this gives **2,970,300 stars + 2,970 BHs = 2,973,270 objects**, exactly 3e6 Msun with the implemented integer allocation. The Pan paper's canonical normalization instead gives 2,000,000 stars + 2,000 BHs, with **total** component mass 2.02e6 Msun. Do not confuse its M_star=20 M_bullet with a total cluster mass of 20 M_bullet.
 
@@ -31,10 +35,10 @@ BH-formation clocks now reflect these populations: existing BHs have clock zero.
 
 A spherical spatial number density obeys
 
-```text
- dN/dr = 4 pi r^2 n(r)
- dN/dln(r) = r dN/dr
-```
+$$
+\frac{dN}{dr}=4\pi r^2n(r),\qquad
+\frac{dN}{d\ln r}=r\frac{dN}{dr}.
+$$
 
 Consequently the following statements are different:
 
@@ -53,12 +57,16 @@ Pan also reports evolved mass-segregated profiles: approximately r^-1.5 for star
 
 The implemented target is Pan Eq. (3):
 
-```text
-n(r) proportional to r^(-gamma) (r+r_a)^(gamma-4)
-F(<r) = [r/(r+r_a)]^(3-gamma)
-r_a = 4 r_h = 4 G M_bullet / sigma^2
-sigma = 70 km/s (M_bullet/1.53e6 Msun)^(1/4.24)
-```
+$$
+n(r)\propto r^{-\gamma}(r+r_a)^{\gamma-4},\qquad
+F(<r)=\left(\frac{r}{r+r_a}\right)^{3-\gamma},
+$$
+
+$$
+r_a=4r_h=\frac{4GM_\bullet}{\sigma^2},\qquad
+\sigma=70\,\mathrm{km\,s^{-1}}
+\left(\frac{M_\bullet}{1.53\times10^6M_\odot}\right)^{1/4.24}.
+$$
 
 The new sampler uses an isotropic Eddington inversion in the **Kepler** potential to recover this full spatial tracer shape. It does not incorrectly assign F(r) directly to a. In a Kepler potential, phase-volume weighting gives p(log E) proportional to f(E) E^-3/2, with a=GM/(2E), thermal eccentricity, isotropic cos(i), and uniform argument of periapsis.
 
@@ -75,18 +83,16 @@ The radial range uses a source frequency of 1e-4 Hz for its inner boundary and r
 ## Commands and outputs
 
 ```bash
-# Default revised three-axis comparison: conditional Pan NSC normalization.
+# Explicit opt-in three-axis comparison: conditional Pan NSC normalization.
 python scripts/compare_host_rates.py --population-model pan2021_nsc
 
-# Small/reference pilot; use a NEW directory, not the old IMF run directory.
+# One-repeat population controls: keep all three under one output directory.
 python scripts/compare_host_rates.py --population-model pan2021_nsc \
-  --reference-only --repeats 1 --output-dir outputs/pan2021_reference_pilot
-
-# Paper number normalizations: reference-only, no independent NSC axis.
+  --reference-only --repeats 1 --output-dir outputs/archive/populations/published_population_validation/pan2021_nsc
 python scripts/compare_host_rates.py --population-model pan2021_paper \
-  --reference-only --repeats 1 --output-dir outputs/pan2021_paper_reference_pilot
+  --reference-only --repeats 1 --output-dir outputs/archive/populations/published_population_validation/pan2021_paper
 python scripts/compare_host_rates.py --population-model xue2026_bh \
-  --reference-only --repeats 1 --output-dir outputs/xue2026_reference_pilot
+  --reference-only --repeats 1 --output-dir outputs/archive/populations/published_population_validation/xue2026_bh
 
 # Inspect normalization and verify the radial spatial CDF without a rate rerun.
 python scripts/check_published_populations.py
@@ -94,12 +100,12 @@ python scripts/check_published_populations.py
 # Reproduce an archived ad hoc IMF experiment explicitly.
 python scripts/compare_host_rates.py --population-model legacy_popiii \
   --popiii-min-mass-msun 1 --popiii-max-mass-msun 400 \
-  --output-dir outputs/imf_1_400_rates
+  --output-dir outputs/archive/imf/imf_1_400_rates
 ```
 
-`outputs/published_population_check/` contains the mass/number/crossing census, radial-CDF test, prescription metadata and report. Standard run metadata includes `population_model`, `population_prescription`, and per-grid component budgets. Cache checks distinguish population models; old IMF rates cannot be reused as published-population rates. Prior files are preserved, not rescaled.
+`outputs/archive/populations/published_population_check/` contains the mass/number/crossing census, radial-CDF test, prescription metadata, combined pilot rate table (`reference_pilots.csv`) and report. The three pilot runs live together in `outputs/archive/populations/published_population_validation/`, one folder per model. Standard run metadata includes `population_model`, `population_prescription`, and per-grid component budgets. Cache checks distinguish population models; old IMF rates cannot be reused as published-population rates.
 
-Reference pilots are only one realization, not converged population rate estimates or a replacement for the full three-panel grid. Previously identified post-alignment eccentric damping, finite-star tidal disruption and replenishment limitations also remain. A full new rate grid must be simulated, not obtained by multiplying the archived rates by a star-count ratio.
+Reference pilots use one 10-Myr realization at z=10 and M_bullet=1e5 Msun. Their rates and interpretation are maintained in [results and uncertainties](simulation_results_synthesis.md#6-population-alternatives-are-not-an-uncertainty-distribution), not duplicated here. These controls change several assumptions together and are not converged reproductions of published rates. Detailed data live in `outputs/archive/populations/published_population_validation/`; the combined table is `outputs/archive/populations/published_population_check/reference_pilots.csv`.
 
 ## Verified sources
 
